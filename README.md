@@ -22,7 +22,21 @@ Modernes Berichtsheft-Portal fuer Azubis, Ausbilder und Verwaltung. Die Anwendun
 - PDFKit
 - Esbuild
 
-## Lokale Entwicklung
+## Installation
+
+### Voraussetzungen
+
+- Node.js 20 oder neuer
+- npm
+
+### Projekt klonen
+
+```bash
+git clone https://github.com/linuxlearner-germany/Ausbildungsdoku_webapp.git
+cd Ausbildungsdoku_webapp
+```
+
+### Konfiguration
 
 1. `.env` anlegen:
 
@@ -36,13 +50,21 @@ cp .env.example .env
 npm install
 ```
 
-3. Entwicklung starten:
+3. Anwendung starten:
 
 ```bash
 npm start
 ```
 
 Die App laeuft danach standardmaessig unter `http://localhost:3000`.
+
+### Erster Login
+
+Nach dem ersten Start kannst du dich mit den Standard-Logins anmelden:
+
+- `azubi@example.com / azubi123`
+- `trainer@example.com / trainer123`
+- `admin@example.com / admin123`
 
 ## Skripte
 
@@ -51,7 +73,7 @@ Die App laeuft danach standardmaessig unter `http://localhost:3000`.
 - `npm run dev`: Server direkt starten
 - `npm run check`: Syntaxcheck fuer `index.js`
 
-## Demo-Logins
+## Standard-Logins
 
 - `azubi@example.com / azubi123`
 - `trainer@example.com / trainer123`
