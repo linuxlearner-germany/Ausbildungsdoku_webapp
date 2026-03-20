@@ -1,0 +1,32 @@
+{
+  "name": "berichtsheft_webapp",
+  "version": "1.0.0",
+  "description": "Berichtsheft Portal mit Rollen fuer Azubi, Ausbilder und Verwaltung",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node index.js",
+    "build": "esbuild src/main.jsx --bundle --format=esm --sourcemap --outfile=public/app.js && cp src/styles.css public/app.css",
+    "start": "npm run build && node index.js",
+    "check": "node --check index.js"
+  },
+  "keywords": [
+    "berichtsheft",
+    "ausbildung",
+    "react",
+    "express",
+    "sqlite"
+  ],
+  "license": "UNLICENSED",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.8.0",
+    "dotenv": "^17.3.1",
+    "esbuild": "^0.27.4",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "pdfkit": "^0.18.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-router-dom": "^7.13.1"
+  }
+}
