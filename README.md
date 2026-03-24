@@ -8,9 +8,10 @@ Modernes Berichtsheft-Portal fuer Azubis, Ausbilder und Verwaltung. Die Anwendun
 - Tagesberichte mit Einreichen, Freigeben und Korrekturprozess
 - Kalenderansicht mit Tagesstatus
 - PDF-Export fuer signierte Berichte
+- Import fuer bestehende Berichte aus `.xlsx` und `.csv` mit Vorschau
 - separates Noten-PDF in Tabellenform
 - Admin-Verwaltung fuer Nutzer, Rollen und Ausbilder-Zuordnung
-- Darkmode mit gespeicherter Nutzereinstellung
+- Darkmode mit gespeicherter Nutzereinstellung pro Benutzer
 - SQLite als lokale Datenbank
 
 ## Tech-Stack
@@ -32,8 +33,8 @@ Modernes Berichtsheft-Portal fuer Azubis, Ausbilder und Verwaltung. Die Anwendun
 ### Projekt klonen
 
 ```bash
-git clone https://github.com/linuxlearner-germany/Ausbildungsdoku_webapp.git
-cd Ausbildungsdoku_webapp
+git clone <repo-url> berichtsheft_webapp
+cd berichtsheft_webapp
 ```
 
 ### Konfiguration
@@ -58,9 +59,23 @@ npm start
 
 Die App laeuft danach standardmaessig unter `http://localhost:3000`.
 
+## Docker
+
+Fuer einen Testbetrieb mit Docker oder Docker Compose:
+
+```bash
+cd docker
+cp .env.docker.example .env.docker
+docker compose up --build -d
+```
+
+Danach ist die App standardmaessig unter `http://localhost` erreichbar.
+Die SQLite-Datenbank liegt persistent im Docker-Volume `berichtsheft_data`.
+
 ### Erster Login
 
-Nach dem ersten Start kannst du dich mit den Standard-Logins anmelden:
+Standard-Logins stehen nur zur Verfuegung, wenn `ENABLE_DEMO_DATA=true` gesetzt ist.
+Mit aktivierten Demo-Daten kannst du dich so anmelden:
 
 - `azubi@example.com / azubi123`
 - `trainer@example.com / trainer123`
@@ -72,8 +87,11 @@ Nach dem ersten Start kannst du dich mit den Standard-Logins anmelden:
 - `npm run build`: React-Bundle und CSS erzeugen
 - `npm run dev`: Server direkt starten
 - `npm run check`: Syntaxcheck fuer `index.js`
+- `npm test`: Integrationstests fuer Login, Freigabe und Delete-Regeln
 
 ## Standard-Logins
+
+Nur bei aktivem `ENABLE_DEMO_DATA=true`:
 
 - `azubi@example.com / azubi123`
 - `trainer@example.com / trainer123`
@@ -84,19 +102,43 @@ Nach dem ersten Start kannst du dich mit den Standard-Logins anmelden:
 - `PORT`: Port des Webservers
 - `SESSION_SECRET`: Secret fuer Session-Cookies
 - `NODE_ENV`: z. B. `development` oder `production`
+- `ENABLE_DEMO_DATA`: setzt Demo-Accounts und Beispieldaten nur bei Bedarf
+- `TRUST_PROXY`: in Produktion mit vorgeschaltetem Nginx auf `true` setzen
+- `SESSION_COOKIE_NAME`: Name des Session-Cookies
 
-Siehe auch: [.env.example](/home/paul/WIWEB_CLOUD/berichtsheft_webapp/.env.example)
+Siehe auch: [.env.example](.env.example)
+
+## Importformat fuer Berichte
+
+Berichte koennen ueber den Bereich `Export` aus `.xlsx` oder `.csv` importiert werden.
+
+Erwartete Spalten:
+
+- `Datum`
+- `Titel`
+- optional `Betrieb`
+- optional `Berufsschule`
+
+Wichtige Regeln:
+
+- importierte Berichte werden als `submitted` angelegt
+- importierte Berichte werden nie automatisch `signed`
+- pro Tag ist nur ein Bericht erlaubt
+- vorhandene Tage werden in der Vorschau als Dublette markiert und nicht importiert
+
+Eine einfache Vorlage liegt unter [public/report-import-template.csv](public/report-import-template.csv).
 
 ## Projektstruktur
 
-- [index.js](/home/paul/WIWEB_CLOUD/berichtsheft_webapp/index.js): Express-Server, API, SQLite, PDF-Erzeugung
-- [src](/home/paul/WIWEB_CLOUD/berichtsheft_webapp/src): React-App mit Routing, Layout und Seiten
-- [public](/home/paul/WIWEB_CLOUD/berichtsheft_webapp/public): ausgelieferte Assets und Build-Ausgabe
-- [Pictures](/home/paul/WIWEB_CLOUD/berichtsheft_webapp/Pictures): Branding und Bilder
-- [data](/home/paul/WIWEB_CLOUD/berichtsheft_webapp/data): lokale SQLite-Datenbank
+- [index.js](index.js): Express-Server, API, SQLite, PDF-Erzeugung
+- [src](src): React-App mit Routing, Layout und Seiten
+- [public](public): ausgelieferte Assets und Build-Ausgabe
+- [Pictures](Pictures): Branding und Bilder
+- [data](data): lokale SQLite-Datenbank
+- [deploy](deploy): Server-Setup, `systemd`, Nginx, Env-Vorlage und Backup-Skripte
 
 ## Hinweise fuer GitHub
 
 - Die lokale Datenbank ist absichtlich in `.gitignore`, damit keine persoenlichen Testdaten ins Repo gelangen.
 - Build-Artefakte und JetBrains-IDE-Dateien sind ebenfalls ignoriert.
-- Vor einer oeffentlichen Veroeffentlichung solltest du `SESSION_SECRET`, Demo-Zugaenge und ggf. Markenassets pruefen.
+- Vor einer oeffentlichen Veroeffentlichung solltest du `SESSION_SECRET` setzen und `ENABLE_DEMO_DATA=false` lassen.

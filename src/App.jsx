@@ -5,7 +5,6 @@ import { AppShell } from "./components/AppShell";
 import { LoginPage } from "./pages/LoginPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { TagesberichtePage } from "./pages/TagesberichtePage";
-import { KalenderPage } from "./pages/KalenderPage";
 import { FreigabenPage } from "./pages/FreigabenPage";
 import { ProfilPage } from "./pages/ProfilPage";
 import { ArchivPage } from "./pages/ArchivPage";
@@ -20,14 +19,16 @@ function ProtectedApp() {
     dashboard,
     grades,
     theme,
+    themePreference,
     flash,
     setFlash,
     logout,
     getTraineeReport,
-    updateProfile,
     saveEntry,
     deleteEntry,
     submitEntry,
+    previewReportImport,
+    importReports,
     createOrFocusEntry,
     signEntry,
     rejectEntry,
@@ -35,6 +36,8 @@ function ProtectedApp() {
     createUser,
     assignTrainer,
     updateUser,
+    updateManagedProfile,
+    saveThemePreference,
     saveGrade,
     deleteGrade,
     toggleTheme
@@ -53,10 +56,11 @@ function ProtectedApp() {
     <AppShell
       user={session.user}
       theme={theme}
+      themePreference={themePreference}
       flash={flash}
       onLogout={logout}
-      onToggleTheme={() => {
-        toggleTheme();
+      onToggleTheme={async () => {
+        await toggleTheme();
         setFlash({ type: "success", message: `Darstellung auf ${theme === "dark" ? "hell" : "dunkel"} umgestellt.` });
       }}
     >
@@ -69,8 +73,9 @@ function ProtectedApp() {
             role === "trainee" ? (
               <TagesberichtePage
                 report={report}
-                onCreate={async () => {
-                  const id = await createOrFocusEntry();
+                initialView="editor"
+                onCreate={async (date) => {
+                  const id = await createOrFocusEntry(date);
                   setFlash({ type: "success", message: "Neuer Tagesbericht angelegt." });
                   return id;
                 }}
@@ -96,13 +101,26 @@ function ProtectedApp() {
           path="/kalender"
           element={
             role === "trainee" ? (
-              <KalenderPage
+              <TagesberichtePage
                 report={report}
-                selectedDate={null}
-                onSelectDate={async (date) => {
+                initialView="calendar"
+                onCreate={async (date) => {
                   const id = await createOrFocusEntry(date);
-                  setFlash({ type: "success", message: `Tagesbericht für ${date} geöffnet.` });
-                  navigate("/tagesberichte", { replace: false, state: { focusEntryId: id } });
+                  setFlash({ type: "success", message: `Tagesbericht fuer ${date || "heute"} geoeffnet.` });
+                  return id;
+                }}
+                onSaveEntry={async (entryId, entry) => {
+                  await saveEntry(entryId, entry);
+                  setFlash({ type: "success", message: "Tagesbericht gespeichert." });
+                }}
+                onDeleteEntry={async (entryId) => {
+                  await deleteEntry(entryId);
+                  setFlash({ type: "success", message: "Tagesbericht geloescht." });
+                  navigate("/kalender", { replace: true });
+                }}
+                onSubmitEntry={async (entryId) => {
+                  await submitEntry(entryId);
+                  setFlash({ type: "success", message: "Tagesbericht eingereicht." });
                 }}
               />
             ) : (
@@ -155,16 +173,24 @@ function ProtectedApp() {
         <Route
           path="/profil"
           element={
-            role === "trainee" ? (
+            ["trainee", "trainer", "admin"].includes(role) ? (
               <ProfilPage
+                role={role}
                 report={report}
+                trainees={trainees}
+                users={users}
                 theme={theme}
-                onToggleTheme={() => {
-                  toggleTheme();
+                themePreference={themePreference}
+                onToggleTheme={async () => {
+                  await toggleTheme();
                   setFlash({ type: "success", message: `Darstellung auf ${theme === "dark" ? "hell" : "dunkel"} umgestellt.` });
                 }}
-                onSaveProfile={async (profile) => {
-                  await updateProfile(profile);
+                onSaveThemePreference={async (nextPreference) => {
+                  await saveThemePreference(nextPreference);
+                  setFlash({ type: "success", message: `Darstellung auf ${nextPreference === "system" ? "Systemstandard" : nextPreference} gesetzt.` });
+                }}
+                onSaveManagedProfile={async (userId, profile) => {
+                  await updateManagedProfile(userId, profile);
                   setFlash({ type: "success", message: "Profil gespeichert." });
                 }}
               />
@@ -177,7 +203,15 @@ function ProtectedApp() {
           path="/export"
           element={
             role === "trainee" ? (
-              <ExportPage report={report} />
+              <ExportPage
+                report={report}
+                onPreviewImport={previewReportImport}
+                onImportReports={async (payload) => {
+                  const data = await importReports(payload);
+                  setFlash({ type: "success", message: `${data.importedCount} Berichte importiert.` });
+                  return data;
+                }}
+              />
             ) : (
               <Navigate to="/dashboard" replace />
             )

@@ -7,7 +7,8 @@
     "dev": "node index.js",
     "build": "esbuild src/main.jsx --bundle --format=esm --sourcemap --outfile=public/app.js && cp src/styles.css public/app.css",
     "start": "npm run build && node index.js",
-    "check": "node --check index.js"
+    "check": "node --check index.js",
+    "test": "node --test tests/*.test.mjs"
   },
   "keywords": [
     "berichtsheft",
@@ -27,6 +28,7 @@
     "pdfkit": "^0.18.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-router-dom": "^7.13.1"
+    "react-router-dom": "^7.13.1",
+    "xlsx": "^0.18.5"
   }
 }

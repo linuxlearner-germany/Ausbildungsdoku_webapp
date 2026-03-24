@@ -4,7 +4,7 @@ import { PrimaryButton } from "../components/PrimaryButton";
 
 export function LoginPage() {
   const { login, busy } = useAppContext();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
@@ -12,7 +12,7 @@ export function LoginPage() {
     event.preventDefault();
     try {
       setError("");
-      await login(email, password);
+      await login(identifier, password);
     } catch (err) {
       setError(err.message);
     }
@@ -31,8 +31,8 @@ export function LoginPage() {
         </div>
         <form className="login-form" onSubmit={handleSubmit}>
           <label>
-            E-Mail
-            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required />
+            E-Mail oder Benutzername
+            <input value={identifier} onChange={(event) => setIdentifier(event.target.value)} type="text" required />
           </label>
           <label>
             Passwort

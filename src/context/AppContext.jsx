@@ -4,6 +4,18 @@ import { api } from "../lib/api";
 const AppContext = createContext(null);
 const THEME_STORAGE_KEY = "berichtsheft-theme";
 
+function isThemePreference(value) {
+  return ["light", "dark", "system"].includes(value);
+}
+
+function resolveTheme(preference) {
+  if (preference === "light" || preference === "dark") {
+    return preference;
+  }
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
 function buildEmptyEntry(date = "") {
   return {
     id: `entry-${Date.now()}-${Math.random()}`,
@@ -24,18 +36,33 @@ export function AppProvider({ children }) {
   const [session, setSession] = useState({ user: null, ready: false });
   const [dashboard, setDashboard] = useState(null);
   const [grades, setGrades] = useState([]);
+  const [themePreference, setThemePreference] = useState("system");
   const [theme, setTheme] = useState("light");
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(null);
+
+  function applyThemePreference(preference) {
+    const nextPreference = isThemePreference(preference) ? preference : "system";
+    setThemePreference(nextPreference);
+    setTheme(resolveTheme(nextPreference));
+    window.localStorage.setItem(THEME_STORAGE_KEY, nextPreference);
+  }
 
   async function restoreSession() {
     try {
       const data = await api("/api/session", { headers: {} });
       setSession({ user: data.user, ready: true });
+      if (data.user?.themePreference) {
+        applyThemePreference(data.user.themePreference);
+      }
       if (data.user) {
-        await refreshDashboard();
-        if (data.user.role === "trainee") {
-          await refreshGrades();
+        try {
+          await refreshDashboard();
+          if (data.user.role === "trainee") {
+            await refreshGrades();
+          }
+        } catch (error) {
+          setFlash({ type: "error", message: error.message });
         }
       }
     } catch (error) {
@@ -58,16 +85,29 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (storedTheme === "dark" || storedTheme === "light") {
-      setTheme(storedTheme);
+    if (isThemePreference(storedTheme)) {
+      applyThemePreference(storedTheme);
+    } else {
+      applyThemePreference("system");
     }
     restoreSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (themePreference !== "system") {
+      return undefined;
+    }
+
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const update = () => setTheme(resolveTheme("system"));
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, [themePreference]);
 
   useEffect(() => {
     if (!flash) {
@@ -81,14 +121,15 @@ export function AppProvider({ children }) {
     return () => window.clearTimeout(timeoutId);
   }, [flash]);
 
-  async function login(email, password) {
+  async function login(identifier, password) {
     setBusy(true);
     try {
       const data = await api("/api/login", {
         method: "POST",
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ identifier, password })
       });
       setSession({ user: data.user, ready: true });
+      applyThemePreference(data.user?.themePreference || window.localStorage.getItem(THEME_STORAGE_KEY) || "system");
       await refreshDashboard();
       if (data.user.role === "trainee") {
         await refreshGrades();
@@ -114,7 +155,6 @@ export function AppProvider({ children }) {
 
   async function saveTraineeReport(nextReport) {
     const payload = {
-      trainee: nextReport.trainee,
       entries: nextReport.entries.map((entry) => ({
         ...entry,
         dateTo: entry.dateFrom || entry.dateTo
@@ -126,12 +166,6 @@ export function AppProvider({ children }) {
     });
     setDashboard((current) => ({ ...current, report: data.data }));
     return data.data;
-  }
-
-  async function updateProfile(trainee) {
-    const current = getTraineeReport();
-    if (!current) return;
-    return saveTraineeReport({ ...current, trainee });
   }
 
   async function createOrFocusEntry(date) {
@@ -162,10 +196,21 @@ export function AppProvider({ children }) {
   }
 
   async function deleteEntry(entryId) {
-    const current = getTraineeReport();
-    if (!current) return;
-    const entries = current.entries.filter((entry) => entry.id !== entryId);
-    return saveTraineeReport({ ...current, entries });
+    const data = await api(`/api/report/${entryId}`, {
+      method: "DELETE"
+    });
+    setDashboard((current) =>
+      current?.role === "trainee"
+        ? {
+            ...current,
+            report: {
+              ...current.report,
+              entries: data.entries
+            }
+          }
+        : current
+    );
+    return data.entries;
   }
 
   async function submitEntry(entryId) {
@@ -200,6 +245,34 @@ export function AppProvider({ children }) {
     await refreshDashboard();
   }
 
+  async function previewReportImport(payload) {
+    return api("/api/report/import-preview", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async function importReports(payload) {
+    const data = await api("/api/report/import", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+
+    setDashboard((current) =>
+      current?.role === "trainee"
+        ? {
+            ...current,
+            report: {
+              ...current.report,
+              entries: data.entries
+            }
+          }
+        : current
+    );
+
+    return data;
+  }
+
   async function createUser(payload) {
     await api("/api/admin/users", {
       method: "POST",
@@ -222,6 +295,41 @@ export function AppProvider({ children }) {
       body: JSON.stringify(payload)
     });
     await refreshDashboard();
+  }
+
+  async function updateManagedProfile(userId, payload) {
+    await api(`/api/profile/${userId}`, {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    await refreshDashboard();
+  }
+
+  async function saveThemePreference(nextPreference) {
+    applyThemePreference(nextPreference);
+
+    if (!session.user) {
+      return nextPreference;
+    }
+
+    const data = await api("/api/preferences/theme", {
+      method: "POST",
+      body: JSON.stringify({ themePreference: nextPreference })
+    });
+
+    setSession((current) =>
+      current.user
+        ? {
+            ...current,
+            user: {
+              ...current.user,
+              themePreference: data.themePreference
+            }
+          }
+        : current
+    );
+
+    return data.themePreference;
   }
 
   async function saveGrade(payload) {
@@ -264,7 +372,8 @@ export function AppProvider({ children }) {
   }
 
   function toggleTheme() {
-    setTheme((current) => (current === "dark" ? "light" : "dark"));
+    const nextPreference = theme === "dark" ? "light" : "dark";
+    return saveThemePreference(nextPreference);
   }
 
   return (
@@ -274,6 +383,7 @@ export function AppProvider({ children }) {
         dashboard,
         grades,
         theme,
+        themePreference,
         busy,
         flash,
         setFlash,
@@ -281,11 +391,12 @@ export function AppProvider({ children }) {
         logout,
         refreshDashboard,
         getTraineeReport,
-        updateProfile,
         saveTraineeReport,
         saveEntry,
         deleteEntry,
         submitEntry,
+        previewReportImport,
+        importReports,
         createOrFocusEntry,
         signEntry,
         rejectEntry,
@@ -293,6 +404,8 @@ export function AppProvider({ children }) {
         createUser,
         assignTrainer,
         updateUser,
+        updateManagedProfile,
+        saveThemePreference,
         refreshGrades,
         saveGrade,
         deleteGrade,

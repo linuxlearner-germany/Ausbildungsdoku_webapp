@@ -63,10 +63,11 @@ export function DashboardPage({ role, report, trainees, users }) {
           <article className="panel-card">
             <PageHeader kicker="Schnellzugriffe" title="Direkte Aktionen" subtitle="Springe direkt in die wichtigsten Arbeitsbereiche." />
             <div className="quick-actions">
-              <Link className="quick-action-card" to="/kalender">Kalender öffnen</Link>
+              <Link className="quick-action-card" to="/tagesberichte">Berichte schreiben</Link>
+              <Link className="quick-action-card" to="/kalender">Kalenderansicht</Link>
               <Link className="quick-action-card" to="/noten">Noten verwalten</Link>
               <Link className="quick-action-card" to="/freigaben">Freigabestatus prüfen</Link>
-              <Link className="quick-action-card" to="/profil">Profil bearbeiten</Link>
+              <Link className="quick-action-card" to="/profil">Profil ansehen</Link>
               <Link className="quick-action-card" to="/archiv">Archiv ansehen</Link>
             </div>
           </article>

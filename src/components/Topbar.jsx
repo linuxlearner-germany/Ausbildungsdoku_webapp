@@ -1,6 +1,13 @@
 import React from "react";
 
-export function Topbar({ user, theme, onLogout, onToggleTheme, mobileNavOpen, onToggleNavigation }) {
+function themeLabel(themePreference, theme) {
+  if (themePreference === "system") {
+    return `System (${theme === "dark" ? "dunkel" : "hell"})`;
+  }
+  return theme === "dark" ? "Dunkel" : "Hell";
+}
+
+export function Topbar({ user, theme, themePreference, onLogout, onToggleTheme, mobileNavOpen, onToggleNavigation }) {
   return (
     <header className="topbar">
       <div className="topbar-main">
@@ -18,16 +25,16 @@ export function Topbar({ user, theme, onLogout, onToggleTheme, mobileNavOpen, on
         <div className="topbar-copy">
           <p className="page-kicker">Berichtsheft Portal</p>
           <strong>Internes Ausbildungsportal</strong>
-          <small className="topbar-theme-label">{theme === "dark" ? "Darkmode aktiv" : "Lightmode aktiv"}</small>
+          <small className="topbar-theme-label">Ansicht: {themeLabel(themePreference, theme)}</small>
         </div>
       </div>
       <div className="topbar-user">
         <button className="button button-secondary" onClick={onToggleTheme} type="button">
-          {theme === "dark" ? "Lightmode" : "Darkmode"}
+          {theme === "dark" ? "Hell" : "Dunkel"}
         </button>
         <div className="user-pill">
           <span>{user?.name || "Gast"}</span>
-          <small>{user?.role || "ohne Sitzung"}</small>
+          <small>{user?.username ? `@${user.username} · ${user.role}` : user?.role || "ohne Sitzung"}</small>
         </div>
         {user ? (
           <button className="button button-secondary" onClick={onLogout} type="button">

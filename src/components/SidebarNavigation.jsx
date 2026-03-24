@@ -7,7 +7,7 @@ const items = [
   { to: "/kalender", label: "Kalender", roles: ["trainee"] },
   { to: "/noten", label: "Noten", roles: ["trainee"] },
   { to: "/freigaben", label: "Freigaben", roles: ["trainee", "trainer", "admin"] },
-  { to: "/profil", label: "Profil", roles: ["trainee"] },
+  { to: "/profil", label: "Profil", roles: ["trainee", "trainer", "admin"] },
   { to: "/export", label: "Export", roles: ["trainee"] },
   { to: "/archiv", label: "Archiv", roles: ["trainee", "trainer", "admin"] },
   { to: "/verwaltung", label: "Verwaltung", roles: ["admin"] }

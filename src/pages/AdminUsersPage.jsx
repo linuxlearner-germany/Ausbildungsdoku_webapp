@@ -6,6 +6,7 @@ import { PrimaryButton } from "../components/PrimaryButton";
 function toEditForm(user) {
   return {
     name: user.name || "",
+    username: user.username || "",
     email: user.email || "",
     password: "",
     role: user.role || "trainee",
@@ -14,9 +15,12 @@ function toEditForm(user) {
 }
 
 export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateUser }) {
-  const [form, setForm] = useState({ name: "", email: "", password: "", role: "trainee", trainerId: "" });
+  const [form, setForm] = useState({ name: "", username: "", email: "", password: "", role: "trainee", trainerId: "" });
   const [editingUserId, setEditingUserId] = useState(null);
   const [editForm, setEditForm] = useState(null);
+  const [createError, setCreateError] = useState("");
+  const [editError, setEditError] = useState("");
+  const [assignError, setAssignError] = useState("");
 
   const trainers = users.filter((user) => user.role === "trainer");
   const trainees = users.filter((user) => user.role === "trainee");
@@ -30,6 +34,42 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
   function stopEditing() {
     setEditingUserId(null);
     setEditForm(null);
+    setEditError("");
+  }
+
+  async function handleCreateUser() {
+    setCreateError("");
+    try {
+      await onCreateUser({
+        ...form,
+        trainerId: form.role === "trainee" && form.trainerId ? Number(form.trainerId) : null
+      });
+      setForm({ name: "", username: "", email: "", password: "", role: "trainee", trainerId: "" });
+    } catch (error) {
+      setCreateError(error.message);
+    }
+  }
+
+  async function handleUpdateUser(userId) {
+    setEditError("");
+    try {
+      await onUpdateUser(userId, {
+        ...editForm,
+        trainerId: editForm.role === "trainee" && editForm.trainerId ? Number(editForm.trainerId) : null
+      });
+      stopEditing();
+    } catch (error) {
+      setEditError(error.message);
+    }
+  }
+
+  async function handleAssignTrainer(traineeId, trainerId) {
+    setAssignError("");
+    try {
+      await onAssignTrainer(traineeId, trainerId);
+    } catch (error) {
+      setAssignError(error.message);
+    }
   }
 
   return (
@@ -46,6 +86,10 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
             <label>
               E-Mail
               <input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+            </label>
+            <label>
+              Benutzername
+              <input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
             </label>
             <label>
               Passwort
@@ -73,17 +117,12 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
               </label>
             ) : null}
           </div>
+          {createError ? <div className="field-message error">{createError}</div> : null}
+          <div className="inline-notice">
+            <strong>Hinweis:</strong> Die E-Mail muss gueltig sein und das Passwort mindestens 10 Zeichen haben.
+          </div>
           <div className="editor-footer">
-            <PrimaryButton
-              onClick={() =>
-                onCreateUser({
-                  ...form,
-                  trainerId: form.role === "trainee" && form.trainerId ? Number(form.trainerId) : null
-                })
-              }
-            >
-              Nutzer speichern
-            </PrimaryButton>
+            <PrimaryButton onClick={handleCreateUser}>Nutzer speichern</PrimaryButton>
           </div>
         </article>
 
@@ -94,6 +133,7 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
             rows={users}
             columns={[
               { key: "name", label: "Name" },
+              { key: "username", label: "Benutzername" },
               { key: "email", label: "E-Mail" },
               { key: "role", label: "Rolle" },
               { key: "betrieb", label: "Betrieb" },
@@ -109,6 +149,7 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
 
       <section className="panel-card">
         <PageHeader kicker="Bearbeitung" title="Bestehende Nutzer verwalten" subtitle="Rollen, Passwoerter und Ausbilder-Zuweisungen koennen jederzeit geaendert werden." />
+        {editError ? <div className="field-message error">{editError}</div> : null}
         <div className="assignment-list admin-edit-list">
           {users.map((user) => (
             <div key={user.id} className="assignment-row admin-edit-row">
@@ -122,6 +163,10 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
                     <label>
                       E-Mail
                       <input value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} />
+                    </label>
+                    <label>
+                      Benutzername
+                      <input value={editForm.username} onChange={(event) => setEditForm({ ...editForm, username: event.target.value })} />
                     </label>
                     <label>
                       Rolle
@@ -157,16 +202,7 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
                     ) : null}
                   </div>
                   <div className="editor-footer">
-                    <PrimaryButton
-                      onClick={() =>
-                        onUpdateUser(user.id, {
-                          ...editForm,
-                          trainerId: editForm.role === "trainee" && editForm.trainerId ? Number(editForm.trainerId) : null
-                        }).then(stopEditing)
-                      }
-                    >
-                      Änderungen speichern
-                    </PrimaryButton>
+                    <PrimaryButton onClick={() => handleUpdateUser(user.id)}>Änderungen speichern</PrimaryButton>
                     <PrimaryButton variant="ghost" onClick={stopEditing}>
                       Abbrechen
                     </PrimaryButton>
@@ -176,7 +212,7 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
                 <>
                   <div>
                     <strong>{user.name}</strong>
-                    <p>{user.email}</p>
+                    <p>{user.username} · {user.email}</p>
                   </div>
                   <div className="admin-edit-meta">
                     <span>Rolle: {user.role}</span>
@@ -196,6 +232,7 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
 
       <section className="panel-card">
         <PageHeader kicker="Zuweisung" title="Azubis Ausbildern zuordnen" subtitle="Bestehende Azubis koennen hier schnell einem Ausbilder zugewiesen werden." />
+        {assignError ? <div className="field-message error">{assignError}</div> : null}
         <div className="assignment-list">
           {trainees.map((trainee) => (
             <div key={trainee.id} className="assignment-row">
@@ -206,7 +243,7 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
               <div className="assignment-actions">
                 <select
                   value={trainee.trainer_id || ""}
-                  onChange={(event) => onAssignTrainer(trainee.id, event.target.value ? Number(event.target.value) : null)}
+                  onChange={(event) => handleAssignTrainer(trainee.id, event.target.value ? Number(event.target.value) : null)}
                 >
                   <option value="">Kein Ausbilder</option>
                   {trainers.map((trainer) => (

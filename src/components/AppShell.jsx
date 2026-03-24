@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { SidebarNavigation } from "./SidebarNavigation";
 import { Topbar } from "./Topbar";
 
-export function AppShell({ user, theme, onLogout, onToggleTheme, flash, children }) {
+export function AppShell({ user, theme, themePreference, onLogout, onToggleTheme, flash, children }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
@@ -12,6 +12,7 @@ export function AppShell({ user, theme, onLogout, onToggleTheme, flash, children
         <Topbar
           user={user}
           theme={theme}
+          themePreference={themePreference}
           onLogout={onLogout}
           onToggleTheme={onToggleTheme}
           mobileNavOpen={mobileNavOpen}
