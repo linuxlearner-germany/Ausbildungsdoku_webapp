@@ -6,6 +6,7 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { FilterBar } from "../components/FilterBar";
 import { EmptyState } from "../components/EmptyState";
 import { CalendarGrid } from "../components/CalendarGrid";
+import { buildLocalWeekDates, createLocalDate, formatLocalDate, getTodayLocalDateString, parseLocalDate, startOfLocalMonth, toLocalDateString } from "../lib/date.mjs";
 
 const VIEW_OPTIONS = [
   { id: "calendar", label: "Kalender" },
@@ -15,7 +16,7 @@ const VIEW_OPTIONS = [
 
 function buildEmptyEntry(date = "") {
   const label = date
-    ? new Date(date).toLocaleDateString("de-DE", {
+    ? formatLocalDate(date, {
         weekday: "long",
         day: "2-digit",
         month: "long"
@@ -47,7 +48,7 @@ function validateEntry(entry) {
 
 function formatLongDate(date) {
   if (!date) return "Kein Tag ausgewaehlt";
-  return new Date(date).toLocaleDateString("de-DE", {
+  return formatLocalDate(date, {
     weekday: "long",
     day: "2-digit",
     month: "long",
@@ -124,15 +125,7 @@ function getEntryPermissions(entry) {
 }
 
 function buildWeekDates(date) {
-  const selected = new Date(date || new Date().toISOString().slice(0, 10));
-  const mondayOffset = (selected.getDay() + 6) % 7;
-  selected.setDate(selected.getDate() - mondayOffset);
-
-  return Array.from({ length: 7 }, (_, index) => {
-    const current = new Date(selected);
-    current.setDate(selected.getDate() + index);
-    return current.toISOString().slice(0, 10);
-  });
+  return buildLocalWeekDates(date || getTodayLocalDateString());
 }
 
 function ReportEditor({
@@ -297,7 +290,7 @@ function ReportEditor({
 export function TagesberichtePage({ report, initialView = "calendar", onCreate, onSaveEntry, onDeleteEntry, onSubmitEntry }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const entries = report?.entries || [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getTodayLocalDateString();
   const defaultDate = entries[0]?.dateFrom || today;
   const initialSelectedId = initialView === "calendar" ? null : entries.find((entry) => entry.dateFrom === defaultDate)?.id || entries[0]?.id || null;
   const [selectedDate, setSelectedDate] = useState(initialView === "calendar" ? today : defaultDate);
@@ -309,8 +302,8 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
   const [statusFilter, setStatusFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [visibleMonth, setVisibleMonth] = useState(() => {
-    const seed = new Date(defaultDate);
-    return new Date(seed.getFullYear(), seed.getMonth(), 1);
+    const seed = parseLocalDate(defaultDate) || parseLocalDate(today);
+    return startOfLocalMonth(seed);
   });
   const [drawerOpen, setDrawerOpen] = useState(initialView === "editor");
   const [draft, setDraft] = useState(null);
@@ -381,8 +374,10 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
     }
 
     previousSelectedDateRef.current = selectedDate;
-    const date = new Date(selectedDate);
-    setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    const date = parseLocalDate(selectedDate);
+    if (date) {
+      setVisibleMonth(startOfLocalMonth(date));
+    }
   }, [selectedDate]);
 
   async function ensureEntry(date) {
@@ -487,13 +482,13 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
 
   function handleChangeMonth(offset) {
     setVisibleMonth((current) => {
-      const nextMonth = new Date(current.getFullYear(), current.getMonth() + offset, 1);
-      const currentSelection = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date(`${today}T00:00:00`);
+      const nextMonth = startOfLocalMonth(createLocalDate(current.getFullYear(), current.getMonth() + offset, 1));
+      const currentSelection = parseLocalDate(selectedDate || today) || parseLocalDate(today);
       const targetDay = Math.min(
         currentSelection.getDate(),
         new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate()
       );
-      const nextSelection = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), targetDay).toISOString().slice(0, 10);
+      const nextSelection = toLocalDateString(createLocalDate(nextMonth.getFullYear(), nextMonth.getMonth(), targetDay));
       setSelectedDate(nextSelection);
       setSelectedId(entryByDate.get(nextSelection)?.id || null);
       return nextMonth;
@@ -614,8 +609,8 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
                     className={`week-strip-day${selectedDate === date ? " active" : ""}`}
                     onClick={() => handleSelectDate(date)}
                   >
-                    <small>{new Date(date).toLocaleDateString("de-DE", { weekday: "short" })}</small>
-                    <strong>{new Date(date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}</strong>
+                    <small>{formatLocalDate(date, { weekday: "short" })}</small>
+                    <strong>{formatLocalDate(date, { day: "2-digit", month: "2-digit" })}</strong>
                     <span>{entry ? <StatusBadge status={entry.status} /> : "Leer"}</span>
                   </button>
                 );

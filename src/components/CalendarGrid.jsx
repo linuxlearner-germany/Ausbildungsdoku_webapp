@@ -1,6 +1,7 @@
 import React from "react";
 import { StatusBadge } from "./StatusBadge";
 import { PrimaryButton } from "./PrimaryButton";
+import { buildCalendarGridDates, formatLocalDate, getTodayLocalDateString, parseLocalDate, startOfLocalMonth } from "../lib/date.mjs";
 
 function validateEntry(entry) {
   if (!entry) return false;
@@ -14,10 +15,9 @@ function dayStatus(entry) {
 }
 
 export function CalendarGrid({ entries, month, selectedDate, onChangeMonth, onSelectDate, variant = "default" }) {
-  const label = month.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
-  const firstGridDay = new Date(month);
-  const weekday = (firstGridDay.getDay() + 6) % 7;
-  firstGridDay.setDate(firstGridDay.getDate() - weekday);
+  const label = formatLocalDate(month, { month: "long", year: "numeric" });
+  const monthStart = startOfLocalMonth(month);
+  const gridDates = buildCalendarGridDates(monthStart);
 
   function entryByDay(isoDate) {
     return entries.find((entry) => entry.dateFrom === isoDate);
@@ -34,7 +34,7 @@ export function CalendarGrid({ entries, month, selectedDate, onChangeMonth, onSe
           </div>
           <div className="calendar-month-switcher">
             <PrimaryButton variant="secondary" onClick={() => onChangeMonth(-1)}>Zurueck</PrimaryButton>
-            <PrimaryButton variant="secondary" onClick={() => onSelectDate(new Date().toISOString().slice(0, 10))}>Heute</PrimaryButton>
+            <PrimaryButton variant="secondary" onClick={() => onSelectDate(getTodayLocalDateString())}>Heute</PrimaryButton>
             <PrimaryButton variant="secondary" onClick={() => onChangeMonth(1)}>Weiter</PrimaryButton>
           </div>
         </div>
@@ -45,12 +45,10 @@ export function CalendarGrid({ entries, month, selectedDate, onChangeMonth, onSe
             {weekdayLabel}
           </div>
         ))}
-        {Array.from({ length: 42 }).map((_, index) => {
-          const date = new Date(firstGridDay);
-          date.setDate(firstGridDay.getDate() + index);
-          const iso = date.toISOString().slice(0, 10);
+        {gridDates.map((iso) => {
           const entry = entryByDay(iso);
           const status = dayStatus(entry);
+          const date = parseLocalDate(iso);
           return (
             <button
               key={iso}

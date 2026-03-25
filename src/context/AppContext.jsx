@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { api } from "../lib/api";
+import { formatLocalDate, getTodayLocalDateString } from "../lib/date.mjs";
 
 const AppContext = createContext(null);
 const THEME_STORAGE_KEY = "berichtsheft-theme";
@@ -19,7 +20,7 @@ function resolveTheme(preference) {
 function buildEmptyEntry(date = "") {
   return {
     id: "",
-    weekLabel: date ? `Tagesbericht ${new Date(date).toLocaleDateString("de-DE")}` : "",
+    weekLabel: date ? `Tagesbericht ${formatLocalDate(date)}` : "",
     dateFrom: date,
     dateTo: date,
     betrieb: "",
@@ -169,7 +170,7 @@ export function AppProvider({ children }) {
   }
 
   async function createOrFocusEntry(date) {
-    const isoDate = date || new Date().toISOString().slice(0, 10);
+    const isoDate = date || getTodayLocalDateString();
     const current = getTraineeReport();
     const existing = current?.entries.find((entry) => entry.dateFrom === isoDate);
     if (existing) {
