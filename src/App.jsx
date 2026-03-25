@@ -68,37 +68,7 @@ function ProtectedApp() {
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage role={role} report={report} trainees={trainees} users={users} />} />
         <Route
-          path="/tagesberichte"
-          element={
-            role === "trainee" ? (
-              <TagesberichtePage
-                report={report}
-                initialView="editor"
-                onCreate={async (date) => {
-                  const id = await createOrFocusEntry(date);
-                  setFlash({ type: "success", message: "Neuer Tagesbericht angelegt." });
-                  return id;
-                }}
-                onSaveEntry={async (entryId, entry) => {
-                  await saveEntry(entryId, entry);
-                  setFlash({ type: "success", message: "Tagesbericht gespeichert." });
-                }}
-                onDeleteEntry={async (entryId) => {
-                  await deleteEntry(entryId);
-                  setFlash({ type: "success", message: "Tagesbericht gelöscht." });
-                }}
-                onSubmitEntry={async (entryId) => {
-                  await submitEntry(entryId);
-                  setFlash({ type: "success", message: "Tagesbericht eingereicht." });
-                }}
-              />
-            ) : (
-              <Navigate to="/dashboard" replace />
-            )
-          }
-        />
-        <Route
-          path="/kalender"
+          path="/berichte"
           element={
             role === "trainee" ? (
               <TagesberichtePage
@@ -116,7 +86,7 @@ function ProtectedApp() {
                 onDeleteEntry={async (entryId) => {
                   await deleteEntry(entryId);
                   setFlash({ type: "success", message: "Tagesbericht geloescht." });
-                  navigate("/kalender", { replace: true });
+                  navigate("/berichte", { replace: true });
                 }}
                 onSubmitEntry={async (entryId) => {
                   await submitEntry(entryId);
@@ -128,6 +98,8 @@ function ProtectedApp() {
             )
           }
         />
+        <Route path="/tagesberichte" element={<Navigate to="/berichte?view=write" replace />} />
+        <Route path="/kalender" element={<Navigate to="/berichte?view=calendar" replace />} />
         <Route
           path="/freigaben"
           element={

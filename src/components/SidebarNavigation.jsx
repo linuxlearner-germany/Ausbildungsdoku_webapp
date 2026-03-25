@@ -3,8 +3,7 @@ import { NavLink } from "react-router-dom";
 
 const items = [
   { to: "/dashboard", label: "Dashboard", roles: ["trainee", "trainer", "admin"] },
-  { to: "/tagesberichte", label: "Tagesberichte", roles: ["trainee"] },
-  { to: "/kalender", label: "Kalender", roles: ["trainee"] },
+  { to: "/berichte", label: "Berichte", roles: ["trainee"] },
   { to: "/noten", label: "Noten", roles: ["trainee"] },
   { to: "/freigaben", label: "Freigaben", roles: ["trainee", "trainer", "admin"] },
   { to: "/profil", label: "Profil", roles: ["trainee", "trainer", "admin"] },

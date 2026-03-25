@@ -189,9 +189,17 @@ export function AppProvider({ children }) {
   async function saveEntry(entryId, patch) {
     const current = getTraineeReport();
     if (!current) return;
-    const entries = current.entries.map((entry) =>
-      entry.id === entryId ? { ...entry, ...patch, dateTo: patch.dateFrom || entry.dateFrom || entry.dateTo } : entry
-    );
+    const normalizedPatch = {
+      ...patch,
+      id: entryId,
+      dateTo: patch.dateFrom || patch.dateTo
+    };
+    const exists = current.entries.some((entry) => entry.id === entryId);
+    const entries = exists
+      ? current.entries.map((entry) =>
+          entry.id === entryId ? { ...entry, ...normalizedPatch, dateTo: patch.dateFrom || entry.dateFrom || entry.dateTo } : entry
+        )
+      : [normalizedPatch, ...current.entries];
     return saveTraineeReport({ ...current, entries });
   }
 

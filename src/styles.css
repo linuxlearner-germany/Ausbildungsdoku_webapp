@@ -1,13 +1,13 @@
 :root {
-  --bg: #edf2ef;
+  --bg: #eef2f0;
   --surface: #ffffff;
-  --surface-soft: #f7faf8;
-  --surface-muted: #eef4f1;
-  --surface-elevated: rgba(255, 255, 255, 0.92);
-  --surface-strong: #dce7e1;
-  --text: #11211f;
-  --muted: #5d6f6a;
-  --line: #d7e1db;
+  --surface-soft: #f6f8f7;
+  --surface-muted: #e8eeeb;
+  --surface-elevated: #ffffff;
+  --surface-strong: #dde5e1;
+  --text: #172220;
+  --muted: #64746f;
+  --line: #d6dfda;
   --primary: #1f5f57;
   --primary-strong: #173f4c;
   --accent: #2d7a60;
@@ -33,49 +33,49 @@
   --status-rejected-text: #8d3c33;
   --status-missing-bg: #e5e9e4;
   --status-missing-text: #59655f;
-  --shadow: 0 18px 48px rgba(18, 30, 26, 0.08);
-  --page-overlay-top: rgba(243, 247, 244, 0.94);
-  --page-overlay-bottom: rgba(235, 241, 237, 0.96);
+  --shadow: 0 8px 24px rgba(18, 30, 26, 0.05);
+  --page-overlay-top: #f5f7f6;
+  --page-overlay-bottom: #edf2ef;
 }
 
 :root[data-theme="dark"] {
-  --bg: #0f1717;
-  --surface: #162120;
-  --surface-soft: #1b2927;
-  --surface-muted: #213330;
-  --surface-elevated: rgba(22, 33, 32, 0.94);
-  --surface-strong: #2a3d39;
-  --text: #edf4f2;
-  --muted: #a5b8b3;
-  --line: #2c403b;
-  --primary: #78b8ac;
-  --primary-strong: #4f9388;
-  --accent: #6ed1a0;
-  --danger: #df8c80;
-  --warning: #d6b15c;
-  --focus-ring: rgba(120, 184, 172, 0.22);
-  --primary-soft: rgba(120, 184, 172, 0.16);
-  --primary-soft-strong: rgba(120, 184, 172, 0.22);
-  --button-secondary-bg: #254943;
+  --bg: #151b1a;
+  --surface: #1c2423;
+  --surface-soft: #202a28;
+  --surface-muted: #273330;
+  --surface-elevated: #1c2423;
+  --surface-strong: #32403c;
+  --text: #ecf2ef;
+  --muted: #a0b1ab;
+  --line: #33413d;
+  --primary: #8ebdb1;
+  --primary-strong: #355e57;
+  --accent: #79c59f;
+  --danger: #e09b93;
+  --warning: #d8b86f;
+  --focus-ring: rgba(142, 189, 177, 0.18);
+  --primary-soft: rgba(142, 189, 177, 0.12);
+  --primary-soft-strong: rgba(142, 189, 177, 0.18);
+  --button-secondary-bg: #2a4440;
   --button-secondary-text: #edf4f2;
-  --button-ghost-bg: rgba(223, 140, 128, 0.16);
-  --button-ghost-text: #f0b2a9;
-  --field-bg: rgba(15, 23, 23, 0.88);
-  --field-bg-disabled: #20312e;
-  --placeholder: #8ea39d;
-  --status-draft-bg: #263532;
-  --status-draft-text: #c5d4d0;
-  --status-submitted-bg: #443819;
-  --status-submitted-text: #f0d484;
-  --status-signed-bg: #1d4135;
-  --status-signed-text: #9ce1c2;
-  --status-rejected-bg: #4a2825;
-  --status-rejected-text: #f1aea6;
-  --status-missing-bg: #25312e;
-  --status-missing-text: #b9cac6;
-  --shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
-  --page-overlay-top: rgba(8, 14, 14, 0.9);
-  --page-overlay-bottom: rgba(10, 18, 18, 0.94);
+  --button-ghost-bg: rgba(224, 155, 147, 0.12);
+  --button-ghost-text: #f0b8b1;
+  --field-bg: #18211f;
+  --field-bg-disabled: #23302d;
+  --placeholder: #8c9d98;
+  --status-draft-bg: #2a3532;
+  --status-draft-text: #d0dad6;
+  --status-submitted-bg: #473b1e;
+  --status-submitted-text: #f3d58f;
+  --status-signed-bg: #233f37;
+  --status-signed-text: #a6dbc7;
+  --status-rejected-bg: #4a2e2b;
+  --status-rejected-text: #efb7af;
+  --status-missing-bg: #29322f;
+  --status-missing-text: #bcc9c5;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  --page-overlay-top: #171d1c;
+  --page-overlay-bottom: #141918;
 }
 
 * { box-sizing: border-box; }
@@ -85,9 +85,7 @@ body {
   color: var(--text);
   font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   color-scheme: light;
-  background:
-    linear-gradient(var(--page-overlay-top), var(--page-overlay-bottom)),
-    url("/Pictures/background.png") center / cover fixed no-repeat;
+  background: linear-gradient(180deg, var(--page-overlay-top), var(--page-overlay-bottom));
 }
 
 :root[data-theme="dark"] body {
@@ -164,6 +162,7 @@ button, input, textarea, select { font: inherit; }
   position: sticky;
   top: 20px;
   height: calc(100vh - 40px);
+  box-shadow: none;
 }
 
 .sidebar-brand {
@@ -283,9 +282,8 @@ button, input, textarea, select { font: inherit; }
   padding: 12px 16px;
   border-radius: 14px;
   border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface) 92%, #102320 8%);
-  box-shadow: 0 16px 34px rgba(8, 19, 18, 0.18);
-  backdrop-filter: blur(12px);
+  background: var(--surface);
+  box-shadow: var(--shadow);
 }
 
 .flash-success {
@@ -540,7 +538,7 @@ textarea {
 .calendar-grid-enterprise {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .calendar-weekday {
@@ -553,23 +551,50 @@ textarea {
 }
 
 .calendar-tile {
-  min-height: 102px;
+  min-height: 132px;
   border: 1px solid var(--line);
-  border-radius: 18px;
-  padding: 12px;
-  background: var(--surface-soft);
+  border-radius: 20px;
+  padding: 14px;
+  background: var(--surface);
   text-align: left;
   display: grid;
   align-content: start;
-  gap: 10px;
+  gap: 12px;
   cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, transform 120ms ease;
 }
 
-.calendar-tile.selected { border-color: rgba(31, 95, 87, 0.52); }
 .calendar-tile.selected { background: var(--primary-soft); }
-.calendar-tile.outside { opacity: 0.42; }
-.calendar-tile-day { font-weight: 700; }
-.calendar-tile-status { display: flex; flex-wrap: wrap; }
+.calendar-tile.selected { border-color: var(--primary); }
+.calendar-tile:hover { transform: translateY(-1px); border-color: var(--primary); }
+.calendar-tile.outside { opacity: 0.5; background: var(--surface-soft); }
+.calendar-tile-day { font-weight: 700; font-size: 1.15rem; }
+.calendar-tile-top,
+.calendar-tile-body {
+  display: grid;
+  gap: 8px;
+}
+
+.calendar-tile-top {
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 10px;
+}
+
+.calendar-tile-body strong {
+  font-size: 0.96rem;
+  line-height: 1.25;
+}
+
+.calendar-tile-body small,
+.calendar-tile-empty-label {
+  color: var(--muted);
+}
+
+.calendar-tile-empty-label {
+  padding-top: 4px;
+  font-size: 0.84rem;
+}
 
 .table-shell {
   overflow-x: auto;
@@ -860,6 +885,148 @@ textarea {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.approval-summary {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.approval-summary-item {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  display: grid;
+  gap: 6px;
+}
+
+.approval-summary-item span,
+.approval-summary-item small,
+.approval-list-head p,
+.approval-row-meta,
+.approval-section-head small,
+.approval-empty p {
+  color: var(--muted);
+}
+
+.approval-summary-item strong,
+.approval-count {
+  font-size: 1.55rem;
+  line-height: 1;
+}
+
+.approval-layout {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(320px, 440px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.approval-list-panel,
+.approval-detail-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.approval-list-head,
+.approval-detail-head,
+.approval-detail-actions,
+.approval-row-main,
+.approval-action-bar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.approval-count {
+  min-width: 52px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  text-align: center;
+}
+
+.approval-list {
+  display: grid;
+  gap: 10px;
+}
+
+.approval-list-row {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  display: grid;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.approval-list-row:hover,
+.approval-list-row.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.approval-row-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.approval-row-copy span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.approval-row-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+
+.approval-meta-grid,
+.approval-content-grid,
+.approval-feedback-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.approval-meta-grid,
+.approval-content-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.approval-content-card {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface-soft);
+  display: grid;
+  gap: 12px;
+}
+
+.approval-content-card p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.approval-section-head {
+  display: grid;
+  gap: 4px;
+}
+
+.approval-empty {
+  min-height: 100%;
+  display: grid;
+  align-items: center;
+}
+
 .grade-pill {
   display: inline-flex;
   align-items: center;
@@ -887,30 +1054,24 @@ textarea {
 
 .field-message.error { color: var(--danger); }
 
-.report-workspace,
+.report-error-banner {
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--line) 65%);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--status-rejected-bg) 60%, var(--surface) 40%);
+}
+
 .profile-manager-layout {
   display: grid;
   gap: 18px;
 }
 
-.report-workspace {
-  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
-}
-
-.report-sidebar-column {
-  display: grid;
-  gap: 18px;
-  align-content: start;
-}
-
-.report-focus-card,
 .editor-card,
 .profile-picker {
   display: grid;
   gap: 16px;
 }
 
-.report-focus-details,
 .report-list-grid,
 .profile-target-list {
   display: grid;
@@ -939,7 +1100,7 @@ textarea {
 }
 
 .report-list-item p,
-.report-focus-card p {
+.day-inspector-card p {
   margin: 0;
   color: var(--muted);
 }
@@ -967,6 +1128,12 @@ textarea {
   font-size: 0.84rem;
 }
 
+.read-only-copy strong {
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font-weight: 600;
+}
+
 .report-type-pills {
   display: flex;
   gap: 10px;
@@ -991,6 +1158,197 @@ textarea {
 .inline-notice-danger {
   background: color-mix(in srgb, var(--status-rejected-bg) 75%, var(--surface) 25%);
   border-color: color-mix(in srgb, var(--danger) 50%, var(--line) 50%);
+}
+
+.report-module {
+  gap: 20px;
+}
+
+.view-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+}
+
+.view-switch-button {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.view-switch-button.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.report-module-calendar,
+.report-writing-view {
+  display: grid;
+  gap: 16px;
+}
+
+.calendar-panel-large {
+  padding: 22px;
+}
+
+.calendar-panel-large .calendar-weekday {
+  padding: 6px 10px 10px;
+}
+
+.week-strip-card,
+.day-inspector-card,
+.writing-toolbar {
+  display: grid;
+  gap: 14px;
+}
+
+.week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.week-strip-day {
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  padding: 14px 12px;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.week-strip-day small,
+.day-inspector-copy small,
+.report-meta-card small {
+  color: var(--muted);
+}
+
+.week-strip-day.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.day-inspector-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.day-inspector-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+.day-inspector-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.day-inspector-button-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.editor-writing-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.editor-card-inline {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 26px;
+}
+
+.report-editor-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) min(680px, 100vw);
+}
+
+.report-editor-backdrop {
+  background: rgba(8, 14, 14, 0.34);
+  backdrop-filter: blur(3px);
+}
+
+.report-editor-panel {
+  height: 100vh;
+  overflow: auto;
+  padding: 18px;
+  background: var(--bg);
+  border-left: 1px solid var(--line);
+}
+
+.writing-toolbar-controls {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.writing-toolbar-status {
+  display: grid;
+  gap: 8px;
+  min-width: 150px;
+}
+
+.writing-toolbar-status span {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.report-listing-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.report-listing-rows {
+  display: grid;
+  gap: 12px;
+}
+
+.report-list-row {
+  width: 100%;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  display: grid;
+  gap: 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.report-list-row:hover {
+  border-color: var(--primary);
+  background: var(--surface-soft);
+}
+
+.report-list-card,
+.report-list-row {
+  display: grid;
+  gap: 10px;
 }
 
 .profile-manager-layout {
@@ -1039,9 +1397,10 @@ textarea {
   }
 
   .stats-grid,
+  .approval-summary,
+  .approval-layout,
   .two-column-grid,
   .reports-layout,
-  .report-workspace,
   .profile-manager-layout,
   .theme-settings-layout,
   .form-grid,
@@ -1050,7 +1409,11 @@ textarea {
   .report-editor-summary,
   .read-only-grid,
   .import-summary-grid,
-  .import-row-grid {
+  .import-row-grid,
+  .editor-writing-grid,
+  .approval-meta-grid,
+  .approval-content-grid,
+  .approval-feedback-grid {
     grid-template-columns: 1fr;
   }
 
@@ -1082,6 +1445,14 @@ textarea {
   .calendar-tile {
     min-height: 92px;
     padding: 10px;
+  }
+
+  .week-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .report-editor-drawer {
+    grid-template-columns: 1fr minmax(0, 620px);
   }
 }
 
@@ -1143,6 +1514,14 @@ textarea {
   .list-row,
   .report-list-summary,
   .report-list-meta,
+  .approval-list-head,
+  .approval-detail-head,
+  .approval-detail-actions,
+  .approval-row-main,
+  .approval-action-bar,
+  .day-inspector-head,
+  .day-inspector-actions,
+  .day-inspector-button-row,
   .subject-summary-head,
   .table-actions,
   .assignment-row,
@@ -1158,9 +1537,35 @@ textarea {
   .page-actions,
   .theme-panel,
   .calendar-month-switcher,
-  .report-type-pills {
+  .report-type-pills,
+  .writing-toolbar-controls {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .view-switch {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .view-switch-button {
+    flex: 1;
+  }
+
+  .week-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-editor-drawer {
+    grid-template-columns: 1fr;
+  }
+
+  .report-editor-backdrop {
+    display: none;
+  }
+
+  .report-editor-panel {
+    padding: 12px;
   }
 
 
@@ -1185,8 +1590,13 @@ textarea {
     border-radius: 14px;
   }
 
-  .calendar-tile-status {
-    font-size: 0.7rem;
+  .calendar-tile-body strong {
+    font-size: 0.86rem;
+  }
+
+  .calendar-tile-body small,
+  .calendar-tile-empty-label {
+    font-size: 0.72rem;
   }
 
   .data-table {
@@ -1252,7 +1662,7 @@ textarea {
   }
 
   .calendar-tile {
-    min-height: 70px;
+    min-height: 84px;
   }
 
   .status-badge,

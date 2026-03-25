@@ -4,9 +4,9 @@ const labels = {
   draft: "Entwurf",
   submitted: "Eingereicht",
   signed: "Signiert",
-  rejected: "Abgelehnt",
-  missing: "Nicht geführt",
-  invalid: "Unvollständig"
+  rejected: "Nachbearbeitung",
+  missing: "Leer",
+  invalid: "Unvollstaendig"
 };
 
 export function StatusBadge({ status }) {

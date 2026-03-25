@@ -1,11 +1,17 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { StatusBadge } from "../components/StatusBadge";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { FilterBar } from "../components/FilterBar";
 import { EmptyState } from "../components/EmptyState";
 import { CalendarGrid } from "../components/CalendarGrid";
-import { StatCard } from "../components/StatCard";
+
+const VIEW_OPTIONS = [
+  { id: "calendar", label: "Kalender" },
+  { id: "list", label: "Liste" },
+  { id: "write", label: "Schreiben" }
+];
 
 function buildEmptyEntry(date = "") {
   const label = date
@@ -41,66 +47,192 @@ function validateEntry(entry) {
 
 function formatLongDate(date) {
   if (!date) return "Kein Tag ausgewaehlt";
-  return new Date(date).toLocaleDateString("de-DE", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+  return new Date(date).toLocaleDateString("de-DE", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric"
+  });
 }
 
-function ReportEditor({ entry, draft, selectedDate, onChange, onSave, onDelete, onSubmit, onCreateForDate }) {
+function dayTone(entry) {
+  if (!entry) return { label: "Noch kein Bericht", description: "Fuer diesen Tag wurde noch kein Eintrag angelegt." };
+  if (entry.status === "submitted") return { label: "Eingereicht", description: "Dieser Bericht wartet auf Freigabe." };
+  if (entry.status === "signed") return { label: "Signiert", description: "Der Bericht ist abgeschlossen und signiert." };
+  if (entry.status === "rejected") return { label: "Nachbearbeitung", description: "Rueckmeldung liegt vor. Bitte den Bericht anpassen." };
+  return { label: "Entwurf", description: "Der Bericht ist angelegt und kann weiterbearbeitet werden." };
+}
+
+function getEntryPermissions(entry) {
+  if (!entry?.id) {
+    return {
+      editable: true,
+      deletable: false,
+      submittable: true,
+      readOnly: false,
+      notice: ""
+    };
+  }
+
+  if (entry.status === "draft") {
+    return {
+      editable: true,
+      deletable: true,
+      submittable: true,
+      readOnly: false,
+      notice: ""
+    };
+  }
+
+  if (entry.status === "rejected") {
+    return {
+      editable: true,
+      deletable: false,
+      submittable: true,
+      readOnly: false,
+      notice: "Der Bericht wurde zur Nachbearbeitung zurueckgegeben und kann erneut bearbeitet werden."
+    };
+  }
+
+  if (entry.status === "submitted") {
+    return {
+      editable: false,
+      deletable: false,
+      submittable: false,
+      readOnly: true,
+      notice: "Dieser Bericht ist eingereicht und bleibt schreibgeschuetzt, bis er freigegeben oder zur Nachbearbeitung zurueckgegeben wird."
+    };
+  }
+
+  if (entry.status === "signed") {
+    return {
+      editable: false,
+      deletable: false,
+      submittable: false,
+      readOnly: true,
+      notice: "Dieser Bericht ist signiert und kann nicht mehr bearbeitet werden."
+    };
+  }
+
+  return {
+    editable: true,
+    deletable: false,
+    submittable: false,
+    readOnly: false,
+    notice: ""
+  };
+}
+
+function buildWeekDates(date) {
+  const selected = new Date(date || new Date().toISOString().slice(0, 10));
+  const mondayOffset = (selected.getDay() + 6) % 7;
+  selected.setDate(selected.getDate() - mondayOffset);
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const current = new Date(selected);
+    current.setDate(selected.getDate() + index);
+    return current.toISOString().slice(0, 10);
+  });
+}
+
+function ReportEditor({
+  entry,
+  draft,
+  selectedDate,
+  inline = false,
+  busy = false,
+  onChange,
+  onSave,
+  onDelete,
+  onSubmit,
+  onCreateForDate,
+  onClose
+}) {
   if (!draft) {
     return (
-      <article className="panel-card editor-card">
-        <EmptyState title="Kein Bericht ausgewaehlt" description="Waehle links einen Kalendertag oder einen bestehenden Tagesbericht aus." />
+      <article className={`panel-card editor-card${inline ? " editor-card-inline" : ""}`}>
+        <EmptyState title="Kein Bericht ausgewaehlt" description="Waehle einen Tag oder oeffne einen bestehenden Bericht." />
       </article>
     );
   }
 
   const errors = validateEntry(draft);
-  const locked = entry?.status === "signed";
+  const permissions = getEntryPermissions(entry);
+  const locked = !permissions.editable;
   const isExistingEntry = Boolean(entry?.id);
+  const tone = dayTone(entry);
 
   return (
-    <article className="panel-card editor-card">
+    <article className={`panel-card editor-card${inline ? " editor-card-inline" : ""}`}>
       <PageHeader
-        kicker={isExistingEntry ? "Bearbeitung" : "Neuer Eintrag"}
+        kicker={isExistingEntry ? "Bericht bearbeiten" : "Neuer Bericht"}
         title={isExistingEntry ? entry.weekLabel || "Tagesbericht" : `Bericht fuer ${formatLongDate(selectedDate || draft.dateFrom)}`}
-        subtitle="Fokussiere dich auf einen Tag. Speichern und Einreichen erfolgen direkt aus dieser Ansicht."
+        subtitle="Kompakter Schreibmodus mit klarer Tageszuordnung, Status und Freigabeweg."
         actions={
           <div className="page-actions">
             <StatusBadge status={entry?.status || "draft"} />
-            {isExistingEntry ? (
-              <PrimaryButton variant="ghost" onClick={() => onDelete(entry.id)} disabled={locked}>
+            {onClose ? (
+              <PrimaryButton variant="secondary" onClick={onClose} disabled={busy}>
+                Schliessen
+              </PrimaryButton>
+            ) : null}
+            {isExistingEntry && permissions.deletable ? (
+              <PrimaryButton variant="ghost" onClick={() => onDelete(entry.id)} disabled={busy}>
                 Loeschen
               </PrimaryButton>
-            ) : (
-              <PrimaryButton variant="secondary" onClick={() => onCreateForDate(draft.dateFrom || selectedDate || "")}>
+            ) : !isExistingEntry ? (
+              <PrimaryButton variant="secondary" onClick={() => onCreateForDate(draft.dateFrom || selectedDate || "")} disabled={busy}>
                 Entwurf anlegen
               </PrimaryButton>
-            )}
+            ) : null}
           </div>
         }
       />
 
       <div className="report-editor-summary">
         <div className="report-meta-card">
-          <span>Ausgewaehlter Tag</span>
+          <span>Tag</span>
           <strong>{formatLongDate(selectedDate || draft.dateFrom)}</strong>
         </div>
         <div className="report-meta-card">
           <span>Status</span>
-          <strong>{entry?.status === "submitted" ? "Wartet auf Freigabe" : entry?.status === "signed" ? "Bereits signiert" : "In Bearbeitung"}</strong>
+          <strong>{tone.label}</strong>
+          <small>{tone.description}</small>
         </div>
       </div>
 
+      {permissions.notice ? (
+        <div className="inline-notice">
+          <strong>Hinweis:</strong> {permissions.notice}
+        </div>
+      ) : null}
+
       <div className="form-grid">
-        <label>
-          Titel
-          <input value={draft.weekLabel} onChange={(event) => onChange("weekLabel", event.target.value)} disabled={locked} />
-          {errors.weekLabel ? <span className="field-message error">{errors.weekLabel}</span> : null}
-        </label>
-        <label>
-          Tag
-          <input type="date" value={draft.dateFrom} onChange={(event) => onChange("dateFrom", event.target.value)} disabled={locked} />
-          {errors.dateFrom ? <span className="field-message error">{errors.dateFrom}</span> : null}
-        </label>
+        {permissions.readOnly ? (
+          <>
+            <div className="read-only-card">
+              <span>Titel</span>
+              <strong>{draft.weekLabel || "-"}</strong>
+            </div>
+            <div className="read-only-card">
+              <span>Tag</span>
+              <strong>{formatLongDate(draft.dateFrom)}</strong>
+            </div>
+          </>
+        ) : (
+          <>
+            <label>
+              Titel
+              <input value={draft.weekLabel} onChange={(event) => onChange("weekLabel", event.target.value)} disabled={locked || busy} />
+              {errors.weekLabel ? <span className="field-message error">{errors.weekLabel}</span> : null}
+            </label>
+            <label>
+              Tag
+              <input type="date" value={draft.dateFrom} onChange={(event) => onChange("dateFrom", event.target.value)} disabled={locked || busy} />
+              {errors.dateFrom ? <span className="field-message error">{errors.dateFrom}</span> : null}
+            </label>
+          </>
+        )}
       </div>
 
       <div className="report-type-pills">
@@ -108,18 +240,33 @@ function ReportEditor({ entry, draft, selectedDate, onChange, onSave, onDelete, 
         <span className={`report-type-pill${draft.schule?.trim() ? " active" : ""}`}>Berufsschule</span>
       </div>
 
-      <div className="form-grid">
-        <label>
-          Betrieb
-          <textarea rows="10" value={draft.betrieb} onChange={(event) => onChange("betrieb", event.target.value)} disabled={locked} />
-        </label>
-        <label>
-          Berufsschule
-          <textarea rows="10" value={draft.schule} onChange={(event) => onChange("schule", event.target.value)} disabled={locked} />
-        </label>
+      <div className="editor-writing-grid">
+        {permissions.readOnly ? (
+          <>
+            <div className="read-only-card read-only-copy">
+              <span>Was wurde im Betrieb gemacht?</span>
+              <strong>{draft.betrieb || "-"}</strong>
+            </div>
+            <div className="read-only-card read-only-copy">
+              <span>Was war in der Berufsschule wichtig?</span>
+              <strong>{draft.schule || "-"}</strong>
+            </div>
+          </>
+        ) : (
+          <>
+            <label>
+              Was wurde im Betrieb gemacht?
+              <textarea rows="12" value={draft.betrieb} onChange={(event) => onChange("betrieb", event.target.value)} disabled={locked || busy} />
+            </label>
+            <label>
+              Was war in der Berufsschule wichtig?
+              <textarea rows="12" value={draft.schule} onChange={(event) => onChange("schule", event.target.value)} disabled={locked || busy} />
+            </label>
+          </>
+        )}
       </div>
 
-      {errors.kind ? <div className="field-message error">{errors.kind}</div> : null}
+      {!permissions.readOnly && errors.kind ? <div className="field-message error">{errors.kind}</div> : null}
 
       {entry?.trainerComment ? (
         <div className="inline-notice">
@@ -133,73 +280,80 @@ function ReportEditor({ entry, draft, selectedDate, onChange, onSave, onDelete, 
         </div>
       ) : null}
 
-      <div className="editor-footer">
-        <PrimaryButton onClick={() => onSave(draft)} disabled={locked}>Speichern</PrimaryButton>
-        <PrimaryButton variant="secondary" onClick={() => onSubmit(draft)} disabled={locked || !!Object.keys(errors).length}>
-          Zur Freigabe einreichen
-        </PrimaryButton>
-      </div>
+      {!permissions.readOnly ? (
+        <div className="editor-footer">
+          <PrimaryButton onClick={() => onSave(draft)} disabled={locked || busy}>
+            {busy ? "Speichert..." : "Speichern"}
+          </PrimaryButton>
+          <PrimaryButton variant="secondary" onClick={() => onSubmit(draft)} disabled={locked || busy || !permissions.submittable || !!Object.keys(errors).length}>
+            {busy ? "Wird eingereicht..." : "Zur Freigabe einreichen"}
+          </PrimaryButton>
+        </div>
+      ) : null}
     </article>
   );
 }
 
-export function TagesberichtePage({ report, initialView = "editor", onCreate, onSaveEntry, onDeleteEntry, onSubmitEntry }) {
+export function TagesberichtePage({ report, initialView = "calendar", onCreate, onSaveEntry, onDeleteEntry, onSubmitEntry }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const entries = report?.entries || [];
-  const defaultDate = entries[0]?.dateFrom || new Date().toISOString().slice(0, 10);
-  const [selectedDate, setSelectedDate] = useState(initialView === "calendar" ? new Date().toISOString().slice(0, 10) : defaultDate);
-  const [selectedId, setSelectedId] = useState(initialView === "editor" ? entries[0]?.id || null : null);
+  const today = new Date().toISOString().slice(0, 10);
+  const defaultDate = entries[0]?.dateFrom || today;
+  const initialSelectedId = initialView === "calendar" ? null : entries.find((entry) => entry.dateFrom === defaultDate)?.id || entries[0]?.id || null;
+  const [selectedDate, setSelectedDate] = useState(initialView === "calendar" ? today : defaultDate);
+  const [selectedId, setSelectedId] = useState(initialSelectedId);
+  const [activeView, setActiveView] = useState(() => {
+    const requested = searchParams.get("view");
+    return VIEW_OPTIONS.some((view) => view.id === requested) ? requested : initialView === "editor" ? "write" : initialView;
+  });
   const [statusFilter, setStatusFilter] = useState("all");
   const [query, setQuery] = useState("");
   const [visibleMonth, setVisibleMonth] = useState(() => {
-    const seed = initialView === "calendar" ? new Date() : new Date(defaultDate || new Date().toISOString().slice(0, 10));
+    const seed = new Date(defaultDate);
     return new Date(seed.getFullYear(), seed.getMonth(), 1);
   });
+  const [drawerOpen, setDrawerOpen] = useState(initialView === "editor");
   const [draft, setDraft] = useState(null);
+  const [actionError, setActionError] = useState("");
+  const [actionBusy, setActionBusy] = useState(false);
+  const previousSelectedDateRef = useRef(selectedDate);
 
   const entryByDate = useMemo(() => new Map(entries.map((entry) => [entry.dateFrom, entry])), [entries]);
   const selectedEntry = useMemo(() => {
+    if (selectedDate) {
+      const datedEntry = entryByDate.get(selectedDate) || null;
+      if (datedEntry) {
+        return datedEntry;
+      }
+    }
     if (selectedId) {
       return entries.find((entry) => entry.id === selectedId) || null;
     }
-    return selectedDate ? entryByDate.get(selectedDate) || null : null;
+    return null;
   }, [entries, entryByDate, selectedDate, selectedId]);
+  const selectedPermissions = useMemo(() => getEntryPermissions(selectedEntry), [selectedEntry]);
 
   const filteredEntries = useMemo(
     () =>
       entries.filter((entry) => {
         const matchesStatus = statusFilter === "all" ? true : entry.status === statusFilter;
         const needle = query.trim().toLowerCase();
-        const matchesQuery = !needle
-          ? true
-          : [entry.weekLabel, entry.dateFrom, entry.betrieb, entry.schule].join(" ").toLowerCase().includes(needle);
+        const matchesQuery = !needle ? true : [entry.weekLabel, entry.dateFrom, entry.betrieb, entry.schule].join(" ").toLowerCase().includes(needle);
         return matchesStatus && matchesQuery;
       }),
     [entries, query, statusFilter]
   );
 
-  const monthlyEntries = useMemo(
-    () =>
-      entries.filter((entry) => {
-        if (!entry.dateFrom) return false;
-        const date = new Date(entry.dateFrom);
-        return date.getFullYear() === visibleMonth.getFullYear() && date.getMonth() === visibleMonth.getMonth();
-      }),
-    [entries, visibleMonth]
-  );
+  const weekDates = useMemo(() => buildWeekDates(selectedDate || today), [selectedDate, today]);
 
   useEffect(() => {
-    if (!entries.length) {
-      setDraft(buildEmptyEntry(selectedDate));
-      return;
-    }
-
     if (selectedEntry) {
       setDraft({ ...selectedEntry });
       return;
     }
 
     setDraft(selectedDate ? buildEmptyEntry(selectedDate) : null);
-  }, [entries, selectedDate, selectedEntry]);
+  }, [selectedDate, selectedEntry]);
 
   useEffect(() => {
     if (!selectedDate && entries[0]?.dateFrom) {
@@ -208,28 +362,72 @@ export function TagesberichtePage({ report, initialView = "editor", onCreate, on
   }, [entries, selectedDate]);
 
   useEffect(() => {
+    if (!selectedDate) {
+      return;
+    }
+
+    const datedEntry = entryByDate.get(selectedDate) || null;
+    const nextSelectedId = datedEntry?.id || null;
+    if (selectedId !== nextSelectedId) {
+      setSelectedId(nextSelectedId);
+    }
+  }, [entryByDate, selectedDate, selectedId]);
+
+  useEffect(() => {
     if (!selectedDate) return;
+    if (previousSelectedDateRef.current === selectedDate) {
+      return;
+    }
+
+    previousSelectedDateRef.current = selectedDate;
     const date = new Date(selectedDate);
-    if (date.getFullYear() !== visibleMonth.getFullYear() || date.getMonth() !== visibleMonth.getMonth()) {
-      setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
-    }
-  }, [selectedDate, visibleMonth]);
+    setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+  }, [selectedDate]);
 
-  async function handleCreate(date) {
-    const id = await onCreate(date);
-    if (!id) {
-      return null;
+  async function ensureEntry(date) {
+    setActionError("");
+    const targetDate = date || selectedDate || today;
+    const existing = entryByDate.get(targetDate);
+    if (existing) {
+      setSelectedId(existing.id);
+      setSelectedDate(targetDate);
+      return existing.id;
     }
 
-    const targetDate = date || selectedDate || new Date().toISOString().slice(0, 10);
-    setSelectedDate(targetDate);
-    setSelectedId(id);
+    const id = await onCreate(targetDate);
+    if (id) {
+      setSelectedId(id);
+      setSelectedDate(targetDate);
+    }
     return id;
   }
 
-  async function handleSave(nextDraft) {
-    if (!nextDraft) return;
+  function openEditorForDate(date) {
+    const targetDate = date || today;
+    setSelectedDate(targetDate);
+    setSelectedId(entryByDate.get(targetDate)?.id || null);
+    setDrawerOpen(true);
+  }
 
+  function handleSelectDate(date) {
+    const targetDate = date || today;
+    setSelectedDate(targetDate);
+    setSelectedId(entryByDate.get(targetDate)?.id || null);
+  }
+
+  function openEditorForEntry(entryId) {
+    const entry = entries.find((candidate) => candidate.id === entryId);
+    if (!entry) return;
+    setSelectedDate(entry.dateFrom);
+    setSelectedId(entry.id);
+    setDrawerOpen(true);
+  }
+
+  async function persistDraft(nextDraft) {
+    if (!nextDraft) return null;
+    if (!selectedPermissions.editable) {
+      throw new Error(selectedPermissions.notice || "Dieser Bericht ist schreibgeschuetzt.");
+    }
     if (selectedEntry?.id) {
       await onSaveEntry(selectedEntry.id, nextDraft);
       setSelectedId(selectedEntry.id);
@@ -237,28 +435,60 @@ export function TagesberichtePage({ report, initialView = "editor", onCreate, on
       return selectedEntry.id;
     }
 
-    const id = await handleCreate(nextDraft.dateFrom || selectedDate);
-    if (id) {
-      await onSaveEntry(id, { ...nextDraft, id });
-      setSelectedId(id);
-      setSelectedDate(nextDraft.dateFrom || selectedDate);
-      return id;
+    const id = await ensureEntry(nextDraft.dateFrom || selectedDate);
+    if (!id) {
+      return null;
     }
 
-    return null;
+    await onSaveEntry(id, { ...nextDraft, id });
+    setSelectedId(id);
+    setSelectedDate(nextDraft.dateFrom || selectedDate);
+    return id;
+  }
+
+  async function handleSave(nextDraft) {
+    setActionBusy(true);
+    setActionError("");
+
+    try {
+      return await persistDraft(nextDraft);
+    } catch (error) {
+      setActionError(error.message || "Bericht konnte nicht gespeichert werden.");
+      return null;
+    } finally {
+      setActionBusy(false);
+    }
   }
 
   async function handleSubmit(nextDraft) {
-    const entryId = (await handleSave(nextDraft)) || selectedEntry?.id || entryByDate.get(nextDraft.dateFrom || selectedDate || "")?.id;
-    if (entryId) {
-      await onSubmitEntry(entryId);
-      setSelectedId(entryId);
+    try {
+      setActionBusy(true);
+      setActionError("");
+      const entryId = (await persistDraft(nextDraft)) || selectedEntry?.id;
+      if (entryId) {
+        await onSubmitEntry(entryId);
+        setSelectedId(entryId);
+      }
+    } catch (error) {
+      setActionError(error.message || "Bericht konnte nicht eingereicht werden.");
+    } finally {
+      setActionBusy(false);
     }
   }
 
-  function handleSelectDate(date) {
-    setSelectedDate(date);
-    setSelectedId(entryByDate.get(date)?.id || null);
+  function handleChangeMonth(offset) {
+    setVisibleMonth((current) => {
+      const nextMonth = new Date(current.getFullYear(), current.getMonth() + offset, 1);
+      const currentSelection = selectedDate ? new Date(`${selectedDate}T00:00:00`) : new Date(`${today}T00:00:00`);
+      const targetDay = Math.min(
+        currentSelection.getDate(),
+        new Date(nextMonth.getFullYear(), nextMonth.getMonth() + 1, 0).getDate()
+      );
+      const nextSelection = new Date(nextMonth.getFullYear(), nextMonth.getMonth(), targetDay).toISOString().slice(0, 10);
+      setSelectedDate(nextSelection);
+      setSelectedId(entryByDate.get(nextSelection)?.id || null);
+      return nextMonth;
+    });
   }
 
   function handleChange(field, value) {
@@ -268,137 +498,259 @@ export function TagesberichtePage({ report, initialView = "editor", onCreate, on
       if (field === "dateFrom") {
         next.dateTo = value;
         setSelectedDate(value);
+        setSelectedId(entryByDate.get(value)?.id || null);
       }
       return next;
     });
   }
 
   async function handleDelete(entryId) {
-    await onDeleteEntry(entryId);
-    setSelectedId(null);
+    setActionBusy(true);
+    setActionError("");
+    try {
+      await onDeleteEntry(entryId);
+      setSelectedId(null);
+      setDrawerOpen(false);
+    } catch (error) {
+      setActionError(error.message || "Bericht konnte nicht geloescht werden.");
+    } finally {
+      setActionBusy(false);
+    }
   }
 
-  const currentMonthMissing = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1, 0).getDate() - monthlyEntries.length;
+  const selectedDayEntry = selectedDate ? entryByDate.get(selectedDate) || null : null;
+  const selectedDayTone = dayTone(selectedDayEntry);
+  useEffect(() => {
+    const requested = searchParams.get("view");
+    if (VIEW_OPTIONS.some((view) => view.id === requested) && requested !== activeView) {
+      setActiveView(requested);
+    }
+  }, [activeView, searchParams]);
+
+  function switchView(nextView) {
+    setActiveView(nextView);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("view", nextView);
+    setSearchParams(nextParams, { replace: true });
+    if (nextView === "write") {
+      setDrawerOpen(false);
+    }
+  }
 
   return (
-    <div className="page-stack">
+    <div className="page-stack report-module">
       <PageHeader
-        kicker="Tagesberichte"
-        title="Berichte schreiben, finden und im Kalender steuern"
-        subtitle="Kalender, Tagesfokus und Editor liegen in einer gemeinsamen Arbeitsansicht. So fuehrst du Berichte schneller und ohne Medienbruch."
+        kicker="Berichte"
+        title="Berichte"
+        subtitle="Ein Arbeitsmodul mit drei klaren Modi: Kalender fuer Planung, Liste fuer Uebersicht und Schreiben fuer fokussiertes Erfassen."
         actions={
           <div className="page-actions">
-            <PrimaryButton variant="secondary" onClick={() => handleSelectDate(new Date().toISOString().slice(0, 10))}>
+            <div className="view-switch">
+              {VIEW_OPTIONS.map((view) => (
+                <button
+                  key={view.id}
+                  type="button"
+                  className={`view-switch-button${activeView === view.id ? " active" : ""}`}
+                  onClick={() => switchView(view.id)}
+                >
+                  {view.label}
+                </button>
+              ))}
+            </div>
+            <PrimaryButton variant="secondary" onClick={() => handleSelectDate(today)}>
               Heute
             </PrimaryButton>
-            <PrimaryButton onClick={() => handleCreate(selectedDate || new Date().toISOString().slice(0, 10))}>
-              Bericht fuer Tag anlegen
+            <PrimaryButton
+              onClick={async () => {
+                const date = selectedDate || today;
+                if (activeView === "write") {
+                  await ensureEntry(date);
+                } else {
+                  openEditorForDate(date);
+                }
+              }}
+            >
+              Bericht oeffnen
             </PrimaryButton>
           </div>
         }
       />
 
-      <section className="stats-grid report-day-stats">
-        <StatCard label="Berichte gesamt" value={entries.length} note="Alle angelegten Tagesberichte" />
-        <StatCard label="Im aktuellen Monat" value={monthlyEntries.length} note="Bereits dokumentierte Tage" />
-        <StatCard label="Offen zur Freigabe" value={entries.filter((entry) => entry.status === "submitted").length} note="Warten auf Rueckmeldung" />
-        <StatCard label="Luecken im Monat" value={Math.max(currentMonthMissing, 0)} note="Noch nicht dokumentierte Kalendertage" />
-      </section>
+      {actionError ? <div className="field-message error report-error-banner">{actionError}</div> : null}
 
-      <section className="report-workspace">
-        <div className="report-sidebar-column">
+      {activeView === "calendar" ? (
+        <section className="report-module-calendar">
           <CalendarGrid
             entries={entries}
             month={visibleMonth}
             selectedDate={selectedDate}
-            onChangeMonth={(offset) => setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1))}
+            onChangeMonth={handleChangeMonth}
             onSelectDate={handleSelectDate}
+            variant="large"
           />
 
-          <article className="panel-card report-focus-card">
+          <section className="panel-card week-strip-card">
             <PageHeader
-              kicker="Tagesfokus"
-              title={formatLongDate(selectedDate)}
-              subtitle={selectedEntry ? "Fuer diesen Tag besteht bereits ein Bericht." : "Fuer diesen Tag existiert noch kein Bericht."}
+              kicker="Woche"
+              title={`Arbeitswoche ab ${formatLongDate(weekDates[0])}`}
+              subtitle="Springe schnell zwischen Tagen, ohne die Monatsansicht zu verlassen."
             />
-            {selectedEntry ? (
-              <div className="report-focus-details">
-                <div className="report-list-summary">
-                  <strong>{selectedEntry.weekLabel || "Ohne Titel"}</strong>
-                  <StatusBadge status={selectedEntry.status} />
-                </div>
-                <p>{selectedEntry.betrieb || selectedEntry.schule ? "Inhalt vorhanden und direkt bearbeitbar." : "Bericht angelegt, aber noch ohne inhaltlichen Schwerpunkt."}</p>
-                <PrimaryButton variant="secondary" onClick={() => setSelectedId(selectedEntry.id)}>
-                  Bericht oeffnen
-                </PrimaryButton>
+            <div className="week-strip">
+              {weekDates.map((date) => {
+                const entry = entryByDate.get(date);
+                return (
+                  <button
+                    key={date}
+                    type="button"
+                    className={`week-strip-day${selectedDate === date ? " active" : ""}`}
+                    onClick={() => handleSelectDate(date)}
+                  >
+                    <small>{new Date(date).toLocaleDateString("de-DE", { weekday: "short" })}</small>
+                    <strong>{new Date(date).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}</strong>
+                    <span>{entry ? <StatusBadge status={entry.status} /> : "Leer"}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+
+          <section className="panel-card day-inspector-card">
+            <div className="day-inspector-head">
+              <div>
+                <p className="page-kicker">Tag</p>
+                <h3>{formatLongDate(selectedDate)}</h3>
+                <p>{selectedDayTone.description}</p>
               </div>
-            ) : (
-              <EmptyState
-                title="Noch kein Bericht"
-                description="Lege direkt aus dem Kalender einen neuen Bericht fuer diesen Tag an."
-                action={<PrimaryButton onClick={() => handleCreate(selectedDate)}>Bericht anlegen</PrimaryButton>}
-              />
-            )}
-          </article>
-        </div>
+              <StatusBadge status={selectedDayEntry?.status || "missing"} />
+            </div>
+            <div className="day-inspector-actions">
+              {selectedDayEntry ? (
+                <>
+                  <div className="day-inspector-copy">
+                    <strong>{selectedDayEntry.weekLabel || "Ohne Titel"}</strong>
+                    <small>{selectedDayEntry.betrieb && selectedDayEntry.schule ? "Betrieb und Berufsschule dokumentiert" : selectedDayEntry.betrieb ? "Betrieb dokumentiert" : selectedDayEntry.schule ? "Berufsschule dokumentiert" : "Noch ohne Inhalt"}</small>
+                  </div>
+                  <div className="day-inspector-button-row">
+                    <PrimaryButton variant="secondary" onClick={() => switchView("write")}>Zur Schreibansicht</PrimaryButton>
+                    <PrimaryButton onClick={() => openEditorForEntry(selectedDayEntry.id)}>Im Seitenpanel bearbeiten</PrimaryButton>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="day-inspector-copy">
+                    <strong>Kein Bericht vorhanden</strong>
+                    <small>Lege direkt fuer den ausgewaehlten Tag einen neuen Entwurf an.</small>
+                  </div>
+                  <div className="day-inspector-button-row">
+                    <PrimaryButton variant="secondary" onClick={() => switchView("write")}>Zur Schreibansicht</PrimaryButton>
+                    <PrimaryButton onClick={() => openEditorForDate(selectedDate)}>Neuen Bericht schreiben</PrimaryButton>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
 
-        <ReportEditor
-          entry={selectedEntry}
-          draft={draft}
-          selectedDate={selectedDate}
-          onChange={handleChange}
-          onSave={handleSave}
-          onDelete={handleDelete}
-          onSubmit={handleSubmit}
-          onCreateForDate={handleCreate}
-        />
-      </section>
+          {drawerOpen ? (
+            <div className="report-editor-drawer">
+              <div className="report-editor-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+              <div className="report-editor-panel">
+                <ReportEditor
+                  entry={selectedEntry}
+                  draft={draft}
+                  selectedDate={selectedDate}
+                  onChange={handleChange}
+                  onSave={handleSave}
+                  onDelete={handleDelete}
+                  onSubmit={handleSubmit}
+                  onCreateForDate={ensureEntry}
+                  onClose={() => setDrawerOpen(false)}
+                  busy={actionBusy}
+                />
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
-      <section className="panel-card">
-        <PageHeader
-          kicker="Berichtsverwaltung"
-          title="Schnellzugriff auf bestehende Eintraege"
-          subtitle="Filtere nach Status, suche nach Stichwoertern und springe direkt in die Bearbeitung."
-        />
-        <FilterBar>
-          <input placeholder="Suche nach Titel, Datum oder Inhalt" value={query} onChange={(event) => setQuery(event.target.value)} />
-          <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value="all">Alle Status</option>
-            <option value="draft">Entwurf</option>
-            <option value="submitted">Eingereicht</option>
-            <option value="signed">Signiert</option>
-            <option value="rejected">Abgelehnt</option>
-          </select>
-        </FilterBar>
+      {activeView === "list" ? (
+        <section className="panel-card report-listing-panel">
+          <PageHeader
+            kicker="Listenansicht"
+            title="Vorhandene Berichte schnell finden"
+            subtitle="Kompakte Uebersicht fuer Suche, Statusfilter und direkten Sprung in die Bearbeitung."
+          />
+          <FilterBar>
+            <input placeholder="Nach Titel, Datum oder Inhalt suchen" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="all">Alle Status</option>
+              <option value="draft">Entwurf</option>
+              <option value="submitted">Eingereicht</option>
+              <option value="signed">Signiert</option>
+              <option value="rejected">Nachbearbeitung</option>
+            </select>
+          </FilterBar>
+          {filteredEntries.length ? (
+            <div className="report-listing-rows">
+              {filteredEntries.map((entry) => (
+                <button key={entry.id} type="button" className="report-list-row" onClick={() => openEditorForEntry(entry.id)}>
+                  <div className="report-list-summary">
+                    <strong>{entry.weekLabel || "Ohne Titel"}</strong>
+                    <StatusBadge status={entry.status} />
+                  </div>
+                  <div className="report-list-meta">
+                    <span>{entry.dateFrom || "-"}</span>
+                    <span>{entry.betrieb && entry.schule ? "Betrieb + Schule" : entry.betrieb ? "Betrieb" : entry.schule ? "Berufsschule" : "Noch ohne Inhalt"}</span>
+                  </div>
+                  <p>{entry.trainerComment || "Direkt oeffnen, aktualisieren oder erneut einreichen."}</p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <EmptyState title="Keine Berichte gefunden" description="Passe die Filter an oder starte einen neuen Bericht fuer einen Tag." />
+          )}
+        </section>
+      ) : null}
 
-        {filteredEntries.length ? (
-          <div className="report-list-grid">
-            {filteredEntries.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                className={`report-list-item${selectedEntry?.id === entry.id ? " active" : ""}`}
-                onClick={() => {
-                  setSelectedId(entry.id);
-                  setSelectedDate(entry.dateFrom || selectedDate);
-                }}
+      {activeView === "write" ? (
+        <section className="report-writing-view">
+          <div className="panel-card writing-toolbar">
+            <PageHeader
+              kicker="Schreibansicht"
+              title="Fokussiert schreiben"
+              subtitle="Der Editor ist hier die Hauptflaeche. Tageswahl und Aktionen bleiben kompakt darueber."
+            />
+            <div className="writing-toolbar-controls">
+              <label>
+                Arbeitstag
+                <input type="date" value={selectedDate} onChange={(event) => handleSelectDate(event.target.value)} />
+              </label>
+              <div className="writing-toolbar-status">
+                <span>Status</span>
+                <StatusBadge status={selectedEntry?.status || "missing"} />
+              </div>
+              <PrimaryButton
+                variant="secondary"
+                onClick={() => ensureEntry(selectedDate)}
+                disabled={selectedEntry?.status === "submitted" || selectedEntry?.status === "signed"}
               >
-                <div className="report-list-summary">
-                  <strong>{entry.weekLabel || "Ohne Titel"}</strong>
-                  <StatusBadge status={entry.status} />
-                </div>
-                <div className="report-list-meta">
-                  <span>{entry.dateFrom || "-"}</span>
-                  <span>{entry.betrieb && entry.schule ? "Betrieb + Schule" : entry.betrieb ? "Betrieb" : entry.schule ? "Berufsschule" : "Noch ohne Inhalt"}</span>
-                </div>
-                {entry.trainerComment ? <p>{entry.trainerComment}</p> : <p>Direkt oeffnen, bearbeiten und bei Bedarf erneut einreichen.</p>}
-              </button>
-            ))}
+                {selectedEntry ? "Bericht laden" : "Entwurf laden"}
+              </PrimaryButton>
+            </div>
           </div>
-        ) : (
-          <EmptyState title="Keine Berichte gefunden" description="Passe die Filter an oder lege fuer den ausgewaehlten Tag einen neuen Bericht an." />
-        )}
-      </section>
+          <ReportEditor
+            entry={selectedEntry}
+            draft={draft}
+            selectedDate={selectedDate}
+            inline
+            onChange={handleChange}
+            onSave={handleSave}
+            onDelete={handleDelete}
+            onSubmit={handleSubmit}
+            onCreateForDate={ensureEntry}
+            busy={actionBusy}
+          />
+        </section>
+      ) : null}
     </div>
   );
 }

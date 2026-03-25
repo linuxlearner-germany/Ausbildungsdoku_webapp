@@ -13,7 +13,7 @@ function dayStatus(entry) {
   return entry.status;
 }
 
-export function CalendarGrid({ entries, month, selectedDate, onChangeMonth, onSelectDate }) {
+export function CalendarGrid({ entries, month, selectedDate, onChangeMonth, onSelectDate, variant = "default" }) {
   const label = month.toLocaleDateString("de-DE", { month: "long", year: "numeric" });
   const firstGridDay = new Date(month);
   const weekday = (firstGridDay.getDay() + 6) % 7;
@@ -24,15 +24,17 @@ export function CalendarGrid({ entries, month, selectedDate, onChangeMonth, onSe
   }
 
   return (
-    <section className="panel-card">
+    <section className={`panel-card calendar-panel calendar-panel-${variant}`}>
       <div className="panel-header">
         <div className="calendar-panel-head">
           <div>
             <p className="page-kicker">Kalender</p>
             <h3>{label}</h3>
+            <p className="page-subtitle">Tage mit Berichten sind direkt anklickbar. Leere, offene und freigegebene Tage werden klar getrennt dargestellt.</p>
           </div>
           <div className="calendar-month-switcher">
-            <PrimaryButton variant="secondary" onClick={() => onChangeMonth(-1)}>Zurück</PrimaryButton>
+            <PrimaryButton variant="secondary" onClick={() => onChangeMonth(-1)}>Zurueck</PrimaryButton>
+            <PrimaryButton variant="secondary" onClick={() => onSelectDate(new Date().toISOString().slice(0, 10))}>Heute</PrimaryButton>
             <PrimaryButton variant="secondary" onClick={() => onChangeMonth(1)}>Weiter</PrimaryButton>
           </div>
         </div>
@@ -56,8 +58,24 @@ export function CalendarGrid({ entries, month, selectedDate, onChangeMonth, onSe
               className={`calendar-tile status-${status}${selectedDate === iso ? " selected" : ""}${date.getMonth() !== month.getMonth() ? " outside" : ""}`}
               onClick={() => onSelectDate(iso)}
             >
-              <span className="calendar-tile-day">{date.getDate()}</span>
-              <span className="calendar-tile-status">{entry ? <StatusBadge status={status} /> : "Kein Eintrag"}</span>
+              <div className="calendar-tile-top">
+                <span className="calendar-tile-day">{date.getDate()}</span>
+                {entry ? <StatusBadge status={status} /> : <span className="calendar-tile-empty-label">Leer</span>}
+              </div>
+              <div className="calendar-tile-body">
+                <strong>{entry?.weekLabel || "Kein Bericht"}</strong>
+                <small>
+                  {entry
+                    ? entry.betrieb && entry.schule
+                      ? "Betrieb und Berufsschule"
+                      : entry.betrieb
+                        ? "Betrieb"
+                        : entry.schule
+                          ? "Berufsschule"
+                          : "Noch unvollstaendig"
+                    : "Neuen Bericht anlegen"}
+                </small>
+              </div>
             </button>
           );
         })}

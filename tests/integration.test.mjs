@@ -232,6 +232,80 @@ test("Trainee kann Profil nicht ueber Report-Speichern aendern", async () => {
   assert.equal(updated.data.trainee.betrieb, "Muster GmbH");
 });
 
+test("Entwurf kann gespeichert werden, eingereichte und signierte Berichte bleiben gesperrt", async () => {
+  const loginResponse = await postJson(`${baseUrl}/api/login`, {
+    identifier: "azubi",
+    password: "azubi123"
+  });
+  const cookie = extractCookie(loginResponse);
+
+  const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: cookie }
+  });
+  const dashboard = await dashboardResponse.json();
+
+  const draftEntry = dashboard.report.entries.find((entry) => entry.status === "draft");
+  const signedEntry = dashboard.report.entries.find((entry) => entry.status === "signed");
+
+  const saveDraftResponse = await postJson(
+    `${baseUrl}/api/report`,
+    {
+      entries: dashboard.report.entries.map((entry) =>
+        entry.id === draftEntry.id
+          ? { ...entry, betrieb: `${entry.betrieb} und Dokumentation` }
+          : entry
+      )
+    },
+    cookie
+  );
+  const savedDraft = await saveDraftResponse.json();
+  assert.equal(saveDraftResponse.status, 200);
+  assert.match(savedDraft.data.entries.find((entry) => entry.id === draftEntry.id).betrieb, /Dokumentation/);
+
+  const submitDraftResponse = await postJson(
+    `${baseUrl}/api/report/submit`,
+    { entryId: draftEntry.id },
+    cookie
+  );
+  assert.equal(submitDraftResponse.status, 200);
+
+  const lockedDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: cookie }
+  });
+  const lockedDashboard = await lockedDashboardResponse.json();
+  const submittedEntry = lockedDashboard.report.entries.find((entry) => entry.id === draftEntry.id);
+
+  const saveSubmittedResponse = await postJson(
+    `${baseUrl}/api/report`,
+    {
+      entries: lockedDashboard.report.entries.map((entry) =>
+        entry.id === submittedEntry.id
+          ? { ...entry, betrieb: `${entry.betrieb} nachtraeglich geaendert` }
+          : entry
+      )
+    },
+    cookie
+  );
+  const submittedError = await saveSubmittedResponse.json();
+  assert.equal(saveSubmittedResponse.status, 400);
+  assert.match(submittedError.error, /schreibgeschuetzt/i);
+
+  const saveSignedResponse = await postJson(
+    `${baseUrl}/api/report`,
+    {
+      entries: lockedDashboard.report.entries.map((entry) =>
+        entry.id === signedEntry.id
+          ? { ...entry, betrieb: `${entry.betrieb} unzulaessig` }
+          : entry
+      )
+    },
+    cookie
+  );
+  const signedError = await saveSignedResponse.json();
+  assert.equal(saveSignedResponse.status, 400);
+  assert.match(signedError.error, /Signierte Eintraege/);
+});
+
 test("Trainer darf zugeordnetes Azubi-Profil aendern", async () => {
   const trainerLogin = await postJson(`${baseUrl}/api/login`, {
     identifier: "trainer",

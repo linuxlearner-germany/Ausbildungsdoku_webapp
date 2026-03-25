@@ -977,10 +977,14 @@ function upsertTraineeEntries(user, payload) {
       entry.rejectionReason = existing.rejectionReason;
 
       if (existing.status === "signed" && contentChanged) {
-        return { error: "Signierte Eintraege koennen nicht bearbeitet oder geloescht werden." };
+        return { error: "Signierte Eintraege koennen nicht bearbeitet oder geloescht werden.", code: "ENTRY_SIGNED_LOCKED", status: 400 };
       }
 
-      if (contentChanged) {
+      if (existing.status === "submitted" && contentChanged) {
+        return { error: "Eingereichte Eintraege sind schreibgeschuetzt, bis sie zur Nachbearbeitung zurueckgegeben werden.", code: "ENTRY_SUBMITTED_LOCKED", status: 400 };
+      }
+
+      if (contentChanged && existing.status === "rejected") {
         entry.status = "draft";
         entry.signedAt = null;
         entry.signerName = "";
@@ -1376,7 +1380,7 @@ app.post("/api/preferences/theme", requireAuth, (req, res) => {
 app.post("/api/report", requireRole("trainee"), (req, res) => {
   const result = upsertTraineeEntries(req.user, req.body || {});
   if (result?.error) {
-    return res.status(400).json({ error: result.error });
+    return res.status(result.status || 400).json({ error: result.error, code: result.code || "REPORT_UPDATE_FAILED" });
   }
   res.json({ ok: true, data: getTraineeDashboard(getCurrentUser(req)) });
 });
@@ -1504,6 +1508,14 @@ app.post("/api/report/submit", requireRole("trainee"), (req, res) => {
   const missing = validateEntry(entry);
   if (missing.length) {
     return res.status(400).json({ error: `Pflichtfelder fehlen: ${missing.join(", ")}` });
+  }
+
+  if (entry.status === "submitted") {
+    return res.status(400).json({ error: "Eintrag ist bereits eingereicht." });
+  }
+
+  if (entry.status === "signed") {
+    return res.status(400).json({ error: "Signierte Eintraege koennen nicht erneut eingereicht werden." });
   }
 
   const result = db.prepare(`

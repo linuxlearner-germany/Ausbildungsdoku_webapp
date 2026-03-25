@@ -33,7 +33,7 @@ export function DashboardPage({ role, report, trainees, users }) {
           kicker="Dashboard"
           title="Mein Überblick"
           subtitle="Status, letzte Aktivitäten und Schnellzugriffe für deine tägliche Berichtsheft-Führung."
-          actions={<Link className="button button-primary" to="/tagesberichte">Tagesbericht erstellen</Link>}
+          actions={<Link className="button button-primary" to="/berichte?view=write">Tagesbericht erstellen</Link>}
         />
         <section className="stats-grid">
           <StatCard label="Tagesberichte" value={entries.length} note="Gesamtzahl deiner Einträge" />
@@ -63,8 +63,8 @@ export function DashboardPage({ role, report, trainees, users }) {
           <article className="panel-card">
             <PageHeader kicker="Schnellzugriffe" title="Direkte Aktionen" subtitle="Springe direkt in die wichtigsten Arbeitsbereiche." />
             <div className="quick-actions">
-              <Link className="quick-action-card" to="/tagesberichte">Berichte schreiben</Link>
-              <Link className="quick-action-card" to="/kalender">Kalenderansicht</Link>
+              <Link className="quick-action-card" to="/berichte?view=write">Berichte schreiben</Link>
+              <Link className="quick-action-card" to="/berichte?view=calendar">Kalenderansicht</Link>
               <Link className="quick-action-card" to="/noten">Noten verwalten</Link>
               <Link className="quick-action-card" to="/freigaben">Freigabestatus prüfen</Link>
               <Link className="quick-action-card" to="/profil">Profil ansehen</Link>
