@@ -331,6 +331,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
     }
     return null;
   }, [entries, entryByDate, selectedDate, selectedId]);
+  const editorKey = `${selectedEntry?.id || "new"}:${selectedDate || "none"}`;
   const selectedPermissions = useMemo(() => getEntryPermissions(selectedEntry), [selectedEntry]);
 
   const filteredEntries = useMemo(
@@ -404,15 +405,21 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
 
   function openEditorForDate(date) {
     const targetDate = date || today;
+    const existing = entryByDate.get(targetDate) || null;
+    setActionError("");
     setSelectedDate(targetDate);
-    setSelectedId(entryByDate.get(targetDate)?.id || null);
+    setSelectedId(existing?.id || null);
+    setDraft(existing ? { ...existing } : buildEmptyEntry(targetDate));
     setDrawerOpen(true);
   }
 
   function handleSelectDate(date) {
     const targetDate = date || today;
+    setActionError("");
     setSelectedDate(targetDate);
-    setSelectedId(entryByDate.get(targetDate)?.id || null);
+    const existing = entryByDate.get(targetDate) || null;
+    setSelectedId(existing?.id || null);
+    setDraft(existing ? { ...existing } : buildEmptyEntry(targetDate));
   }
 
   function openEditorForEntry(entryId) {
@@ -425,22 +432,24 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
 
   async function persistDraft(nextDraft) {
     if (!nextDraft) return null;
-    if (!selectedPermissions.editable) {
-      throw new Error(selectedPermissions.notice || "Dieser Bericht ist schreibgeschuetzt.");
+    const sourceEntry = nextDraft.id ? entries.find((entry) => entry.id === nextDraft.id) || null : selectedEntry;
+    const sourcePermissions = getEntryPermissions(sourceEntry);
+    if (!sourcePermissions.editable) {
+      throw new Error(sourcePermissions.notice || "Dieser Bericht ist schreibgeschuetzt.");
     }
-    if (selectedEntry?.id) {
-      await onSaveEntry(selectedEntry.id, nextDraft);
-      setSelectedId(selectedEntry.id);
+    if (sourceEntry?.id) {
+      await onSaveEntry(sourceEntry.id, nextDraft);
+      setSelectedId(sourceEntry.id);
       setSelectedDate(nextDraft.dateFrom || selectedDate);
-      return selectedEntry.id;
+      return sourceEntry.id;
     }
 
-    const id = await ensureEntry(nextDraft.dateFrom || selectedDate);
+    const id = await onCreate(nextDraft.dateFrom || selectedDate);
     if (!id) {
       return null;
     }
 
-    await onSaveEntry(id, { ...nextDraft, id });
+    await onSaveEntry(id, { ...nextDraft, id, status: "draft", signedAt: null, signerName: "", trainerComment: "", rejectionReason: "" });
     setSelectedId(id);
     setSelectedDate(nextDraft.dateFrom || selectedDate);
     return id;
@@ -655,6 +664,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
               <div className="report-editor-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
               <div className="report-editor-panel">
                 <ReportEditor
+                  key={editorKey}
                   entry={selectedEntry}
                   draft={draft}
                   selectedDate={selectedDate}
@@ -738,6 +748,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
             </div>
           </div>
           <ReportEditor
+            key={editorKey}
             entry={selectedEntry}
             draft={draft}
             selectedDate={selectedDate}

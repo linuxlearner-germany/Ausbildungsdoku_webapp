@@ -18,7 +18,7 @@ function resolveTheme(preference) {
 
 function buildEmptyEntry(date = "") {
   return {
-    id: `entry-${Date.now()}-${Math.random()}`,
+    id: "",
     weekLabel: date ? `Tagesbericht ${new Date(date).toLocaleDateString("de-DE")}` : "",
     dateFrom: date,
     dateTo: date,
@@ -169,38 +169,42 @@ export function AppProvider({ children }) {
   }
 
   async function createOrFocusEntry(date) {
-    const current = getTraineeReport();
-    if (!current) return null;
-
     const isoDate = date || new Date().toISOString().slice(0, 10);
-    const existing = current.entries.find((entry) => entry.dateFrom === isoDate);
+    const current = getTraineeReport();
+    const existing = current?.entries.find((entry) => entry.dateFrom === isoDate);
     if (existing) {
       return existing.id;
     }
 
-    const nextReport = {
-      ...current,
-      entries: [buildEmptyEntry(isoDate), ...current.entries]
-    };
-    const saved = await saveTraineeReport(nextReport);
-    return saved.entries.find((entry) => entry.dateFrom === isoDate)?.id || null;
+    const data = await api("/api/report/draft", {
+      method: "POST",
+      body: JSON.stringify(buildEmptyEntry(isoDate))
+    });
+    setDashboard((dashboard) => (dashboard?.role === "trainee" ? { ...dashboard, report: data.data } : dashboard));
+    return data.entry?.id || data.data?.entries?.find((entry) => entry.dateFrom === isoDate)?.id || null;
   }
 
   async function saveEntry(entryId, patch) {
     const current = getTraineeReport();
-    if (!current) return;
-    const normalizedPatch = {
-      ...patch,
-      id: entryId,
-      dateTo: patch.dateFrom || patch.dateTo
-    };
-    const exists = current.entries.some((entry) => entry.id === entryId);
-    const entries = exists
-      ? current.entries.map((entry) =>
-          entry.id === entryId ? { ...entry, ...normalizedPatch, dateTo: patch.dateFrom || entry.dateFrom || entry.dateTo } : entry
-        )
-      : [normalizedPatch, ...current.entries];
-    return saveTraineeReport({ ...current, entries });
+    if (!current) return null;
+
+    const effectiveId = entryId || patch?.id || "";
+    const exists = effectiveId ? current.entries.some((entry) => entry.id === effectiveId) : false;
+    const targetId = exists ? effectiveId : await createOrFocusEntry(patch?.dateFrom || "");
+    if (!targetId) {
+      return null;
+    }
+
+    const data = await api(`/api/report/entry/${targetId}`, {
+      method: "POST",
+      body: JSON.stringify({
+        ...patch,
+        id: targetId,
+        dateTo: patch?.dateFrom || patch?.dateTo
+      })
+    });
+    setDashboard((dashboard) => (dashboard?.role === "trainee" ? { ...dashboard, report: data.data } : dashboard));
+    return data.data;
   }
 
   async function deleteEntry(entryId) {

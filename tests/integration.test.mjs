@@ -306,6 +306,72 @@ test("Entwurf kann gespeichert werden, eingereichte und signierte Berichte bleib
   assert.match(signedError.error, /Signierte Eintraege/);
 });
 
+test("Neuer Entwurf bleibt nach signiertem Bericht getrennt und wird als neuer Bericht erstellt", async () => {
+  const loginResponse = await postJson(`${baseUrl}/api/login`, {
+    identifier: "azubi",
+    password: "azubi123"
+  });
+  const cookie = extractCookie(loginResponse);
+
+  const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: cookie }
+  });
+  const dashboard = await dashboardResponse.json();
+  const signedEntry = dashboard.report.entries.find((entry) => entry.status === "signed");
+  assert.ok(signedEntry);
+  const signedSnapshot = { ...signedEntry };
+
+  const createDate = "2026-05-01";
+  const createDraftResponse = await postJson(
+    `${baseUrl}/api/report/draft`,
+    { dateFrom: createDate, dateTo: createDate, weekLabel: "Neuer Tagesbericht" },
+    cookie
+  );
+  const createdDraft = await createDraftResponse.json();
+  assert.equal(createDraftResponse.status, 200);
+  assert.ok(createdDraft.entry?.id);
+  assert.notEqual(createdDraft.entry.id, signedEntry.id);
+  assert.equal(createdDraft.entry.status, "draft");
+  assert.equal(createdDraft.entry.dateFrom, createDate);
+
+  const updateDraftResponse = await postJson(
+    `${baseUrl}/api/report/entry/${createdDraft.entry.id}`,
+    {
+      weekLabel: "Neuer sauberer Entwurf",
+      dateFrom: createDate,
+      dateTo: createDate,
+      betrieb: "Neuer Inhalt",
+      schule: ""
+    },
+    cookie
+  );
+  const updatedDraft = await updateDraftResponse.json();
+  assert.equal(updateDraftResponse.status, 200);
+  assert.equal(updatedDraft.entry.id, createdDraft.entry.id);
+  assert.equal(updatedDraft.entry.status, "draft");
+  assert.equal(updatedDraft.entry.betrieb, "Neuer Inhalt");
+
+  const submitDraftResponse = await postJson(
+    `${baseUrl}/api/report/submit`,
+    { entryId: createdDraft.entry.id },
+    cookie
+  );
+  assert.equal(submitDraftResponse.status, 200);
+
+  const refreshedResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: cookie }
+  });
+  const refreshedDashboard = await refreshedResponse.json();
+  const refreshedSignedEntry = refreshedDashboard.report.entries.find((entry) => entry.id === signedEntry.id);
+  const refreshedCreatedEntry = refreshedDashboard.report.entries.find((entry) => entry.id === createdDraft.entry.id);
+
+  assert.equal(refreshedSignedEntry.status, "signed");
+  assert.equal(refreshedSignedEntry.betrieb, signedSnapshot.betrieb);
+  assert.equal(refreshedSignedEntry.schule, signedSnapshot.schule);
+  assert.equal(refreshedCreatedEntry.status, "submitted");
+  assert.equal(refreshedCreatedEntry.dateFrom, createDate);
+});
+
 test("Trainer darf zugeordnetes Azubi-Profil aendern", async () => {
   const trainerLogin = await postJson(`${baseUrl}/api/login`, {
     identifier: "trainer",

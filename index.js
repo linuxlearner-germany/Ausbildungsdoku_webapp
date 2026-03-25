@@ -727,6 +727,134 @@ function validateEntry(entry) {
   return missing;
 }
 
+function findEntryById(traineeId, entryId) {
+  return db.prepare(`
+    SELECT id, weekLabel, dateFrom, dateTo, betrieb, schule,
+           status, signedAt, signerName, trainerComment, rejectionReason
+    FROM entries
+    WHERE trainee_id = ? AND id = ?
+    LIMIT 1
+  `).get(traineeId, entryId);
+}
+
+function findEntryByDate(traineeId, dateFrom) {
+  return db.prepare(`
+    SELECT id, weekLabel, dateFrom, dateTo, betrieb, schule,
+           status, signedAt, signerName, trainerComment, rejectionReason
+    FROM entries
+    WHERE trainee_id = ? AND dateFrom = ?
+    LIMIT 1
+  `).get(traineeId, dateFrom);
+}
+
+function createDraftEntry(user, payload) {
+  const entry = normalizeEntry(payload || {});
+  if (!entry.dateFrom) {
+    return { error: "Tag fehlt.", status: 400, code: "ENTRY_DATE_REQUIRED" };
+  }
+
+  const existing = findEntryByDate(user.id, entry.dateFrom);
+  if (existing) {
+    return { ok: true, entry: existing, created: false };
+  }
+
+  const insertEntry = db.prepare(`
+    INSERT INTO entries (
+      id, trainee_id, weekLabel, dateFrom, dateTo, betrieb, schule, themen, reflection,
+      status, signedAt, signerName, trainerComment, rejectionReason, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', 'draft', NULL, '', '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+  `);
+
+  const entryId = entry.id || `entry-${Date.now()}-${Math.random()}`;
+  insertEntry.run(
+    entryId,
+    user.id,
+    entry.weekLabel || `Bericht ${entry.dateFrom}`,
+    entry.dateFrom,
+    entry.dateTo || entry.dateFrom,
+    "",
+    ""
+  );
+
+  return {
+    ok: true,
+    created: true,
+    entry: findEntryById(user.id, entryId)
+  };
+}
+
+function updateTraineeEntry(user, entryId, payload) {
+  const existing = findEntryById(user.id, entryId);
+  if (!existing) {
+    return { error: "Eintrag nicht gefunden.", status: 404, code: "ENTRY_NOT_FOUND" };
+  }
+
+  const entry = normalizeEntry({ ...existing, ...(payload || {}), id: entryId });
+  const contentChanged =
+    entry.weekLabel !== existing.weekLabel ||
+    entry.dateFrom !== existing.dateFrom ||
+    entry.dateTo !== existing.dateTo ||
+    entry.betrieb !== existing.betrieb ||
+    entry.schule !== existing.schule;
+
+  if (existing.status === "signed" && contentChanged) {
+    return { error: "Signierte Eintraege koennen nicht bearbeitet oder geloescht werden.", status: 400, code: "ENTRY_SIGNED_LOCKED" };
+  }
+
+  if (existing.status === "submitted" && contentChanged) {
+    return {
+      error: "Eingereichte Eintraege sind schreibgeschuetzt, bis sie zur Nachbearbeitung zurueckgegeben werden.",
+      status: 400,
+      code: "ENTRY_SUBMITTED_LOCKED"
+    };
+  }
+
+  const conflictingEntry = db.prepare(`
+    SELECT id
+    FROM entries
+    WHERE trainee_id = ? AND dateFrom = ? AND id != ?
+    LIMIT 1
+  `).get(user.id, entry.dateFrom, entryId);
+  if (conflictingEntry) {
+    return { error: `Fuer ${entry.dateFrom} existiert bereits ein Tagesbericht.`, status: 400, code: "ENTRY_DATE_CONFLICT" };
+  }
+
+  let nextStatus = existing.status;
+  let nextSignedAt = existing.signedAt;
+  let nextSignerName = existing.signerName;
+  let nextTrainerComment = existing.trainerComment;
+  let nextRejectionReason = existing.rejectionReason;
+
+  if (contentChanged && existing.status === "rejected") {
+    nextStatus = "draft";
+    nextSignedAt = null;
+    nextSignerName = "";
+    nextTrainerComment = "";
+    nextRejectionReason = "";
+  }
+
+  db.prepare(`
+    UPDATE entries
+    SET weekLabel = ?, dateFrom = ?, dateTo = ?, betrieb = ?, schule = ?, status = ?, signedAt = ?, signerName = ?, trainerComment = ?, rejectionReason = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND trainee_id = ?
+  `).run(
+    entry.weekLabel,
+    entry.dateFrom,
+    entry.dateTo || entry.dateFrom,
+    entry.betrieb,
+    entry.schule,
+    nextStatus,
+    nextSignedAt,
+    nextSignerName,
+    nextTrainerComment,
+    nextRejectionReason,
+    entryId,
+    user.id
+  );
+
+  return { ok: true, entry: findEntryById(user.id, entryId) };
+}
+
 function validateProfilePayload(input) {
   const profile = {
     name: String(input?.name || "").trim(),
@@ -1383,6 +1511,32 @@ app.post("/api/report", requireRole("trainee"), (req, res) => {
     return res.status(result.status || 400).json({ error: result.error, code: result.code || "REPORT_UPDATE_FAILED" });
   }
   res.json({ ok: true, data: getTraineeDashboard(getCurrentUser(req)) });
+});
+
+app.post("/api/report/draft", requireRole("trainee"), (req, res) => {
+  const result = createDraftEntry(req.user, req.body || {});
+  if (result?.error) {
+    return res.status(result.status || 400).json({ error: result.error, code: result.code || "REPORT_CREATE_FAILED" });
+  }
+  res.json({
+    ok: true,
+    created: Boolean(result.created),
+    entry: result.entry,
+    data: getTraineeDashboard(getCurrentUser(req))
+  });
+});
+
+app.post("/api/report/entry/:entryId", requireRole("trainee"), (req, res) => {
+  const entryId = String(req.params.entryId || "");
+  const result = updateTraineeEntry(req.user, entryId, req.body || {});
+  if (result?.error) {
+    return res.status(result.status || 400).json({ error: result.error, code: result.code || "REPORT_ENTRY_UPDATE_FAILED" });
+  }
+  res.json({
+    ok: true,
+    entry: result.entry,
+    data: getTraineeDashboard(getCurrentUser(req))
+  });
 });
 
 app.post("/api/report/import-preview", requireRole("trainee"), (req, res) => {
