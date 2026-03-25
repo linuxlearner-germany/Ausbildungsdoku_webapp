@@ -294,10 +294,10 @@ export function AppProvider({ children }) {
     await refreshDashboard();
   }
 
-  async function assignTrainer(traineeId, trainerId) {
+  async function assignTrainer(traineeId, trainerIds) {
     await api("/api/admin/assign-trainer", {
       method: "POST",
-      body: JSON.stringify({ traineeId, trainerId })
+      body: JSON.stringify({ traineeId, trainerIds })
     });
     await refreshDashboard();
   }

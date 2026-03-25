@@ -128,6 +128,14 @@ function buildWeekDates(date) {
   return buildLocalWeekDates(date || getTodayLocalDateString());
 }
 
+function getDesktopCalendarInteractionState() {
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+    return false;
+  }
+
+  return window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+}
+
 function ReportEditor({
   entry,
   draft,
@@ -309,6 +317,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
   const [draft, setDraft] = useState(null);
   const [actionError, setActionError] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
+  const [enableDesktopDoubleClick, setEnableDesktopDoubleClick] = useState(getDesktopCalendarInteractionState);
   const previousSelectedDateRef = useRef(selectedDate);
 
   const entryByDate = useMemo(() => new Map(entries.map((entry) => [entry.dateFrom, entry])), [entries]);
@@ -380,6 +389,24 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
     }
   }, [selectedDate]);
 
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return undefined;
+    }
+
+    const mediaQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const syncInteractionMode = () => setEnableDesktopDoubleClick(mediaQuery.matches);
+    syncInteractionMode();
+
+    if (typeof mediaQuery.addEventListener === "function") {
+      mediaQuery.addEventListener("change", syncInteractionMode);
+      return () => mediaQuery.removeEventListener("change", syncInteractionMode);
+    }
+
+    mediaQuery.addListener(syncInteractionMode);
+    return () => mediaQuery.removeListener(syncInteractionMode);
+  }, []);
+
   async function ensureEntry(date) {
     setActionError("");
     const targetDate = date || selectedDate || today;
@@ -406,6 +433,11 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
     setSelectedId(existing?.id || null);
     setDraft(existing ? { ...existing } : buildEmptyEntry(targetDate));
     setDrawerOpen(true);
+  }
+
+  function openReportForDate(date) {
+    const targetDate = date || selectedDate || today;
+    openEditorForDate(targetDate);
   }
 
   function handleSelectDate(date) {
@@ -590,6 +622,8 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
             selectedDate={selectedDate}
             onChangeMonth={handleChangeMonth}
             onSelectDate={handleSelectDate}
+            onOpenDate={openReportForDate}
+            enableDesktopDoubleClick={enableDesktopDoubleClick}
             variant="large"
           />
 

@@ -51,6 +51,7 @@ function ProtectedApp() {
   const report = getTraineeReport();
   const trainees = dashboard?.trainees || [];
   const users = dashboard?.users || [];
+  const educations = dashboard?.educations || [];
 
   return (
     <AppShell
@@ -196,9 +197,10 @@ function ProtectedApp() {
             role === "admin" ? (
               <AdminUsersPage
                 users={users}
-                onAssignTrainer={async (traineeId, trainerId) => {
-                  await assignTrainer(traineeId, trainerId);
-                  setFlash({ type: "success", message: "Azubi wurde einem Ausbilder zugeordnet." });
+                educations={educations}
+                onAssignTrainer={async (traineeId, trainerIds) => {
+                  await assignTrainer(traineeId, trainerIds);
+                  setFlash({ type: "success", message: "Ausbilder-Zuordnung gespeichert." });
                 }}
                 onUpdateUser={async (userId, payload) => {
                   await updateUser(userId, payload);

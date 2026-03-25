@@ -138,6 +138,21 @@ function initDb() {
       FOREIGN KEY(trainer_id) REFERENCES users(id)
     );
 
+    CREATE TABLE IF NOT EXISTS educations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS trainee_trainers (
+      trainee_id INTEGER NOT NULL,
+      trainer_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (trainee_id, trainer_id),
+      FOREIGN KEY(trainee_id) REFERENCES users(id),
+      FOREIGN KEY(trainer_id) REFERENCES users(id)
+    );
+
     CREATE TABLE IF NOT EXISTS entries (
       id TEXT PRIMARY KEY,
       trainee_id INTEGER NOT NULL,
@@ -220,6 +235,42 @@ function migrateUserSchema() {
     UPDATE users
     SET theme_preference = 'system'
     WHERE theme_preference NOT IN ('light', 'dark', 'system') OR theme_preference IS NULL OR TRIM(theme_preference) = ''
+  `).run();
+
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_educations_name ON educations (name)");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_trainee_trainers_pair ON trainee_trainers (trainee_id, trainer_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_trainee_trainers_trainer ON trainee_trainers (trainer_id)");
+}
+
+function syncEducationsFromUsers() {
+  const educationRows = db.prepare(`
+    SELECT DISTINCT TRIM(ausbildung) AS name
+    FROM users
+    WHERE TRIM(ausbildung) != ''
+  `).all();
+  const insertEducation = db.prepare("INSERT OR IGNORE INTO educations (name) VALUES (?)");
+
+  for (const row of educationRows) {
+    insertEducation.run(row.name);
+  }
+}
+
+function migrateTrainerAssignments() {
+  const legacyAssignments = db.prepare(`
+    SELECT id AS trainee_id, trainer_id
+    FROM users
+    WHERE role = 'trainee' AND trainer_id IS NOT NULL
+  `).all();
+  const insertAssignment = db.prepare("INSERT OR IGNORE INTO trainee_trainers (trainee_id, trainer_id) VALUES (?, ?)");
+
+  for (const assignment of legacyAssignments) {
+    insertAssignment.run(assignment.trainee_id, assignment.trainer_id);
+  }
+
+  db.prepare(`
+    DELETE FROM trainee_trainers
+    WHERE trainee_id IN (SELECT id FROM users WHERE role != 'trainee')
+       OR trainer_id IN (SELECT id FROM users WHERE role != 'trainer')
   `).run();
 }
 
@@ -537,8 +588,12 @@ initDb();
 migrateUserSchema();
 migrateEntrySchema();
 ensureDemoUsers();
+syncEducationsFromUsers();
+migrateTrainerAssignments();
 migrateLegacyJson();
 ensureDemoData();
+syncEducationsFromUsers();
+migrateTrainerAssignments();
 
 const defaultTrainee = db.prepare("SELECT id FROM users WHERE role = 'trainee' ORDER BY id ASC LIMIT 1").get();
 if (defaultTrainee) {
@@ -583,6 +638,133 @@ function withoutPassword(user) {
   }
   const { password_hash, ...rest } = user;
   return rest;
+}
+
+function normalizeEducationName(value) {
+  return String(value || "").trim();
+}
+
+function parseTrainerIds(input) {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return [...new Set(
+    input
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0)
+  )];
+}
+
+function listEducations() {
+  return db.prepare(`
+    SELECT id, name
+    FROM educations
+    ORDER BY name COLLATE NOCASE ASC
+  `).all();
+}
+
+function saveEducation(name) {
+  const normalized = normalizeEducationName(name);
+  if (!normalized) {
+    return "";
+  }
+  db.prepare("INSERT OR IGNORE INTO educations (name) VALUES (?)").run(normalized);
+  return normalized;
+}
+
+function getTrainerIdsForTrainee(traineeId) {
+  return db.prepare(`
+    SELECT trainer_id
+    FROM trainee_trainers
+    WHERE trainee_id = ?
+    ORDER BY trainer_id ASC
+  `).all(traineeId).map((row) => row.trainer_id);
+}
+
+function getTraineeIdsForTrainer(trainerId) {
+  return db.prepare(`
+    SELECT trainee_id
+    FROM trainee_trainers
+    WHERE trainer_id = ?
+    ORDER BY trainee_id ASC
+  `).all(trainerId).map((row) => row.trainee_id);
+}
+
+function listUsersWithRelations() {
+  const users = db.prepare(`
+    SELECT id, name, username, email, role, ausbildung, betrieb, berufsschule,
+           theme_preference AS themePreference
+    FROM users
+    ORDER BY CASE role WHEN 'admin' THEN 1 WHEN 'trainer' THEN 2 ELSE 3 END, name COLLATE NOCASE ASC
+  `).all();
+
+  const assignments = db.prepare(`
+    SELECT trainee_id, trainer_id
+    FROM trainee_trainers
+  `).all();
+
+  const userMap = new Map(users.map((user) => [user.id, {
+    ...user,
+    trainerIds: [],
+    traineeIds: [],
+    assignedTrainers: [],
+    assignedTrainees: []
+  }]));
+
+  for (const assignment of assignments) {
+    const trainee = userMap.get(assignment.trainee_id);
+    const trainer = userMap.get(assignment.trainer_id);
+    if (!trainee || !trainer) {
+      continue;
+    }
+
+    trainee.trainerIds.push(trainer.id);
+    trainee.assignedTrainers.push({ id: trainer.id, name: trainer.name, email: trainer.email });
+    trainer.traineeIds.push(trainee.id);
+    trainer.assignedTrainees.push({ id: trainee.id, name: trainee.name, email: trainee.email, ausbildung: trainee.ausbildung });
+  }
+
+  return users.map((user) => userMap.get(user.id));
+}
+
+function listTraineesForTrainer(trainerId) {
+  return db.prepare(`
+    SELECT users.id, users.name, users.username, users.email, users.ausbildung, users.betrieb, users.berufsschule
+    FROM users
+    JOIN trainee_trainers ON trainee_trainers.trainee_id = users.id
+    WHERE users.role = 'trainee' AND trainee_trainers.trainer_id = ?
+    ORDER BY users.name COLLATE NOCASE ASC
+  `).all(trainerId);
+}
+
+function isTrainerAssignedToTrainee(trainerId, traineeId) {
+  const assignment = db.prepare(`
+    SELECT 1
+    FROM trainee_trainers
+    WHERE trainee_id = ? AND trainer_id = ?
+    LIMIT 1
+  `).get(traineeId, trainerId);
+  return Boolean(assignment);
+}
+
+function syncTraineeTrainerAssignments(traineeId, trainerIds) {
+  const uniqueTrainerIds = [...new Set(trainerIds)];
+  const existingIds = new Set(getTrainerIdsForTrainee(traineeId));
+  const insertAssignment = db.prepare("INSERT OR IGNORE INTO trainee_trainers (trainee_id, trainer_id) VALUES (?, ?)");
+  const deleteAssignment = db.prepare("DELETE FROM trainee_trainers WHERE trainee_id = ? AND trainer_id = ?");
+
+  for (const trainerId of uniqueTrainerIds) {
+    if (!existingIds.has(trainerId)) {
+      insertAssignment.run(traineeId, trainerId);
+    }
+  }
+
+  for (const trainerId of existingIds) {
+    if (!uniqueTrainerIds.includes(trainerId)) {
+      deleteAssignment.run(traineeId, trainerId);
+    }
+  }
 }
 
 function getClientIp(req) {
@@ -634,13 +816,25 @@ function getCurrentUser(req) {
   }
 
   const user = db.prepare(`
-    SELECT id, name, username, email, role, ausbildung, betrieb, berufsschule, trainer_id,
+    SELECT id, name, username, email, role, ausbildung, betrieb, berufsschule,
            theme_preference AS themePreference
     FROM users
     WHERE id = ?
   `).get(req.session.userId);
 
-  return user || null;
+  if (!user) {
+    return null;
+  }
+
+  if (user.role === "trainee") {
+    user.trainerIds = getTrainerIdsForTrainee(user.id);
+  }
+
+  if (user.role === "trainer") {
+    user.traineeIds = getTraineeIdsForTrainer(user.id);
+  }
+
+  return user;
 }
 
 function requireAuth(req, res, next) {
@@ -870,6 +1064,52 @@ function validateProfilePayload(input) {
   return { data: profile };
 }
 
+function validateAdminUserPayload(input, { requirePassword = false } = {}) {
+  const name = String(input?.name || "").trim();
+  const username = normalizeUsername(input?.username);
+  const email = String(input?.email || "").trim().toLowerCase();
+  const role = String(input?.role || "").trim();
+  const password = String(input?.password || "");
+  const ausbildung = normalizeEducationName(input?.ausbildung);
+  const betrieb = String(input?.betrieb || "").trim();
+  const berufsschule = String(input?.berufsschule || "").trim();
+  const trainerIds = role === "trainee" ? parseTrainerIds(input?.trainerIds) : [];
+
+  if (!name || !username || !email || !["trainee", "trainer", "admin"].includes(role)) {
+    return { error: "Ungueltige Nutzerdaten." };
+  }
+
+  if (!isValidEmail(email)) {
+    return { error: "E-Mail-Adresse ist ungueltig." };
+  }
+
+  if (requirePassword && !password) {
+    return { error: "Passwort fehlt." };
+  }
+
+  if (password && password.length < 10) {
+    return { error: "Passwort muss mindestens 10 Zeichen lang sein." };
+  }
+
+  if (role === "trainee" && !ausbildung) {
+    return { error: "Azubis benoetigen eine Ausbildung." };
+  }
+
+  return {
+    data: {
+      name,
+      username,
+      email,
+      role,
+      password,
+      ausbildung,
+      betrieb,
+      berufsschule,
+      trainerIds
+    }
+  };
+}
+
 function validateThemePreferencePayload(input) {
   return {
     data: {
@@ -1067,15 +1307,11 @@ function getTraineeDashboard(user) {
 }
 
 function getTrainerDashboard(user) {
-  const trainees = db.prepare(`
-    SELECT id, name, username, email, ausbildung, betrieb, berufsschule
-    FROM users
-    WHERE role = 'trainee' AND trainer_id = ?
-    ORDER BY name ASC
-  `).all(user.id);
+  const trainees = listTraineesForTrainer(user.id);
 
   return trainees.map((trainee) => ({
     ...trainee,
+    trainerIds: getTrainerIdsForTrainee(trainee.id),
     entries: listEntriesForTrainee(trainee.id)
   }));
 }
@@ -1277,6 +1513,14 @@ function renderPdf(res, trainee, entries) {
   }
 
   const doc = new PDFDocument({ size: "A4", margin: 50, autoFirstPage: true });
+  const pageBottomY = doc.page.height - doc.page.margins.bottom;
+  const cardX = 50;
+  const cardWidth = 495;
+  const cardPadding = 16;
+  const innerX = cardX + cardPadding;
+  const innerWidth = cardWidth - (cardPadding * 2);
+  const cardGap = 14;
+  const contentStartY = 245;
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `attachment; filename="berichtsheft-${trainee.name.replace(/\s+/g, "-").toLowerCase()}.pdf"`);
   doc.pipe(res);
@@ -1302,6 +1546,172 @@ function renderPdf(res, trainee, entries) {
     doc.moveTo(50, 225).lineTo(545, 225).strokeColor("#B7C7C1").lineWidth(1).stroke();
   }
 
+  function normalizePdfText(value) {
+    if (value == null) return "";
+    return String(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
+  }
+
+  function hasMeaningfulPdfContent(value) {
+    const normalized = normalizePdfText(value).trim();
+    if (!normalized) {
+      return false;
+    }
+
+    return !/^[-\s]+$/.test(normalized);
+  }
+
+  function buildEntryBody(entry) {
+    const sections = [];
+
+    if (hasMeaningfulPdfContent(entry.betrieb)) {
+      sections.push(["Betrieb", normalizePdfText(entry.betrieb).trim()]);
+    }
+
+    if (hasMeaningfulPdfContent(entry.schule)) {
+      sections.push(["Berufsschule", normalizePdfText(entry.schule).trim()]);
+    }
+
+    if (entry.trainerComment) {
+      sections.push(["Kommentar Ausbilder", normalizePdfText(entry.trainerComment)]);
+    }
+
+    if (entry.rejectionReason) {
+      sections.push(["Rueckmeldung", normalizePdfText(entry.rejectionReason)]);
+    }
+
+    if (!sections.length) {
+      return "Keine Inhalte hinterlegt.";
+    }
+
+    return sections
+      .map(([label, content]) => `${label}\n${content}`)
+      .join("\n\n");
+  }
+
+  function measureTextHeight(text, options) {
+    return doc.heightOfString(text || "-", options);
+  }
+
+  function fitTextToHeight(text, options, maxHeight) {
+    const normalizedText = text || "-";
+    if (!normalizedText || maxHeight <= 0) {
+      return { fittingText: "", remainingText: normalizedText };
+    }
+
+    const fullHeight = measureTextHeight(normalizedText, options);
+    if (fullHeight <= maxHeight) {
+      return { fittingText: normalizedText, remainingText: "" };
+    }
+
+    let low = 1;
+    let high = normalizedText.length;
+    let best = 0;
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const slice = normalizedText.slice(0, mid);
+      const sliceHeight = measureTextHeight(slice, options);
+      if (sliceHeight <= maxHeight) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    if (!best) {
+      return { fittingText: "", remainingText: normalizedText };
+    }
+
+    const searchWindowStart = Math.max(0, best - 120);
+    const tail = normalizedText.slice(searchWindowStart, best);
+    const breakMatch = tail.match(/[\n\s](?!.*[\n\s])/);
+    let cutIndex = best;
+
+    if (breakMatch) {
+      cutIndex = searchWindowStart + breakMatch.index + 1;
+    }
+
+    if (cutIndex <= 0) {
+      cutIndex = best;
+    }
+
+    const fittingText = normalizedText.slice(0, cutIndex).trimEnd();
+    const remainingText = normalizedText.slice(cutIndex).replace(/^\n/, "");
+    return {
+      fittingText: fittingText || normalizedText.slice(0, best),
+      remainingText
+    };
+  }
+
+  function drawEntryCard(boxTop, title, statusText, bodyText) {
+    const titleOptions = { width: innerWidth, lineGap: 1 };
+    const metaOptions = { width: innerWidth, lineGap: 1 };
+    const bodyOptions = { width: innerWidth, lineGap: 2 };
+    const titleHeight = measureTextHeight(title, titleOptions);
+    const metaHeight = measureTextHeight(statusText, metaOptions);
+    const bodyHeight = measureTextHeight(bodyText, bodyOptions);
+    const boxHeight = cardPadding + titleHeight + 6 + metaHeight + 12 + bodyHeight + cardPadding;
+
+    doc.roundedRect(cardX, boxTop, cardWidth, boxHeight, 10).fillAndStroke("#F7FAF8", "#D7E1DB");
+    doc.fillColor("#11211F").font("Helvetica-Bold").fontSize(11).text(title, innerX, boxTop + cardPadding, titleOptions);
+    doc.font("Helvetica").fontSize(9.5).fillColor("#4B5F5B").text(statusText, innerX, boxTop + cardPadding + titleHeight + 6, metaOptions);
+    doc.font("Helvetica").fontSize(10).fillColor("#11211F").text(bodyText, innerX, boxTop + cardPadding + titleHeight + 6 + metaHeight + 12, bodyOptions);
+
+    return boxHeight;
+  }
+
+  function renderEntryAcrossPages(entry, weekTitle, weekRange, cursorY) {
+    const baseTitle = `${formatDate(entry.dateFrom)} · ${entry.weekLabel || "Ohne Titel"}`;
+    const statusText = entry.status === "signed"
+      ? `Signiert von ${entry.signerName || "-"} am ${formatDateTime(entry.signedAt)}`
+      : `Status: ${entry.status}`;
+    const bodyText = buildEntryBody(entry);
+    const titleOptions = { width: innerWidth, lineGap: 1 };
+    const metaOptions = { width: innerWidth, lineGap: 1 };
+    const bodyOptions = { width: innerWidth, lineGap: 2 };
+    const titleHeight = measureTextHeight(baseTitle, titleOptions);
+    const metaHeight = measureTextHeight(statusText, metaOptions);
+    const fixedContentHeight = cardPadding + titleHeight + 6 + metaHeight + 12 + cardPadding;
+
+    let remainingBody = bodyText;
+    let segmentIndex = 0;
+
+    while (remainingBody) {
+      let availableHeight = pageBottomY - cursorY;
+      if (availableHeight <= fixedContentHeight + 24) {
+        doc.addPage();
+        renderHeader(weekTitle, weekRange);
+        cursorY = contentStartY;
+        availableHeight = pageBottomY - cursorY;
+      }
+
+      const availableBodyHeight = availableHeight - fixedContentHeight;
+      const { fittingText, remainingText } = fitTextToHeight(remainingBody, bodyOptions, availableBodyHeight);
+
+      if (!fittingText) {
+        doc.addPage();
+        renderHeader(weekTitle, weekRange);
+        cursorY = contentStartY;
+        continue;
+      }
+
+      const segmentTitle = segmentIndex > 0 ? `${baseTitle} (Fortsetzung)` : baseTitle;
+      const boxHeight = drawEntryCard(cursorY, segmentTitle, statusText, fittingText);
+      cursorY += boxHeight + cardGap;
+      remainingBody = remainingText;
+      segmentIndex += 1;
+
+      if (remainingBody) {
+        doc.addPage();
+        renderHeader(weekTitle, weekRange);
+        cursorY = contentStartY;
+      }
+    }
+
+    return cursorY;
+  }
+
   if (!weekGroups.length) {
     renderHeader("Keine Tagesberichte vorhanden");
     doc.font("Helvetica").fontSize(12).text("Aktuell sind keine Einträge für den PDF-Export vorhanden.", 50, 250);
@@ -1316,26 +1726,14 @@ function renderPdf(res, trainee, entries) {
 
     const firstDate = formatDate(group.entries[0]?.dateFrom);
     const lastDate = formatDate(group.entries[group.entries.length - 1]?.dateFrom);
-    renderHeader(`KW ${group.week}/${group.year}`, `${firstDate} bis ${lastDate}`);
+    const weekTitle = `KW ${group.week}/${group.year}`;
+    const weekRange = `${firstDate} bis ${lastDate}`;
+    renderHeader(weekTitle, weekRange);
 
-    let cursorY = 245;
+    let cursorY = contentStartY;
 
     group.entries.forEach((entry) => {
-      const boxTop = cursorY;
-      const boxHeight = 96;
-      const title = `${formatDate(entry.dateFrom)} · ${entry.weekLabel || "Ohne Titel"}`;
-      const statusText = entry.status === "signed" ? `Signiert von ${entry.signerName || "-"} am ${formatDateTime(entry.signedAt)}` : `Status: ${entry.status}`;
-      const description = entry.betrieb || entry.schule || "-";
-
-      doc.roundedRect(50, boxTop, 495, boxHeight, 10).fillAndStroke("#F7FAF8", "#D7E1DB");
-      doc.fillColor("#11211F").font("Helvetica-Bold").fontSize(11).text(title, 62, boxTop + 12, { width: 470 });
-      doc.font("Helvetica").fontSize(10).fillColor("#334643").text(statusText, 62, boxTop + 30, { width: 470 });
-      doc.font("Helvetica").fontSize(10).fillColor("#11211F").text(description, 62, boxTop + 46, { width: 470, height: 34, ellipsis: true });
-      if (entry.rejectionReason) {
-        doc.font("Helvetica").fontSize(9).fillColor("#5D6F6A").text(`Ablehnung: ${entry.rejectionReason}`, 62, boxTop + 74, { width: 470, ellipsis: true });
-      }
-
-      cursorY += boxHeight + 12;
+      cursorY = renderEntryAcrossPages(entry, weekTitle, weekRange, cursorY);
     });
   });
 
@@ -1490,13 +1888,7 @@ app.get("/api/dashboard", requireAuth, (req, res) => {
     return res.json({ role: "trainer", trainees: getTrainerDashboard(req.user) });
   }
 
-  const users = db.prepare(`
-    SELECT id, name, username, email, role, ausbildung, betrieb, berufsschule, trainer_id,
-           theme_preference AS themePreference
-    FROM users
-    ORDER BY role, name
-  `).all();
-  res.json({ role: "admin", users });
+  res.json({ role: "admin", users: listUsersWithRelations(), educations: listEducations() });
 });
 
 app.post("/api/preferences/theme", requireAuth, (req, res) => {
@@ -1600,7 +1992,7 @@ app.post("/api/profile/:userId", requireRole("trainer", "admin"), (req, res) => 
   }
 
   const trainee = db.prepare(`
-    SELECT id, role, trainer_id
+    SELECT id, role
     FROM users
     WHERE id = ?
   `).get(userId);
@@ -1609,7 +2001,7 @@ app.post("/api/profile/:userId", requireRole("trainer", "admin"), (req, res) => 
     return res.status(404).json({ error: "Azubi nicht gefunden." });
   }
 
-  if (req.user.role === "trainer" && trainee.trainer_id !== req.user.id) {
+  if (req.user.role === "trainer" && !isTrainerAssignedToTrainee(req.user.id, trainee.id)) {
     return res.status(403).json({ error: "Profil gehoert nicht zu dir." });
   }
 
@@ -1623,6 +2015,7 @@ app.post("/api/profile/:userId", requireRole("trainer", "admin"), (req, res) => 
     SET name = ?, ausbildung = ?, betrieb = ?, berufsschule = ?
     WHERE id = ?
   `).run(result.data.name, result.data.ausbildung, result.data.betrieb, result.data.berufsschule, userId);
+  saveEducation(result.data.ausbildung);
 
   res.json({ ok: true });
 });
@@ -1690,10 +2083,9 @@ app.post("/api/trainer/sign", requireRole("trainer", "admin"), (req, res) => {
   const trainerComment = String(req.body?.trainerComment || "").trim();
 
   const entry = db.prepare(`
-    SELECT entries.id, entries.trainee_id, users.trainer_id, entries.status, entries.weekLabel, entries.dateFrom, entries.dateTo,
+    SELECT entries.id, entries.trainee_id, entries.status, entries.weekLabel, entries.dateFrom, entries.dateTo,
            entries.betrieb, entries.schule
     FROM entries
-    JOIN users ON users.id = entries.trainee_id
     WHERE entries.id = ?
   `).get(entryId);
 
@@ -1701,7 +2093,7 @@ app.post("/api/trainer/sign", requireRole("trainer", "admin"), (req, res) => {
     return res.status(404).json({ error: "Eintrag nicht gefunden." });
   }
 
-  if (req.user.role === "trainer" && entry.trainer_id !== req.user.id) {
+  if (req.user.role === "trainer" && !isTrainerAssignedToTrainee(req.user.id, entry.trainee_id)) {
     return res.status(403).json({ error: "Eintrag gehoert nicht zu dir." });
   }
 
@@ -1735,9 +2127,8 @@ app.post("/api/trainer/comment", requireRole("trainer", "admin"), (req, res) => 
   }
 
   const entry = db.prepare(`
-    SELECT entries.id, entries.status, users.trainer_id
+    SELECT entries.id, entries.status, entries.trainee_id
     FROM entries
-    JOIN users ON users.id = entries.trainee_id
     WHERE entries.id = ?
   `).get(entryId);
 
@@ -1745,7 +2136,7 @@ app.post("/api/trainer/comment", requireRole("trainer", "admin"), (req, res) => 
     return res.status(404).json({ error: "Eintrag nicht gefunden." });
   }
 
-  if (req.user.role === "trainer" && entry.trainer_id !== req.user.id) {
+  if (req.user.role === "trainer" && !isTrainerAssignedToTrainee(req.user.id, entry.trainee_id)) {
     return res.status(403).json({ error: "Eintrag gehoert nicht zu dir." });
   }
 
@@ -1770,9 +2161,8 @@ app.post("/api/trainer/reject", requireRole("trainer", "admin"), (req, res) => {
   }
 
   const entry = db.prepare(`
-    SELECT entries.id, entries.trainee_id, entries.status, users.trainer_id
+    SELECT entries.id, entries.trainee_id, entries.status
     FROM entries
-    JOIN users ON users.id = entries.trainee_id
     WHERE entries.id = ?
   `).get(entryId);
 
@@ -1780,7 +2170,7 @@ app.post("/api/trainer/reject", requireRole("trainer", "admin"), (req, res) => {
     return res.status(404).json({ error: "Eintrag nicht gefunden." });
   }
 
-  if (req.user.role === "trainer" && entry.trainer_id !== req.user.id) {
+  if (req.user.role === "trainer" && !isTrainerAssignedToTrainee(req.user.id, entry.trainee_id)) {
     return res.status(403).json({ error: "Eintrag gehoert nicht zu dir." });
   }
 
@@ -1798,37 +2188,28 @@ app.post("/api/trainer/reject", requireRole("trainer", "admin"), (req, res) => {
 });
 
 app.post("/api/admin/users", requireRole("admin"), (req, res) => {
-  const name = String(req.body?.name || "").trim();
-  const username = normalizeUsername(req.body?.username);
-  const email = String(req.body?.email || "").trim().toLowerCase();
-  const password = String(req.body?.password || "");
-  const role = String(req.body?.role || "").trim();
-  const trainerId = req.body?.trainerId ? Number(req.body.trainerId) : null;
-
-  if (!name || !username || !email || !password || !["trainee", "trainer", "admin"].includes(role)) {
-    return res.status(400).json({ error: "Ungueltige Nutzerdaten." });
+  const result = validateAdminUserPayload(req.body || {}, { requirePassword: true });
+  if (result.error) {
+    return res.status(400).json({ error: result.error });
   }
 
-  if (!isValidEmail(email)) {
-    return res.status(400).json({ error: "E-Mail-Adresse ist ungueltig." });
-  }
-
-  if (password.length < 10) {
-    return res.status(400).json({ error: "Passwort muss mindestens 10 Zeichen lang sein." });
-  }
-
-  if (role === "trainee" && trainerId) {
-    const trainer = db.prepare("SELECT id FROM users WHERE id = ? AND role = 'trainer'").get(trainerId);
-    if (!trainer) {
-      return res.status(400).json({ error: "Ausbilder nicht gefunden." });
-    }
+  const { name, username, email, password, role, ausbildung, betrieb, berufsschule, trainerIds } = result.data;
+  const matchingTrainerCount = trainerIds.length
+    ? db.prepare(`SELECT COUNT(*) AS count FROM users WHERE role = 'trainer' AND id IN (${trainerIds.map(() => "?").join(", ")})`).get(...trainerIds).count
+    : 0;
+  if (matchingTrainerCount !== trainerIds.length) {
+    return res.status(400).json({ error: "Mindestens ein ausgewaehlter Ausbilder wurde nicht gefunden." });
   }
 
   try {
-    db.prepare(`
+    const insertResult = db.prepare(`
       INSERT INTO users (name, username, email, password_hash, role, trainer_id, ausbildung, betrieb, berufsschule)
-      VALUES (?, ?, ?, ?, ?, ?, '', '', '')
-    `).run(name, username, email, hashPassword(password), role, role === "trainee" ? trainerId : null);
+      VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
+    `).run(name, username, email, hashPassword(password), role, ausbildung, betrieb, berufsschule);
+    saveEducation(ausbildung);
+    if (role === "trainee") {
+      syncTraineeTrainerAssignments(insertResult.lastInsertRowid, trainerIds);
+    }
     res.json({ ok: true });
   } catch (error) {
     res.status(400).json({ error: "Benutzer konnte nicht angelegt werden. Benutzername oder E-Mail existiert bereits." });
@@ -1837,7 +2218,7 @@ app.post("/api/admin/users", requireRole("admin"), (req, res) => {
 
 app.post("/api/admin/assign-trainer", requireRole("admin"), (req, res) => {
   const traineeId = Number(req.body?.traineeId);
-  const trainerId = req.body?.trainerId ? Number(req.body.trainerId) : null;
+  const trainerIds = parseTrainerIds(req.body?.trainerIds);
 
   if (!Number.isInteger(traineeId)) {
     return res.status(400).json({ error: "Ungueltiger Azubi." });
@@ -1848,67 +2229,67 @@ app.post("/api/admin/assign-trainer", requireRole("admin"), (req, res) => {
     return res.status(404).json({ error: "Azubi nicht gefunden." });
   }
 
-  if (trainerId !== null) {
-    const trainer = db.prepare("SELECT id FROM users WHERE id = ? AND role = 'trainer'").get(trainerId);
-    if (!trainer) {
-      return res.status(400).json({ error: "Ausbilder nicht gefunden." });
-    }
+  const matchingTrainerCount = trainerIds.length
+    ? db.prepare(`SELECT COUNT(*) AS count FROM users WHERE role = 'trainer' AND id IN (${trainerIds.map(() => "?").join(", ")})`).get(...trainerIds).count
+    : 0;
+  if (matchingTrainerCount !== trainerIds.length) {
+    return res.status(400).json({ error: "Mindestens ein ausgewaehlter Ausbilder wurde nicht gefunden." });
   }
 
-  db.prepare("UPDATE users SET trainer_id = ? WHERE id = ?").run(trainerId, traineeId);
+  syncTraineeTrainerAssignments(traineeId, trainerIds);
   res.json({ ok: true });
 });
 
 app.post("/api/admin/users/:id", requireRole("admin"), (req, res) => {
   const userId = Number(req.params.id);
-  const name = String(req.body?.name || "").trim();
-  const username = normalizeUsername(req.body?.username);
-  const email = String(req.body?.email || "").trim().toLowerCase();
-  const role = String(req.body?.role || "").trim();
-  const password = String(req.body?.password || "");
-  const trainerId = req.body?.trainerId ? Number(req.body.trainerId) : null;
-
-  if (!Number.isInteger(userId) || !name || !username || !email || !["trainee", "trainer", "admin"].includes(role)) {
-    return res.status(400).json({ error: "Ungueltige Nutzerdaten." });
+  const result = validateAdminUserPayload(req.body || {});
+  if (!Number.isInteger(userId) || result.error) {
+    return res.status(400).json({ error: result.error || "Ungueltige Nutzerdaten." });
   }
 
-  if (!isValidEmail(email)) {
-    return res.status(400).json({ error: "E-Mail-Adresse ist ungueltig." });
-  }
-
-  if (password && password.length < 10) {
-    return res.status(400).json({ error: "Passwort muss mindestens 10 Zeichen lang sein." });
-  }
-
+  const { name, username, email, role, password, ausbildung, betrieb, berufsschule, trainerIds } = result.data;
   const existingUser = db.prepare("SELECT id, role FROM users WHERE id = ?").get(userId);
   if (!existingUser) {
     return res.status(404).json({ error: "Benutzer nicht gefunden." });
   }
 
-  if (role === "trainee" && trainerId) {
-    const trainer = db.prepare("SELECT id FROM users WHERE id = ? AND role = 'trainer'").get(trainerId);
-    if (!trainer) {
-      return res.status(400).json({ error: "Ausbilder nicht gefunden." });
-    }
+  const validTrainerIds = trainerIds.filter((trainerId) => trainerId !== userId);
+  const matchingTrainerCount = validTrainerIds.length
+    ? db.prepare(`SELECT COUNT(*) AS count FROM users WHERE role = 'trainer' AND id IN (${validTrainerIds.map(() => "?").join(", ")})`).get(...validTrainerIds).count
+    : 0;
+  if (matchingTrainerCount !== validTrainerIds.length) {
+    return res.status(400).json({ error: "Mindestens ein ausgewaehlter Ausbilder wurde nicht gefunden." });
+  }
+
+  if (role === "trainer" && validTrainerIds.length) {
+    return res.status(400).json({ error: "Ungueltige Nutzerdaten." });
   }
 
   try {
     if (password) {
       db.prepare(`
         UPDATE users
-        SET name = ?, username = ?, email = ?, role = ?, trainer_id = ?, password_hash = ?
+        SET name = ?, username = ?, email = ?, role = ?, ausbildung = ?, betrieb = ?, berufsschule = ?, trainer_id = NULL, password_hash = ?
         WHERE id = ?
-      `).run(name, username, email, role, role === "trainee" ? trainerId : null, hashPassword(password), userId);
+      `).run(name, username, email, role, ausbildung, betrieb, berufsschule, hashPassword(password), userId);
     } else {
       db.prepare(`
         UPDATE users
-        SET name = ?, username = ?, email = ?, role = ?, trainer_id = ?
+        SET name = ?, username = ?, email = ?, role = ?, ausbildung = ?, betrieb = ?, berufsschule = ?, trainer_id = NULL
         WHERE id = ?
-      `).run(name, username, email, role, role === "trainee" ? trainerId : null, userId);
+      `).run(name, username, email, role, ausbildung, betrieb, berufsschule, userId);
+    }
+
+    saveEducation(ausbildung);
+
+    if (role === "trainee") {
+      syncTraineeTrainerAssignments(userId, validTrainerIds);
+    } else {
+      db.prepare("DELETE FROM trainee_trainers WHERE trainee_id = ?").run(userId);
     }
 
     if (role !== "trainer") {
-      db.prepare("UPDATE users SET trainer_id = NULL WHERE trainer_id = ?").run(userId);
+      db.prepare("DELETE FROM trainee_trainers WHERE trainer_id = ?").run(userId);
     }
 
     res.json({ ok: true });
@@ -1977,7 +2358,7 @@ function handlePdfRequest(req, res) {
   }
 
   const trainee = db.prepare(`
-    SELECT id, name, username, email, ausbildung, betrieb, berufsschule, trainer_id
+    SELECT id, name, username, email, ausbildung, betrieb, berufsschule
     FROM users
     WHERE id = ? AND role = 'trainee'
   `).get(traineeId);
@@ -1986,7 +2367,7 @@ function handlePdfRequest(req, res) {
     return res.status(404).json({ error: "Azubi nicht gefunden." });
   }
 
-  if (req.user.role === "trainer" && trainee.trainer_id !== req.user.id) {
+  if (req.user.role === "trainer" && !isTrainerAssignedToTrainee(req.user.id, trainee.id)) {
     return res.status(403).json({ error: "Keine Berechtigung fuer dieses Berichtsheft." });
   }
 

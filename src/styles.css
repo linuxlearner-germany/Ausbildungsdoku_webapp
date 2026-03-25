@@ -105,15 +105,39 @@ button, input, textarea, select { font: inherit; }
   padding: 32px;
 }
 
+.login-page {
+  position: relative;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(7, 16, 23, 0.52), rgba(7, 16, 23, 0.72)),
+    url("/Pictures/background.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.login-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.08), transparent 32%),
+    linear-gradient(135deg, rgba(8, 19, 27, 0.18), rgba(8, 19, 27, 0.42));
+  pointer-events: none;
+}
+
 .login-card {
+  position: relative;
+  z-index: 1;
   width: min(980px, 100%);
   display: grid;
   gap: 24px;
   padding: 32px;
   border: 1px solid var(--line);
   border-radius: 28px;
-  background: var(--surface-elevated);
-  box-shadow: var(--shadow);
+  background: rgba(14, 24, 32, 0.84);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(10px);
 }
 
 .login-brand {
@@ -783,6 +807,172 @@ textarea {
   width: 100%;
   display: grid;
   gap: 14px;
+}
+
+.admin-users-page {
+  gap: 20px;
+}
+
+.admin-users-layout,
+.admin-role-sections {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.admin-form-card,
+.admin-overview-card,
+.admin-assignment-card {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-user-grid,
+.admin-role-list,
+.admin-assignment-list {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-user-card,
+.admin-role-row,
+.admin-assignment-row {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--surface-soft), var(--surface));
+  padding: 18px;
+}
+
+.admin-user-card,
+.admin-assignment-row {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-user-card-head,
+.admin-assignment-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.admin-role-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.admin-user-card-head p,
+.admin-assignment-copy p,
+.admin-user-relations p,
+.admin-role-row span,
+.admin-role-row small {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.admin-user-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.admin-user-relations {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.admin-section-label {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-section-label small {
+  color: var(--muted);
+}
+
+.admin-trainer-selector {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-chip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.admin-chip-grid.compact {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.admin-choice-chip {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.admin-choice-chip input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.admin-choice-chip span {
+  font-weight: 600;
+}
+
+.admin-choice-chip small {
+  color: var(--muted);
+}
+
+.admin-choice-chip.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  transform: translateY(-1px);
+}
+
+.admin-assignment-copy {
+  max-width: 320px;
+}
+
+.admin-assignment-copy small {
+  color: var(--muted);
+}
+
+.admin-role-row {
+  display: grid;
+  gap: 6px;
+}
+
+@media (max-width: 1080px) {
+  .admin-users-layout,
+  .admin-role-sections {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-facts {
+    grid-template-columns: 1fr;
+  }
 }
 
 .trainer-overview-grid {

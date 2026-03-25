@@ -14,13 +14,36 @@ function dayStatus(entry) {
   return entry.status;
 }
 
-export function CalendarGrid({ entries, month, selectedDate, onChangeMonth, onSelectDate, variant = "default" }) {
+export function CalendarGrid({
+  entries,
+  month,
+  selectedDate,
+  onChangeMonth,
+  onSelectDate,
+  onOpenDate,
+  enableDesktopDoubleClick = false,
+  variant = "default"
+}) {
   const label = formatLocalDate(month, { month: "long", year: "numeric" });
   const monthStart = startOfLocalMonth(month);
   const gridDates = buildCalendarGridDates(monthStart);
 
   function entryByDay(isoDate) {
     return entries.find((entry) => entry.dateFrom === isoDate);
+  }
+
+  function handleTileClick(isoDate, event) {
+    if (enableDesktopDoubleClick && event.detail > 1) {
+      return;
+    }
+    onSelectDate(isoDate);
+  }
+
+  function handleTileDoubleClick(isoDate) {
+    if (!enableDesktopDoubleClick || !onOpenDate) {
+      return;
+    }
+    onOpenDate(isoDate);
   }
 
   return (
@@ -30,7 +53,11 @@ export function CalendarGrid({ entries, month, selectedDate, onChangeMonth, onSe
           <div>
             <p className="page-kicker">Kalender</p>
             <h3>{label}</h3>
-            <p className="page-subtitle">Tage mit Berichten sind direkt anklickbar. Leere, offene und freigegebene Tage werden klar getrennt dargestellt.</p>
+            <p className="page-subtitle">
+              {enableDesktopDoubleClick
+                ? "Ein Klick markiert den Tag. Ein Doppelklick oeffnet den Bericht oder einen neuen Entwurf fuer diesen Tag."
+                : "Ein Tipp markiert den Tag. Oeffne den Bericht anschliessend ueber die sichtbaren Aktionen."}
+            </p>
           </div>
           <div className="calendar-month-switcher">
             <PrimaryButton variant="secondary" onClick={() => onChangeMonth(-1)}>Zurueck</PrimaryButton>
@@ -54,7 +81,8 @@ export function CalendarGrid({ entries, month, selectedDate, onChangeMonth, onSe
               key={iso}
               type="button"
               className={`calendar-tile status-${status}${selectedDate === iso ? " selected" : ""}${date.getMonth() !== month.getMonth() ? " outside" : ""}`}
-              onClick={() => onSelectDate(iso)}
+              onClick={(event) => handleTileClick(iso, event)}
+              onDoubleClick={() => handleTileDoubleClick(iso)}
             >
               <div className="calendar-tile-top">
                 <span className="calendar-tile-day">{date.getDate()}</span>

@@ -200,6 +200,72 @@ test("Admin kann Benutzer mit Benutzername anlegen", async () => {
   assert.equal(response.status, 200);
 });
 
+test("Admin kann Azubi mit Ausbildung und mehreren Ausbildern verwalten", async () => {
+  const adminLogin = await postJson(`${baseUrl}/api/login`, {
+    identifier: "admin",
+    password: "admin123"
+  });
+  const adminCookie = extractCookie(adminLogin);
+
+  const secondTrainerResponse = await postJson(
+    `${baseUrl}/api/admin/users`,
+    {
+      name: "Zweiter Ausbilder",
+      username: "zweiter-ausbilder",
+      email: "zweiter-ausbilder@example.com",
+      password: "Trainerkonto123",
+      role: "trainer",
+      betrieb: "WIWEB"
+    },
+    adminCookie
+  );
+  assert.equal(secondTrainerResponse.status, 200);
+
+  const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: adminCookie }
+  });
+  const adminDashboard = await adminDashboardResponse.json();
+  const trainerIds = adminDashboard.users.filter((user) => user.role === "trainer").map((user) => user.id);
+  assert.ok(trainerIds.length >= 2);
+
+  const createTraineeResponse = await postJson(
+    `${baseUrl}/api/admin/users`,
+    {
+      name: "Mehrfach Azubi",
+      username: "mehrfach-azubi",
+      email: "mehrfach-azubi@example.com",
+      password: "Azubikonto123",
+      role: "trainee",
+      ausbildung: "Fachinformatiker Anwendungsentwicklung",
+      betrieb: "WIWEB",
+      trainerIds
+    },
+    adminCookie
+  );
+  assert.equal(createTraineeResponse.status, 200);
+
+  const refreshedAdminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: adminCookie }
+  });
+  const refreshedAdminDashboard = await refreshedAdminDashboardResponse.json();
+  const createdTrainee = refreshedAdminDashboard.users.find((user) => user.username === "mehrfach-azubi");
+
+  assert.equal(createdTrainee.ausbildung, "Fachinformatiker Anwendungsentwicklung");
+  assert.deepEqual(createdTrainee.trainerIds.slice().sort((a, b) => a - b), trainerIds.slice().sort((a, b) => a - b));
+  assert.equal(refreshedAdminDashboard.educations.some((education) => education.name === "Fachinformatiker Anwendungsentwicklung"), true);
+
+  const trainerLogin = await postJson(`${baseUrl}/api/login`, {
+    identifier: "trainer",
+    password: "trainer123"
+  });
+  const trainerCookie = extractCookie(trainerLogin);
+  const trainerDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: trainerCookie }
+  });
+  const trainerDashboard = await trainerDashboardResponse.json();
+  assert.equal(trainerDashboard.trainees.some((trainee) => trainee.username === "mehrfach-azubi"), true);
+});
+
 test("Trainee kann Profil nicht ueber Report-Speichern aendern", async () => {
   const loginResponse = await postJson(`${baseUrl}/api/login`, {
     identifier: "azubi",

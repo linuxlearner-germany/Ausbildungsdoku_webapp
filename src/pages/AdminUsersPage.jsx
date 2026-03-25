@@ -1,34 +1,182 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
-import { DataTable } from "../components/DataTable";
 import { PrimaryButton } from "../components/PrimaryButton";
 
-function toEditForm(user) {
+function buildUserForm(user = null) {
   return {
-    name: user.name || "",
-    username: user.username || "",
-    email: user.email || "",
+    name: user?.name || "",
+    username: user?.username || "",
+    email: user?.email || "",
     password: "",
-    role: user.role || "trainee",
-    trainerId: user.trainer_id || ""
+    role: user?.role || "trainee",
+    ausbildung: user?.ausbildung || "",
+    betrieb: user?.betrieb || "",
+    berufsschule: user?.berufsschule || "",
+    trainerIds: Array.isArray(user?.trainerIds) ? user.trainerIds.map(Number) : []
   };
 }
 
-export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateUser }) {
-  const [form, setForm] = useState({ name: "", username: "", email: "", password: "", role: "trainee", trainerId: "" });
+function roleLabel(role) {
+  if (role === "trainee") return "Azubi";
+  if (role === "trainer") return "Ausbilder";
+  return "Admin";
+}
+
+function toggleId(list, id) {
+  return list.includes(id) ? list.filter((value) => value !== id) : [...list, id];
+}
+
+function formatRelationshipList(items, emptyLabel) {
+  if (!items?.length) return emptyLabel;
+  return items.map((item) => item.name).join(", ");
+}
+
+function EducationField({ value, educations, onChange, listId }) {
+  return (
+    <label>
+      Ausbildung
+      <input list={listId} value={value} onChange={(event) => onChange(event.target.value)} placeholder="z. B. Fachinformatiker Systemintegration" />
+      <datalist id={listId}>
+        {educations.map((education) => (
+          <option key={education.id || education.name} value={education.name} />
+        ))}
+      </datalist>
+    </label>
+  );
+}
+
+function TrainerMultiSelect({ trainers, value, onChange, excludeUserId }) {
+  const availableTrainers = trainers.filter((trainer) => trainer.id !== excludeUserId);
+
+  return (
+    <div className="admin-trainer-selector">
+      <div className="admin-section-label">
+        <strong>Zugeordnete Ausbilder</strong>
+        <small>Mehrfachauswahl, doppelte Zuordnungen werden verhindert.</small>
+      </div>
+      {availableTrainers.length ? (
+        <div className="admin-chip-grid">
+          {availableTrainers.map((trainer) => {
+            const checked = value.includes(trainer.id);
+            return (
+              <label key={trainer.id} className={`admin-choice-chip${checked ? " active" : ""}`}>
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => onChange(toggleId(value, trainer.id))}
+                />
+                <span>{trainer.name}</span>
+                <small>{trainer.email}</small>
+              </label>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="field-message">Noch keine Ausbilder vorhanden.</p>
+      )}
+    </div>
+  );
+}
+
+function UserForm({ title, subtitle, form, setForm, trainers, educations, submitLabel, onSubmit, onCancel, error, editingUserId = null }) {
+  const isTrainee = form.role === "trainee";
+
+  return (
+    <article className="panel-card admin-form-card">
+      <PageHeader kicker="Verwaltung" title={title} subtitle={subtitle} />
+      <div className="form-grid">
+        <label>
+          Name
+          <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        </label>
+        <label>
+          Benutzername
+          <input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
+        </label>
+        <label>
+          E-Mail
+          <input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+        </label>
+        <label>
+          {editingUserId ? "Neues Passwort" : "Passwort"}
+          <input
+            type="password"
+            placeholder={editingUserId ? "Leer lassen um beizubehalten" : ""}
+            value={form.password}
+            onChange={(event) => setForm({ ...form, password: event.target.value })}
+          />
+        </label>
+        <label>
+          Rolle
+          <select
+            value={form.role}
+            onChange={(event) => {
+              const nextRole = event.target.value;
+              setForm({
+                ...form,
+                role: nextRole,
+                trainerIds: nextRole === "trainee" ? form.trainerIds : [],
+                ausbildung: nextRole === "trainee" ? form.ausbildung : form.ausbildung
+              });
+            }}
+          >
+            <option value="trainee">Azubi</option>
+            <option value="trainer">Ausbilder</option>
+            <option value="admin">Admin</option>
+          </select>
+        </label>
+        <EducationField
+          value={form.ausbildung}
+          educations={educations}
+          onChange={(ausbildung) => setForm({ ...form, ausbildung })}
+          listId={editingUserId ? `admin-education-options-${editingUserId}` : "admin-education-options-create"}
+        />
+        <label>
+          Betrieb
+          <input value={form.betrieb} onChange={(event) => setForm({ ...form, betrieb: event.target.value })} />
+        </label>
+        <label>
+          Berufsschule
+          <input value={form.berufsschule} onChange={(event) => setForm({ ...form, berufsschule: event.target.value })} />
+        </label>
+      </div>
+      {isTrainee ? (
+        <TrainerMultiSelect
+          trainers={trainers}
+          value={form.trainerIds}
+          onChange={(trainerIds) => setForm({ ...form, trainerIds })}
+          excludeUserId={editingUserId}
+        />
+      ) : null}
+      {error ? <div className="field-message error">{error}</div> : null}
+      <div className="editor-footer">
+        <PrimaryButton onClick={onSubmit}>{submitLabel}</PrimaryButton>
+        {onCancel ? (
+          <PrimaryButton variant="ghost" onClick={onCancel}>
+            Abbrechen
+          </PrimaryButton>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
+export function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUpdateUser }) {
+  const [form, setForm] = useState(buildUserForm());
   const [editingUserId, setEditingUserId] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [createError, setCreateError] = useState("");
   const [editError, setEditError] = useState("");
   const [assignError, setAssignError] = useState("");
 
-  const trainers = users.filter((user) => user.role === "trainer");
-  const trainees = users.filter((user) => user.role === "trainee");
-  const trainerNames = new Map(trainers.map((trainer) => [trainer.id, trainer.name]));
+  const trainers = useMemo(() => users.filter((user) => user.role === "trainer"), [users]);
+  const trainees = useMemo(() => users.filter((user) => user.role === "trainee"), [users]);
+  const managedEducations = useMemo(() => educations || [], [educations]);
 
   function startEditing(user) {
     setEditingUserId(user.id);
-    setEditForm(toEditForm(user));
+    setEditForm(buildUserForm(user));
+    setEditError("");
   }
 
   function stopEditing() {
@@ -40,11 +188,8 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
   async function handleCreateUser() {
     setCreateError("");
     try {
-      await onCreateUser({
-        ...form,
-        trainerId: form.role === "trainee" && form.trainerId ? Number(form.trainerId) : null
-      });
-      setForm({ name: "", username: "", email: "", password: "", role: "trainee", trainerId: "" });
+      await onCreateUser(form);
+      setForm(buildUserForm());
     } catch (error) {
       setCreateError(error.message);
     }
@@ -53,208 +198,129 @@ export function AdminUsersPage({ users, onCreateUser, onAssignTrainer, onUpdateU
   async function handleUpdateUser(userId) {
     setEditError("");
     try {
-      await onUpdateUser(userId, {
-        ...editForm,
-        trainerId: editForm.role === "trainee" && editForm.trainerId ? Number(editForm.trainerId) : null
-      });
+      await onUpdateUser(userId, editForm);
       stopEditing();
     } catch (error) {
       setEditError(error.message);
     }
   }
 
-  async function handleAssignTrainer(traineeId, trainerId) {
+  async function handleAssignTrainers(traineeId, trainerIds) {
     setAssignError("");
     try {
-      await onAssignTrainer(traineeId, trainerId);
+      await onAssignTrainer(traineeId, trainerIds);
     } catch (error) {
       setAssignError(error.message);
     }
   }
 
   return (
-    <div className="page-stack">
-      <PageHeader kicker="Verwaltung" title="Benutzer und Rollen" subtitle="Nutzer anlegen, bearbeiten und Ausbilder nachtraeglich zuweisen." />
-      <section className="reports-layout">
-        <article className="panel-card">
-          <PageHeader kicker="Neuer Nutzer" title="Benutzer anlegen" />
-          <div className="form-grid">
-            <label>
-              Name
-              <input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
-            </label>
-            <label>
-              E-Mail
-              <input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
-            </label>
-            <label>
-              Benutzername
-              <input value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} />
-            </label>
-            <label>
-              Passwort
-              <input type="password" value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
-            </label>
-            <label>
-              Rolle
-              <select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value })}>
-                <option value="trainee">Azubi</option>
-                <option value="trainer">Ausbilder</option>
-                <option value="admin">Admin</option>
-              </select>
-            </label>
-            {form.role === "trainee" ? (
-              <label>
-                Ausbilder
-                <select value={form.trainerId} onChange={(event) => setForm({ ...form, trainerId: event.target.value })}>
-                  <option value="">Kein Ausbilder</option>
-                  {trainers.map((trainer) => (
-                    <option key={trainer.id} value={trainer.id}>
-                      {trainer.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-          </div>
-          {createError ? <div className="field-message error">{createError}</div> : null}
-          <div className="inline-notice">
-            <strong>Hinweis:</strong> Die E-Mail muss gueltig sein und das Passwort mindestens 10 Zeichen haben.
-          </div>
-          <div className="editor-footer">
-            <PrimaryButton onClick={handleCreateUser}>Nutzer speichern</PrimaryButton>
-          </div>
-        </article>
+    <div className="page-stack admin-users-page">
+      <PageHeader
+        kicker="Verwaltung"
+        title="Benutzerverwaltung"
+        subtitle="Nutzer, Rollen, Ausbildung und Ausbilder-Zuordnungen verwalten."
+      />
 
-        <article className="panel-card">
-          <PageHeader kicker="Benutzerliste" title="Konten im System" subtitle="Rollen und Zuweisungen im Ueberblick." />
-          <DataTable
-            rowKey="id"
-            rows={users}
-            columns={[
-              { key: "name", label: "Name" },
-              { key: "username", label: "Benutzername" },
-              { key: "email", label: "E-Mail" },
-              { key: "role", label: "Rolle" },
-              { key: "betrieb", label: "Betrieb" },
-              {
-                key: "trainer",
-                label: "Ausbilder",
-                render: (row) => (row.role === "trainee" ? trainerNames.get(row.trainer_id) || "-" : "-")
-              }
-            ]}
-          />
-        </article>
-      </section>
+      <section className="admin-users-layout">
+        <UserForm
+          title="Benutzer anlegen"
+          subtitle="Neuen Nutzer erfassen."
+          form={form}
+          setForm={setForm}
+          trainers={trainers}
+          educations={managedEducations}
+          submitLabel="Nutzer speichern"
+          onSubmit={handleCreateUser}
+          error={createError}
+        />
 
-      <section className="panel-card">
-        <PageHeader kicker="Bearbeitung" title="Bestehende Nutzer verwalten" subtitle="Rollen, Passwoerter und Ausbilder-Zuweisungen koennen jederzeit geaendert werden." />
-        {editError ? <div className="field-message error">{editError}</div> : null}
-        <div className="assignment-list admin-edit-list">
-          {users.map((user) => (
-            <div key={user.id} className="assignment-row admin-edit-row">
-              {editingUserId === user.id && editForm ? (
-                <div className="admin-edit-form">
-                  <div className="form-grid">
-                    <label>
-                      Name
-                      <input value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} />
-                    </label>
-                    <label>
-                      E-Mail
-                      <input value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} />
-                    </label>
-                    <label>
-                      Benutzername
-                      <input value={editForm.username} onChange={(event) => setEditForm({ ...editForm, username: event.target.value })} />
-                    </label>
-                    <label>
-                      Rolle
-                      <select value={editForm.role} onChange={(event) => setEditForm({ ...editForm, role: event.target.value })}>
-                        <option value="trainee">Azubi</option>
-                        <option value="trainer">Ausbilder</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                    </label>
-                    <label>
-                      Neues Passwort
-                      <input
-                        type="password"
-                        placeholder="Leer lassen um beizubehalten"
-                        value={editForm.password}
-                        onChange={(event) => setEditForm({ ...editForm, password: event.target.value })}
-                      />
-                    </label>
-                    {editForm.role === "trainee" ? (
-                      <label>
-                        Ausbilder
-                        <select value={editForm.trainerId} onChange={(event) => setEditForm({ ...editForm, trainerId: event.target.value })}>
-                          <option value="">Kein Ausbilder</option>
-                          {trainers
-                            .filter((trainer) => trainer.id !== user.id)
-                            .map((trainer) => (
-                              <option key={trainer.id} value={trainer.id}>
-                                {trainer.name}
-                              </option>
-                            ))}
-                        </select>
-                      </label>
-                    ) : null}
-                  </div>
-                  <div className="editor-footer">
-                    <PrimaryButton onClick={() => handleUpdateUser(user.id)}>Änderungen speichern</PrimaryButton>
-                    <PrimaryButton variant="ghost" onClick={stopEditing}>
-                      Abbrechen
-                    </PrimaryButton>
-                  </div>
-                </div>
-              ) : (
-                <>
+        <article className="panel-card admin-overview-card">
+          <PageHeader kicker="Uebersicht" title="Benutzer" subtitle={`${users.length} Konten`} />
+          <div className="admin-user-grid">
+            {users.map((user) => (
+              <article key={user.id} className="admin-user-card">
+                <div className="admin-user-card-head">
                   <div>
                     <strong>{user.name}</strong>
                     <p>{user.username} · {user.email}</p>
                   </div>
-                  <div className="admin-edit-meta">
-                    <span>Rolle: {user.role}</span>
-                    <span>{user.role === "trainee" ? `Ausbilder: ${trainerNames.get(user.trainer_id) || "Kein Ausbilder"}` : "Keine Ausbilder-Zuordnung"}</span>
-                  </div>
-                  <div className="assignment-actions">
-                    <PrimaryButton variant="secondary" onClick={() => startEditing(user)}>
-                      Bearbeiten
-                    </PrimaryButton>
-                  </div>
-                </>
-              )}
-            </div>
-          ))}
-        </div>
+                  <span className="admin-role-pill">{roleLabel(user.role)}</span>
+                </div>
+                <div className="admin-user-facts">
+                  <span>Rolle: {roleLabel(user.role)}</span>
+                  <span>Ausbildung: {user.ausbildung || "-"}</span>
+                  <span>Betrieb: {user.betrieb || "-"}</span>
+                </div>
+                <div className="admin-user-relations">
+                  {user.role === "trainee" ? (
+                    <p>Ausbilder: {formatRelationshipList(user.assignedTrainers, "Keine Ausbilder zugeordnet")}</p>
+                  ) : user.role === "trainer" ? (
+                    <p>Betreut: {formatRelationshipList(user.assignedTrainees, "Keine Azubis zugeordnet")}</p>
+                  ) : (
+                    <p>Administrator ohne fachliche Zuordnung.</p>
+                  )}
+                </div>
+                <div className="assignment-actions">
+                  <PrimaryButton variant="secondary" onClick={() => startEditing(user)}>
+                    Bearbeiten
+                  </PrimaryButton>
+                </div>
+              </article>
+            ))}
+          </div>
+        </article>
       </section>
 
-      <section className="panel-card">
-        <PageHeader kicker="Zuweisung" title="Azubis Ausbildern zuordnen" subtitle="Bestehende Azubis koennen hier schnell einem Ausbilder zugewiesen werden." />
+      {editingUserId && editForm ? (
+        <UserForm
+          title="Benutzer bearbeiten"
+          subtitle="Stammdaten und Zuordnungen aendern."
+          form={editForm}
+          setForm={setEditForm}
+          trainers={trainers}
+          educations={managedEducations}
+          submitLabel="Aenderungen speichern"
+          onSubmit={() => handleUpdateUser(editingUserId)}
+          onCancel={stopEditing}
+          error={editError}
+          editingUserId={editingUserId}
+        />
+      ) : null}
+
+      <section className="panel-card admin-assignment-card">
+        <PageHeader
+          kicker="Zuordnungen"
+          title="Azubis mehreren Ausbildern zuordnen"
+          subtitle={`${trainees.length} Azubis`}
+        />
         {assignError ? <div className="field-message error">{assignError}</div> : null}
-        <div className="assignment-list">
+        <div className="admin-assignment-list">
           {trainees.map((trainee) => (
-            <div key={trainee.id} className="assignment-row">
-              <div>
+            <div key={trainee.id} className="admin-assignment-row">
+              <div className="admin-assignment-copy">
                 <strong>{trainee.name}</strong>
-                <p>{trainee.email}</p>
+                <p>{trainee.ausbildung || trainee.email}</p>
+                <small>{formatRelationshipList(trainee.assignedTrainers, "Keine Ausbilder zugeordnet")}</small>
               </div>
-              <div className="assignment-actions">
-                <select
-                  value={trainee.trainer_id || ""}
-                  onChange={(event) => handleAssignTrainer(trainee.id, event.target.value ? Number(event.target.value) : null)}
-                >
-                  <option value="">Kein Ausbilder</option>
-                  {trainers.map((trainer) => (
-                    <option key={trainer.id} value={trainer.id}>
-                      {trainer.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="admin-chip-grid compact">
+                {trainers.map((trainer) => {
+                  const checked = trainee.trainerIds.includes(trainer.id);
+                  return (
+                    <label key={`${trainee.id}-${trainer.id}`} className={`admin-choice-chip${checked ? " active" : ""}`}>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => handleAssignTrainers(trainee.id, toggleId(trainee.trainerIds, trainer.id))}
+                      />
+                      <span>{trainer.name}</span>
+                    </label>
+                  );
+                })}
               </div>
             </div>
           ))}
+          {!trainees.length ? <p className="field-message">Noch keine Azubis vorhanden.</p> : null}
         </div>
       </section>
     </div>
