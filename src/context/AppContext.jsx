@@ -317,6 +317,17 @@ export function AppProvider({ children }) {
     return data;
   }
 
+  async function loadAuditLogs(filters = {}) {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        params.set(key, String(value));
+      }
+    });
+    const query = params.toString();
+    return api(`/api/admin/audit-logs${query ? `?${query}` : ""}`);
+  }
+
   async function updateManagedProfile(userId, payload) {
     await api(`/api/profile/${userId}`, {
       method: "POST",
@@ -360,6 +371,19 @@ export function AppProvider({ children }) {
       window.localStorage.setItem(THEME_STORAGE_KEY, previousPreference);
       throw error;
     }
+  }
+
+  async function changeOwnPassword(payload) {
+    const safePayload = {
+      currentPassword: String(payload?.currentPassword || ""),
+      newPassword: String(payload?.newPassword || ""),
+      newPasswordRepeat: String(payload?.newPasswordRepeat || "")
+    };
+
+    return api("/api/profile/password", {
+      method: "POST",
+      body: JSON.stringify(safePayload)
+    });
   }
 
   async function saveGrade(payload) {
@@ -436,7 +460,9 @@ export function AppProvider({ children }) {
         updateUser,
         previewUserImport,
         importUsers,
+        loadAuditLogs,
         updateManagedProfile,
+        changeOwnPassword,
         saveThemePreference,
         refreshGrades,
         saveGrade,

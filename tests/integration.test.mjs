@@ -6,11 +6,10 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import XLSX from "xlsx";
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "berichtsheft-test-"));
-const port = 3210;
-const baseUrl = `http://127.0.0.1:${port}`;
+let nextPort = 3210;
+let baseUrl = "";
 
-function startServer() {
+function startServer(tmpDir, port) {
   const child = spawn("node", ["index.js"], {
     cwd: process.cwd(),
     env: {
@@ -64,148 +63,187 @@ async function postJson(url, body, cookie = "") {
   });
 }
 
-let server;
+async function withIsolatedServer(run) {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "berichtsheft-test-"));
+  const port = nextPort;
+  nextPort += 1;
+  baseUrl = `http://127.0.0.1:${port}`;
+  const server = await startServer(tmpDir, port);
 
-test.before(async () => {
-  server = await startServer();
-});
-
-test.after(() => {
-  if (server) {
-    server.kill("SIGTERM");
+  try {
+    await run();
+  } finally {
+    if (server.exitCode === null && !server.killed) {
+      await new Promise((resolve) => {
+        server.once("exit", resolve);
+        server.kill("SIGTERM");
+      });
+    }
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
-  fs.rmSync(tmpDir, { recursive: true, force: true });
-});
+}
 
-test("Login funktioniert mit Demo-User", async () => {
-  const response = await postJson(`${baseUrl}/api/login`, {
-    identifier: "azubi",
-    password: "azubi123"
-  });
-
-  assert.equal(response.status, 200);
-  assert.ok(extractCookie(response));
-});
-
-test("Login-Rate-Limit greift", async () => {
-  for (let index = 0; index < 8; index += 1) {
+await test("Login funktioniert mit Demo-User", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
     const response = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+
+    assert.equal(response.status, 200);
+    assert.ok(extractCookie(response));
+  });
+});
+
+await test("Login-Rate-Limit greift", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    for (let index = 0; index < 8; index += 1) {
+      const response = await postJson(`${baseUrl}/api/login`, {
+        identifier: "limit@example.com",
+        password: "falsch"
+      });
+      assert.equal(response.status, 401);
+    }
+
+    const blocked = await postJson(`${baseUrl}/api/login`, {
       identifier: "limit@example.com",
       password: "falsch"
     });
-    assert.equal(response.status, 401);
-  }
-
-  const blocked = await postJson(`${baseUrl}/api/login`, {
-    identifier: "limit@example.com",
-    password: "falsch"
+    assert.equal(blocked.status, 429);
   });
-  assert.equal(blocked.status, 429);
 });
 
-test("Nur Entwuerfe koennen geloescht werden", async () => {
-  const loginResponse = await postJson(`${baseUrl}/api/login`, {
-    identifier: "azubi",
-    password: "azubi123"
-  });
-  const cookie = extractCookie(loginResponse);
+await test("Nur Entwuerfe koennen geloescht werden", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const loginResponse = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+    const cookie = extractCookie(loginResponse);
 
-  const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
-    headers: { Cookie: cookie }
-  });
-  const dashboard = await dashboardResponse.json();
-  const submittedEntry = dashboard.report.entries.find((entry) => entry.status === "submitted");
+    const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: cookie }
+    });
+    const dashboard = await dashboardResponse.json();
+    const submittedEntry = dashboard.report.entries.find((entry) => entry.status === "submitted");
 
-  const deleteResponse = await fetch(`${baseUrl}/api/report/${submittedEntry.id}`, {
-    method: "DELETE",
-    headers: { Cookie: cookie }
-  });
+    const deleteResponse = await fetch(`${baseUrl}/api/report/${submittedEntry.id}`, {
+      method: "DELETE",
+      headers: { Cookie: cookie }
+    });
 
-  assert.equal(deleteResponse.status, 400);
+    assert.equal(deleteResponse.status, 400);
+  });
 });
 
-test("Signieren nur fuer eingereichte Eintraege", async () => {
-  const trainerLogin = await postJson(`${baseUrl}/api/login`, {
-    identifier: "trainer",
-    password: "trainer123"
+await test("Signieren nur fuer eingereichte Eintraege", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const trainerLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "trainer",
+      password: "trainer123"
+    });
+    const trainerCookie = extractCookie(trainerLogin);
+
+    const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: trainerCookie }
+    });
+    const dashboard = await dashboardResponse.json();
+    const draftEntry = dashboard.trainees.flatMap((trainee) => trainee.entries).find((entry) => entry.status === "draft");
+    const submittedEntry = dashboard.trainees.flatMap((trainee) => trainee.entries).find((entry) => entry.status === "submitted");
+
+    const invalidSign = await postJson(
+      `${baseUrl}/api/trainer/sign`,
+      { entryId: draftEntry.id, trainerComment: "" },
+      trainerCookie
+    );
+    assert.equal(invalidSign.status, 400);
+
+    const validSign = await postJson(
+      `${baseUrl}/api/trainer/sign`,
+      { entryId: submittedEntry.id, trainerComment: "" },
+      trainerCookie
+    );
+    assert.equal(validSign.status, 200);
   });
-  const trainerCookie = extractCookie(trainerLogin);
-
-  const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
-    headers: { Cookie: trainerCookie }
-  });
-  const dashboard = await dashboardResponse.json();
-  const draftEntry = dashboard.trainees.flatMap((trainee) => trainee.entries).find((entry) => entry.status === "draft");
-  const submittedEntry = dashboard.trainees.flatMap((trainee) => trainee.entries).find((entry) => entry.status === "submitted");
-
-  const invalidSign = await postJson(
-    `${baseUrl}/api/trainer/sign`,
-    { entryId: draftEntry.id, trainerComment: "" },
-    trainerCookie
-  );
-  assert.equal(invalidSign.status, 400);
-
-  const validSign = await postJson(
-    `${baseUrl}/api/trainer/sign`,
-    { entryId: submittedEntry.id, trainerComment: "" },
-    trainerCookie
-  );
-  assert.equal(validSign.status, 200);
 });
 
-test("Health-Endpoint ist erreichbar", async () => {
-  const response = await fetch(`${baseUrl}/api/health`);
-  const data = await response.json();
+await test("Health-Endpoint ist erreichbar", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const response = await fetch(`${baseUrl}/api/health`);
+    const data = await response.json();
 
-  assert.equal(response.status, 200);
-  assert.equal(data.ok, true);
-  assert.equal(data.status, "healthy");
+    assert.equal(response.status, 200);
+    assert.equal(data.ok, true);
+    assert.equal(data.status, "healthy");
+  });
 });
 
-test("Admin-User-Anlage verlangt gueltige E-Mail und starkes Passwort", async () => {
+await test("Admin-User-Anlage verlangt gueltige E-Mail und starkes Passwort", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    const invalidEmail = await postJson(
+      `${baseUrl}/api/admin/users`,
+      { name: "Test User", username: "test-user", email: "ungueltig", password: "sehrlangespasswort", role: "trainer" },
+      adminCookie
+    );
+    assert.equal(invalidEmail.status, 400);
+
+    const weakPassword = await postJson(
+      `${baseUrl}/api/admin/users`,
+      { name: "Test User", username: "test-user", email: "test@example.com", password: "kurz", role: "trainer" },
+      adminCookie
+    );
+    assert.equal(weakPassword.status, 400);
+  });
+});
+
+await test("Admin kann Benutzer mit Benutzername anlegen", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    const response = await postJson(
+      `${baseUrl}/api/admin/users`,
+      { name: "Neue Person", username: "neue-person", email: "neu@example.com", password: "Testkonto123", role: "trainer" },
+      adminCookie
+    );
+
+    assert.equal(response.status, 200);
+  });
+});
+
+await test("Admin kann Benutzer bearbeiten und Bearbeitungsdaten speichern", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const adminLogin = await postJson(`${baseUrl}/api/login`, {
     identifier: "admin",
     password: "admin123"
   });
   const adminCookie = extractCookie(adminLogin);
 
-  const invalidEmail = await postJson(
+  const createTraineeResponse = await postJson(
     `${baseUrl}/api/admin/users`,
-    { name: "Test User", username: "test-user", email: "ungueltig", password: "sehrlangespasswort", role: "trainer" },
+    {
+      name: "Bearbeitungs Azubi",
+      username: "bearbeitungs-azubi",
+      email: "bearbeitungs-azubi@example.com",
+      password: "Azubikonto123",
+      role: "trainee",
+      ausbildung: "Fachinformatiker Systemintegration",
+      betrieb: "Muster GmbH",
+      berufsschule: "BBS",
+      trainerIds: []
+    },
     adminCookie
   );
-  assert.equal(invalidEmail.status, 400);
-
-  const weakPassword = await postJson(
-    `${baseUrl}/api/admin/users`,
-    { name: "Test User", username: "test-user", email: "test@example.com", password: "kurz", role: "trainer" },
-    adminCookie
-  );
-  assert.equal(weakPassword.status, 400);
-});
-
-test("Admin kann Benutzer mit Benutzername anlegen", async () => {
-  const adminLogin = await postJson(`${baseUrl}/api/login`, {
-    identifier: "admin",
-    password: "admin123"
-  });
-  const adminCookie = extractCookie(adminLogin);
-
-  const response = await postJson(
-    `${baseUrl}/api/admin/users`,
-    { name: "Neue Person", username: "neue-person", email: "neu@example.com", password: "Testkonto123", role: "trainer" },
-    adminCookie
-  );
-
-  assert.equal(response.status, 200);
-});
-
-test("Admin kann Benutzer bearbeiten und Bearbeitungsdaten speichern", async () => {
-  const adminLogin = await postJson(`${baseUrl}/api/login`, {
-    identifier: "admin",
-    password: "admin123"
-  });
-  const adminCookie = extractCookie(adminLogin);
+  assert.equal(createTraineeResponse.status, 200);
 
   const secondTrainerResponse = await postJson(
     `${baseUrl}/api/admin/users`,
@@ -225,7 +263,7 @@ test("Admin kann Benutzer bearbeiten und Bearbeitungsdaten speichern", async () 
     headers: { Cookie: adminCookie }
   });
   const adminDashboard = await adminDashboardResponse.json();
-  const trainee = adminDashboard.users.find((user) => user.username === "azubi");
+  const trainee = adminDashboard.users.find((user) => user.username === "bearbeitungs-azubi");
   const trainerIds = adminDashboard.users
     .filter((user) => ["trainer", "bearbeitungs-ausbilder"].includes(user.username))
     .map((user) => user.id);
@@ -233,9 +271,9 @@ test("Admin kann Benutzer bearbeiten und Bearbeitungsdaten speichern", async () 
   const updateResponse = await postJson(
     `${baseUrl}/api/admin/users/${trainee.id}`,
     {
-      name: "Max Mustermann Bearbeitet",
-      username: "azubi",
-      email: "azubi@example.com",
+      name: "Bearbeitungs Azubi Aktualisiert",
+      username: "bearbeitungs-azubi",
+      email: "bearbeitungs-azubi@example.com",
       role: "trainee",
       password: "",
       ausbildung: "Fachinformatiker Daten und Prozessanalyse",
@@ -253,13 +291,15 @@ test("Admin kann Benutzer bearbeiten und Bearbeitungsdaten speichern", async () 
   const refreshedAdminDashboard = await refreshedAdminDashboardResponse.json();
   const updatedTrainee = refreshedAdminDashboard.users.find((user) => user.id === trainee.id);
 
-  assert.equal(updatedTrainee.name, "Max Mustermann Bearbeitet");
+  assert.equal(updatedTrainee.name, "Bearbeitungs Azubi Aktualisiert");
   assert.equal(updatedTrainee.ausbildung, "Fachinformatiker Daten und Prozessanalyse");
   assert.equal(updatedTrainee.betrieb, "Neue Muster GmbH");
   assert.deepEqual(updatedTrainee.trainerIds.slice().sort((a, b) => a - b), trainerIds.slice().sort((a, b) => a - b));
+  });
 });
 
-test("Admin kann Azubi mit Ausbildung und mehreren Ausbildern verwalten", async () => {
+await test("Admin kann Azubi mit Ausbildung und mehreren Ausbildern verwalten", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const adminLogin = await postJson(`${baseUrl}/api/login`, {
     identifier: "admin",
     password: "admin123"
@@ -323,9 +363,11 @@ test("Admin kann Azubi mit Ausbildung und mehreren Ausbildern verwalten", async 
   });
   const trainerDashboard = await trainerDashboardResponse.json();
   assert.equal(trainerDashboard.trainees.some((trainee) => trainee.username === "mehrfach-azubi"), true);
+  });
 });
 
-test("Admin kann Nutzer per CSV validieren und importieren", async () => {
+await test("Admin kann Nutzer per CSV validieren und importieren", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const adminLogin = await postJson(`${baseUrl}/api/login`, {
     identifier: "admin",
     password: "admin123"
@@ -383,9 +425,11 @@ test("Admin kann Nutzer per CSV validieren und importieren", async () => {
   assert.ok(importedTrainer);
   assert.ok(importedTrainee);
   assert.equal(importedTrainee.trainerIds.includes(importedTrainer.id), true);
+  });
 });
 
-test("Noten-API erzwingt Rollen und Azubi-Ausbilder-Zuordnung", async () => {
+await test("Noten-API erzwingt Rollen und Azubi-Ausbilder-Zuordnung", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const adminLogin = await postJson(`${baseUrl}/api/login`, {
     identifier: "admin",
     password: "admin123"
@@ -558,9 +602,11 @@ test("Noten-API erzwingt Rollen und Azubi-Ausbilder-Zuordnung", async () => {
   assert.equal(adminDeleteForeignResponse.status, 200);
   const adminDeleteForeignResult = await adminDeleteForeignResponse.json();
   assert.equal(adminDeleteForeignResult.grades.some((grade) => grade.id === foreignCreatedGrade.id), false);
+  });
 });
 
-test("Trainee kann Profil nicht ueber Report-Speichern aendern", async () => {
+await test("Trainee kann Profil nicht ueber Report-Speichern aendern", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const loginResponse = await postJson(`${baseUrl}/api/login`, {
     identifier: "azubi",
     password: "azubi123"
@@ -590,9 +636,11 @@ test("Trainee kann Profil nicht ueber Report-Speichern aendern", async () => {
   assert.equal(response.status, 200);
   assert.equal(updated.data.trainee.name, "Max Mustermann");
   assert.equal(updated.data.trainee.betrieb, "Muster GmbH");
+  });
 });
 
-test("Entwurf kann gespeichert werden, eingereichte und signierte Berichte bleiben gesperrt", async () => {
+await test("Entwurf kann gespeichert werden, eingereichte und signierte Berichte bleiben gesperrt", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const loginResponse = await postJson(`${baseUrl}/api/login`, {
     identifier: "azubi",
     password: "azubi123"
@@ -664,9 +712,11 @@ test("Entwurf kann gespeichert werden, eingereichte und signierte Berichte bleib
   const signedError = await saveSignedResponse.json();
   assert.equal(saveSignedResponse.status, 400);
   assert.match(signedError.error, /Signierte Eintraege/);
+  });
 });
 
-test("Neuer Entwurf bleibt nach signiertem Bericht getrennt und wird als neuer Bericht erstellt", async () => {
+await test("Neuer Entwurf bleibt nach signiertem Bericht getrennt und wird als neuer Bericht erstellt", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const loginResponse = await postJson(`${baseUrl}/api/login`, {
     identifier: "azubi",
     password: "azubi123"
@@ -730,9 +780,11 @@ test("Neuer Entwurf bleibt nach signiertem Bericht getrennt und wird als neuer B
   assert.equal(refreshedSignedEntry.schule, signedSnapshot.schule);
   assert.equal(refreshedCreatedEntry.status, "submitted");
   assert.equal(refreshedCreatedEntry.dateFrom, createDate);
+  });
 });
 
-test("Trainer darf zugeordnetes Azubi-Profil aendern", async () => {
+await test("Trainer darf zugeordnetes Azubi-Profil aendern", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const trainerLogin = await postJson(`${baseUrl}/api/login`, {
     identifier: "trainer",
     password: "trainer123"
@@ -763,9 +815,11 @@ test("Trainer darf zugeordnetes Azubi-Profil aendern", async () => {
   const refreshed = await refreshedResponse.json();
   assert.equal(refreshed.trainees[0].name, "Max Mustermann Neu");
   assert.equal(refreshed.trainees[0].betrieb, "WIWEB Testbetrieb");
+  });
 });
 
-test("Trainee darf Profil-API nicht nutzen", async () => {
+await test("Trainee darf Profil-API nicht nutzen", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const traineeLogin = await postJson(`${baseUrl}/api/login`, {
     identifier: "azubi",
     password: "azubi123"
@@ -784,9 +838,11 @@ test("Trainee darf Profil-API nicht nutzen", async () => {
   );
 
   assert.equal(deniedResponse.status, 403);
+  });
 });
 
-test("Theme-Praeferenz wird pro Benutzer gespeichert", async () => {
+await test("Theme-Praeferenz wird pro Benutzer gespeichert", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const loginResponse = await postJson(`${baseUrl}/api/login`, {
     identifier: "azubi",
     password: "azubi123"
@@ -805,9 +861,11 @@ test("Theme-Praeferenz wird pro Benutzer gespeichert", async () => {
   });
   const sessionData = await sessionResponse.json();
   assert.equal(sessionData.user.themePreference, "dark");
+  });
 });
 
-test("Import-Vorschau erkennt gueltige und doppelte Berichtstage", async () => {
+await test("Import-Vorschau erkennt gueltige und doppelte Berichtstage", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const loginResponse = await postJson(`${baseUrl}/api/login`, {
     identifier: "azubi",
     password: "azubi123"
@@ -838,9 +896,11 @@ test("Import-Vorschau erkennt gueltige und doppelte Berichtstage", async () => {
   assert.equal(previewData.summary.totalRows, 3);
   assert.equal(previewData.summary.validRows, 1);
   assert.equal(previewData.summary.invalidRows, 2);
+  });
 });
 
-test("Import legt Berichte als submitted an", async () => {
+await test("Import legt Berichte als submitted an", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const loginResponse = await postJson(`${baseUrl}/api/login`, {
     identifier: "azubi",
     password: "azubi123"
@@ -870,9 +930,11 @@ test("Import legt Berichte als submitted an", async () => {
   assert.equal(importData.importedCount, 2);
   assert.ok(importData.entries.some((entry) => entry.dateFrom === "2026-04-01" && entry.status === "submitted"));
   assert.ok(importData.entries.some((entry) => entry.dateFrom === "2026-04-02" && entry.status === "submitted"));
+  });
 });
 
-test("Produktion startet nicht mit Demo-Daten", async () => {
+await test("Produktion startet nicht mit Demo-Daten", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
   const prodDir = fs.mkdtempSync(path.join(os.tmpdir(), "berichtsheft-prod-test-"));
   const child = spawn("node", ["index.js"], {
     cwd: process.cwd(),
@@ -899,4 +961,5 @@ test("Produktion startet nicht mit Demo-Daten", async () => {
 
   fs.rmSync(prodDir, { recursive: true, force: true });
   assert.match(stderr, /ENABLE_DEMO_DATA darf in Produktion nicht aktiviert sein/);
+  });
 });

@@ -62,7 +62,124 @@ function ThemeSettingsPanel({ theme, themePreference, onToggleTheme, onSaveTheme
   );
 }
 
-export function ProfilPage({ role, report, trainees, users, theme, themePreference, onToggleTheme, onSaveThemePreference, onSaveManagedProfile }) {
+function PasswordChangePanel({ onChangeOwnPassword }) {
+  const [form, setForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    newPasswordRepeat: ""
+  });
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function updateForm(nextPartial) {
+    setError("");
+    setSuccess("");
+    setForm((current) => ({ ...current, ...nextPartial }));
+  }
+
+  async function handleSubmit() {
+    setError("");
+    setSuccess("");
+
+    if (!form.currentPassword) {
+      setError("Bitte aktuelles Passwort eingeben.");
+      return;
+    }
+
+    if (!form.newPassword) {
+      setError("Bitte neues Passwort eingeben.");
+      return;
+    }
+
+    if (form.newPassword.length < 10) {
+      setError("Das neue Passwort muss mindestens 10 Zeichen lang sein.");
+      return;
+    }
+
+    if (form.newPassword !== form.newPasswordRepeat) {
+      setError("Neues Passwort und Wiederholung stimmen nicht ueberein.");
+      return;
+    }
+
+    if (form.currentPassword === form.newPassword) {
+      setError("Das neue Passwort muss sich vom aktuellen Passwort unterscheiden.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await onChangeOwnPassword(form);
+      setForm({
+        currentPassword: "",
+        newPassword: "",
+        newPasswordRepeat: ""
+      });
+      setSuccess("Dein Passwort wurde erfolgreich geaendert.");
+    } catch (submitError) {
+      setError(submitError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel-card">
+      <PageHeader
+        kicker="Sicherheit"
+        title="Passwort aendern"
+        subtitle="Hier aenderst du ausschliesslich das Passwort deines eigenen Benutzerkontos."
+      />
+      <div className="form-grid">
+        <label>
+          Aktuelles Passwort
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={form.currentPassword}
+            onChange={(event) => updateForm({ currentPassword: event.target.value })}
+          />
+        </label>
+        <label>
+          Neues Passwort
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={form.newPassword}
+            onChange={(event) => updateForm({ newPassword: event.target.value })}
+          />
+        </label>
+        <label>
+          Neues Passwort wiederholen
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={form.newPasswordRepeat}
+            onChange={(event) => updateForm({ newPasswordRepeat: event.target.value })}
+          />
+        </label>
+      </div>
+      <div className="inline-notice">
+        <strong>Passwortregeln:</strong>
+        <ul className="inline-notice-list">
+          <li>Das neue Passwort muss mindestens 10 Zeichen lang sein.</li>
+          <li>Es muss mindestens einen Großbuchstaben, einen Kleinbuchstaben, eine Zahl und ein Sonderzeichen enthalten.</li>
+          <li>Das neue Passwort muss sich vom aktuellen Passwort unterscheiden.</li>
+          <li>Neues Passwort und Wiederholung müssen exakt übereinstimmen.</li>
+        </ul>
+      </div>
+      {error ? <div className="field-message error">{error}</div> : null}
+      {success ? <div className="field-message success">{success}</div> : null}
+      <div className="editor-footer">
+        <PrimaryButton onClick={handleSubmit} disabled={busy}>
+          Passwort speichern
+        </PrimaryButton>
+      </div>
+    </section>
+  );
+}
+
+export function ProfilPage({ role, report, trainees, users, theme, themePreference, onToggleTheme, onSaveThemePreference, onSaveManagedProfile, onChangeOwnPassword }) {
   const targets = useMemo(() => {
     if (role === "trainer") {
       return trainees || [];
@@ -117,6 +234,7 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
           onToggleTheme={onToggleTheme}
           onSaveThemePreference={onSaveThemePreference}
         />
+        <PasswordChangePanel onChangeOwnPassword={onChangeOwnPassword} />
       </div>
     );
   }
@@ -210,6 +328,7 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
         onToggleTheme={onToggleTheme}
         onSaveThemePreference={onSaveThemePreference}
       />
+      <PasswordChangePanel onChangeOwnPassword={onChangeOwnPassword} />
     </div>
   );
 }

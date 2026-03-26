@@ -778,6 +778,15 @@ textarea {
   border: 1px solid var(--line);
 }
 
+.inline-notice-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.inline-notice-list li + li {
+  margin-top: 4px;
+}
+
 .empty-table {
   padding: 18px;
   border: 1px dashed var(--line);
@@ -1030,6 +1039,39 @@ textarea {
   gap: 20px;
 }
 
+.admin-section-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.admin-section-tab {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--card-bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.admin-section-tab:hover,
+.admin-section-tab:focus-visible {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  outline: none;
+}
+
+.admin-section-tab.active {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  color: var(--primary);
+  transform: translateY(-1px);
+}
+
 .admin-users-layout,
 .admin-role-sections {
   display: grid;
@@ -1190,6 +1232,13 @@ textarea {
   .admin-user-facts {
     grid-template-columns: 1fr;
   }
+
+  .audit-log-toolbar,
+  .audit-log-grid,
+  .import-row-grid,
+  .import-summary-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .trainer-overview-grid {
@@ -1286,6 +1335,83 @@ textarea {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   color: var(--muted);
   font-size: 0.92rem;
+}
+
+.audit-log-toolbar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.audit-log-list {
+  display: grid;
+  gap: 12px;
+}
+
+.audit-log-row {
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--card-soft-bg), var(--card-bg));
+  display: grid;
+  gap: 12px;
+}
+
+.audit-log-row-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.audit-log-row-head p,
+.audit-log-summary {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.audit-log-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.audit-log-action-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.audit-log-details {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.audit-log-details summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.audit-log-details pre {
+  margin: 10px 0 0;
+  padding: 14px;
+  border-radius: 16px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  overflow: auto;
+  font-size: 0.84rem;
+  line-height: 1.5;
 }
 
 .trainer-review-stats {

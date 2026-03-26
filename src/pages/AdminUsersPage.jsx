@@ -21,6 +21,7 @@ function buildUserForm(user = null) {
 function roleLabel(role) {
   if (role === "trainee") return "Azubi";
   if (role === "trainer") return "Ausbilder";
+  if (role === "system") return "System";
   return "Admin";
 }
 
@@ -338,13 +339,265 @@ function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
   );
 }
 
-export function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUpdateUser, onPreviewUserImport, onImportUsers }) {
+const AUDIT_ACTION_OPTIONS = [
+  "USER_CREATED",
+  "USER_UPDATED",
+  "USER_DELETED",
+  "ROLE_CHANGED",
+  "TRAINER_ASSIGNED",
+  "TRAINER_UNASSIGNED",
+  "PROFILE_UPDATED_BY_ADMIN",
+  "GRADE_CREATED",
+  "GRADE_UPDATED",
+  "GRADE_DELETED",
+  "REPORT_SUBMITTED",
+  "REPORT_APPROVED",
+  "REPORT_RETURNED",
+  "REPORT_SIGNED",
+  "CSV_IMPORT_EXECUTED"
+];
+
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("de-DE", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(date);
+}
+
+function actionLabel(actionType) {
+  return String(actionType || "")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => `${part.slice(0, 1)}${part.slice(1).toLowerCase()}`)
+    .join(" ");
+}
+
+function getAuditTargetLabel(log, usersById) {
+  const metadata = log.metadata || {};
+  if (metadata.traineeName) return metadata.traineeName;
+  if (metadata.trainerName) return metadata.trainerName;
+  if (metadata.username) return metadata.username;
+  if (metadata.role && log.targetUserId && usersById.has(log.targetUserId)) {
+    return usersById.get(log.targetUserId).name;
+  }
+  if (log.targetUserId && usersById.has(log.targetUserId)) {
+    return usersById.get(log.targetUserId).name;
+  }
+  if (metadata.importedCount) {
+    return `${metadata.importedCount} Nutzer`;
+  }
+  return `${log.entityType} ${log.entityId || ""}`.trim();
+}
+
+function AuditLogRow({ log, usersById }) {
+  const targetLabel = getAuditTargetLabel(log, usersById);
+
+  return (
+    <article className="audit-log-row">
+      <div className="audit-log-row-head">
+        <div>
+          <strong>{formatDateTime(log.createdAt)}</strong>
+          <p>{actionLabel(log.actionType)}</p>
+        </div>
+        <span className="audit-log-action-pill">{log.actionType}</span>
+      </div>
+      <div className="audit-log-grid">
+        <span>
+          <strong>Ausgefuehrt von:</strong> {log.actorName} ({roleLabel(log.actorRole)})
+        </span>
+        <span>
+          <strong>Betroffen:</strong> {targetLabel}
+        </span>
+      </div>
+      <p className="audit-log-summary">{log.summary}</p>
+      {log.changes || log.metadata ? (
+        <details className="audit-log-details">
+          <summary>Details</summary>
+          <pre>{JSON.stringify({ changes: log.changes, metadata: log.metadata }, null, 2)}</pre>
+        </details>
+      ) : null}
+    </article>
+  );
+}
+
+function AdminAuditLogPanel({ users, onLoadAuditLogs }) {
+  const [filters, setFilters] = useState({
+    search: "",
+    actionType: "",
+    userId: "",
+    from: "",
+    to: ""
+  });
+  const [appliedFilters, setAppliedFilters] = useState({
+    search: "",
+    actionType: "",
+    userId: "",
+    from: "",
+    to: ""
+  });
+  const [page, setPage] = useState(1);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState({
+    items: [],
+    pagination: {
+      page: 1,
+      pageSize: 20,
+      total: 0,
+      totalPages: 1
+    }
+  });
+
+  const usersById = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      setBusy(true);
+      setError("");
+      try {
+        const data = await onLoadAuditLogs({
+          ...appliedFilters,
+          page,
+          pageSize: 20
+        });
+        if (!cancelled) {
+          setResult(data);
+        }
+      } catch (loadError) {
+        if (!cancelled) {
+          setError(loadError.message);
+        }
+      } finally {
+        if (!cancelled) {
+          setBusy(false);
+        }
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [appliedFilters, onLoadAuditLogs, page]);
+
+  function applyFilters() {
+    setPage(1);
+    setAppliedFilters(filters);
+  }
+
+  function resetFilters() {
+    const cleared = {
+      search: "",
+      actionType: "",
+      userId: "",
+      from: "",
+      to: ""
+    };
+    setFilters(cleared);
+    setAppliedFilters(cleared);
+    setPage(1);
+  }
+
+  return (
+    <section className="page-stack">
+      <article className="panel-card">
+        <PageHeader
+          kicker="Audit-Log"
+          title="Admin-Logs"
+          subtitle="Read-only Verlauf fachlich relevanter Verwaltungs- und Systemaktionen."
+        />
+        <div className="audit-log-toolbar">
+          <label>
+            Suche
+            <input value={filters.search} onChange={(event) => setFilters({ ...filters, search: event.target.value })} placeholder="Aktion, Benutzer oder Beschreibung" />
+          </label>
+          <label>
+            Aktion
+            <select value={filters.actionType} onChange={(event) => setFilters({ ...filters, actionType: event.target.value })}>
+              <option value="">Alle Aktionen</option>
+              {AUDIT_ACTION_OPTIONS.map((actionType) => (
+                <option key={actionType} value={actionType}>
+                  {actionType}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Benutzer
+            <select value={filters.userId} onChange={(event) => setFilters({ ...filters, userId: event.target.value })}>
+              <option value="">Alle Benutzer</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name} ({user.username})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Von
+            <input type="date" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} />
+          </label>
+          <label>
+            Bis
+            <input type="date" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} />
+          </label>
+        </div>
+        <div className="page-actions">
+          <PrimaryButton onClick={applyFilters} disabled={busy}>
+            Filter anwenden
+          </PrimaryButton>
+          <PrimaryButton variant="ghost" onClick={resetFilters} disabled={busy}>
+            Zuruecksetzen
+          </PrimaryButton>
+        </div>
+        {error ? <div className="field-message error">{error}</div> : null}
+        <div className="inline-notice">
+          <strong>Sortierung:</strong> Neueste Eintraege zuerst. Seite {result.pagination.page} von {result.pagination.totalPages}.
+        </div>
+      </article>
+
+      {busy ? <div className="field-message">Audit-Log wird geladen...</div> : null}
+      {!busy && !result.items.length ? (
+        <EmptyState title="Keine Logeintraege gefunden" description="Passe Filter an oder pruefe spaeter erneut." />
+      ) : null}
+      {result.items.length ? (
+        <div className="audit-log-list">
+          {result.items.map((log) => (
+            <AuditLogRow key={log.id} log={log} usersById={usersById} />
+          ))}
+        </div>
+      ) : null}
+      <div className="editor-footer">
+        <PrimaryButton variant="ghost" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={busy || result.pagination.page <= 1}>
+          Vorherige Seite
+        </PrimaryButton>
+        <PrimaryButton onClick={() => setPage((current) => Math.min(result.pagination.totalPages, current + 1))} disabled={busy || result.pagination.page >= result.pagination.totalPages}>
+          Naechste Seite
+        </PrimaryButton>
+      </div>
+    </section>
+  );
+}
+
+export function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUpdateUser, onPreviewUserImport, onImportUsers, onLoadAuditLogs }) {
   const [form, setForm] = useState(buildUserForm());
   const [editingUserId, setEditingUserId] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [createError, setCreateError] = useState("");
   const [editError, setEditError] = useState("");
   const [assignError, setAssignError] = useState("");
+  const [activeView, setActiveView] = useState("users");
   const editPanelRef = useRef(null);
 
   const trainers = useMemo(() => users.filter((user) => user.role === "trainer"), [users]);
@@ -406,114 +659,128 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
         title="Benutzerverwaltung"
         subtitle="Nutzer, Rollen, Ausbildung, CSV-Import und Ausbilder-Zuordnungen verwalten."
       />
+      <div className="admin-section-tabs">
+        <button type="button" className={`admin-section-tab${activeView === "users" ? " active" : ""}`} onClick={() => setActiveView("users")}>
+          Benutzerverwaltung
+        </button>
+        <button type="button" className={`admin-section-tab${activeView === "audit" ? " active" : ""}`} onClick={() => setActiveView("audit")}>
+          Audit-Log
+        </button>
+      </div>
 
-      {editingUserId && editForm ? (
-        <section ref={editPanelRef}>
-          <UserForm
-            title={`Benutzer bearbeiten${editingUser ? `: ${editingUser.name}` : ""}`}
-            subtitle="Bearbeitung wird direkt mit den vorhandenen Stammdaten und Mehrfach-Zuordnungen befuellt."
-            form={editForm}
-            setForm={setEditForm}
-            trainers={trainers}
-            educations={managedEducations}
-            submitLabel="Aenderungen speichern"
-            onSubmit={() => handleUpdateUser(editingUserId)}
-            onCancel={stopEditing}
-            error={editError}
-            editingUserId={editingUserId}
-          />
-        </section>
-      ) : null}
+      {activeView === "users" ? (
+        <>
+          {editingUserId && editForm ? (
+            <section ref={editPanelRef}>
+              <UserForm
+                title={`Benutzer bearbeiten${editingUser ? `: ${editingUser.name}` : ""}`}
+                subtitle="Bearbeitung wird direkt mit den vorhandenen Stammdaten und Mehrfach-Zuordnungen befuellt."
+                form={editForm}
+                setForm={setEditForm}
+                trainers={trainers}
+                educations={managedEducations}
+                submitLabel="Aenderungen speichern"
+                onSubmit={() => handleUpdateUser(editingUserId)}
+                onCancel={stopEditing}
+                error={editError}
+                editingUserId={editingUserId}
+              />
+            </section>
+          ) : null}
 
-      <section className="admin-users-layout">
-        <div className="page-stack">
-          <UserForm
-            title="Benutzer anlegen"
-            subtitle="Neuen Nutzer erfassen."
-            form={form}
-            setForm={setForm}
-            trainers={trainers}
-            educations={managedEducations}
-            submitLabel="Nutzer speichern"
-            onSubmit={handleCreateUser}
-            error={createError}
-          />
+          <section className="admin-users-layout">
+            <div className="page-stack">
+              <UserForm
+                title="Benutzer anlegen"
+                subtitle="Neuen Nutzer erfassen."
+                form={form}
+                setForm={setForm}
+                trainers={trainers}
+                educations={managedEducations}
+                submitLabel="Nutzer speichern"
+                onSubmit={handleCreateUser}
+                error={createError}
+              />
 
-          <UserImportPanel onPreviewUserImport={onPreviewUserImport} onImportUsers={onImportUsers} />
-        </div>
-
-        <article className="panel-card admin-overview-card">
-          <PageHeader kicker="Uebersicht" title="Benutzer" subtitle={`${users.length} Konten`} />
-          <div className="admin-user-grid">
-            {users.map((user) => (
-              <article key={user.id} className="admin-user-card">
-                <div className="admin-user-card-head">
-                  <div>
-                    <strong>{user.name}</strong>
-                    <p>{user.username} · {user.email}</p>
-                  </div>
-                  <span className="admin-role-pill">{roleLabel(user.role)}</span>
-                </div>
-                <div className="admin-user-facts">
-                  <span>Rolle: {roleLabel(user.role)}</span>
-                  <span>Ausbildung: {user.ausbildung || "-"}</span>
-                  <span>Betrieb: {user.betrieb || "-"}</span>
-                </div>
-                <div className="admin-user-relations">
-                  {user.role === "trainee" ? (
-                    <p>Ausbilder: {formatRelationshipList(user.assignedTrainers, "Keine Ausbilder zugeordnet")}</p>
-                  ) : user.role === "trainer" ? (
-                    <p>Betreut: {formatRelationshipList(user.assignedTrainees, "Keine Azubis zugeordnet")}</p>
-                  ) : (
-                    <p>Administrator ohne fachliche Zuordnung.</p>
-                  )}
-                </div>
-                <div className="assignment-actions">
-                  <PrimaryButton variant="secondary" onClick={() => startEditing(user)}>
-                    Bearbeiten
-                  </PrimaryButton>
-                </div>
-              </article>
-            ))}
-          </div>
-        </article>
-      </section>
-
-      <section className="panel-card admin-assignment-card">
-        <PageHeader
-          kicker="Zuordnungen"
-          title="Azubis mehreren Ausbildern zuordnen"
-          subtitle={`${trainees.length} Azubis`}
-        />
-        {assignError ? <div className="field-message error">{assignError}</div> : null}
-        <div className="admin-assignment-list">
-          {trainees.map((trainee) => (
-            <div key={trainee.id} className="admin-assignment-row">
-              <div className="admin-assignment-copy">
-                <strong>{trainee.name}</strong>
-                <p>{trainee.ausbildung || trainee.email}</p>
-                <small>{formatRelationshipList(trainee.assignedTrainers, "Keine Ausbilder zugeordnet")}</small>
-              </div>
-              <div className="admin-chip-grid compact">
-                {trainers.map((trainer) => {
-                  const checked = trainee.trainerIds.includes(trainer.id);
-                  return (
-                    <label key={`${trainee.id}-${trainer.id}`} className={`admin-choice-chip${checked ? " active" : ""}`}>
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => handleAssignTrainers(trainee.id, toggleId(trainee.trainerIds, trainer.id))}
-                      />
-                      <span>{trainer.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
+              <UserImportPanel onPreviewUserImport={onPreviewUserImport} onImportUsers={onImportUsers} />
             </div>
-          ))}
-          {!trainees.length ? <p className="field-message">Noch keine Azubis vorhanden.</p> : null}
-        </div>
-      </section>
+
+            <article className="panel-card admin-overview-card">
+              <PageHeader kicker="Uebersicht" title="Benutzer" subtitle={`${users.length} Konten`} />
+              <div className="admin-user-grid">
+                {users.map((user) => (
+                  <article key={user.id} className="admin-user-card">
+                    <div className="admin-user-card-head">
+                      <div>
+                        <strong>{user.name}</strong>
+                        <p>{user.username} · {user.email}</p>
+                      </div>
+                      <span className="admin-role-pill">{roleLabel(user.role)}</span>
+                    </div>
+                    <div className="admin-user-facts">
+                      <span>Rolle: {roleLabel(user.role)}</span>
+                      <span>Ausbildung: {user.ausbildung || "-"}</span>
+                      <span>Betrieb: {user.betrieb || "-"}</span>
+                    </div>
+                    <div className="admin-user-relations">
+                      {user.role === "trainee" ? (
+                        <p>Ausbilder: {formatRelationshipList(user.assignedTrainers, "Keine Ausbilder zugeordnet")}</p>
+                      ) : user.role === "trainer" ? (
+                        <p>Betreut: {formatRelationshipList(user.assignedTrainees, "Keine Azubis zugeordnet")}</p>
+                      ) : (
+                        <p>Administrator ohne fachliche Zuordnung.</p>
+                      )}
+                    </div>
+                    <div className="assignment-actions">
+                      <PrimaryButton variant="secondary" onClick={() => startEditing(user)}>
+                        Bearbeiten
+                      </PrimaryButton>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </article>
+          </section>
+
+          <section className="panel-card admin-assignment-card">
+            <PageHeader
+              kicker="Zuordnungen"
+              title="Azubis mehreren Ausbildern zuordnen"
+              subtitle={`${trainees.length} Azubis`}
+            />
+            {assignError ? <div className="field-message error">{assignError}</div> : null}
+            <div className="admin-assignment-list">
+              {trainees.map((trainee) => (
+                <div key={trainee.id} className="admin-assignment-row">
+                  <div className="admin-assignment-copy">
+                    <strong>{trainee.name}</strong>
+                    <p>{trainee.ausbildung || trainee.email}</p>
+                    <small>{formatRelationshipList(trainee.assignedTrainers, "Keine Ausbilder zugeordnet")}</small>
+                  </div>
+                  <div className="admin-chip-grid compact">
+                    {trainers.map((trainer) => {
+                      const checked = trainee.trainerIds.includes(trainer.id);
+                      return (
+                        <label key={`${trainee.id}-${trainer.id}`} className={`admin-choice-chip${checked ? " active" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => handleAssignTrainers(trainee.id, toggleId(trainee.trainerIds, trainer.id))}
+                          />
+                          <span>{trainer.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+              {!trainees.length ? <p className="field-message">Noch keine Azubis vorhanden.</p> : null}
+            </div>
+          </section>
+        </>
+      ) : (
+        <AdminAuditLogPanel users={users} onLoadAuditLogs={onLoadAuditLogs} />
+      )}
     </div>
   );
 }

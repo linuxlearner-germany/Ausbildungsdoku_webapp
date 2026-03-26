@@ -38,7 +38,9 @@ function ProtectedApp() {
     updateUser,
     previewUserImport,
     importUsers,
+    loadAuditLogs,
     updateManagedProfile,
+    changeOwnPassword,
     saveThemePreference,
     refreshGrades,
     saveGrade,
@@ -175,6 +177,10 @@ function ProtectedApp() {
                   await updateManagedProfile(userId, profile);
                   setFlash({ type: "success", message: "Profil gespeichert." });
                 }}
+                onChangeOwnPassword={async (payload) => {
+                  await changeOwnPassword(payload);
+                  setFlash({ type: "success", message: "Dein Passwort wurde erfolgreich geaendert." });
+                }}
               />
             ) : (
               <Navigate to="/dashboard" replace />
@@ -213,6 +219,7 @@ function ProtectedApp() {
                   setFlash({ type: "success", message: `${data.importedCount} Nutzer importiert.` });
                   return data;
                 }}
+                onLoadAuditLogs={loadAuditLogs}
                 onAssignTrainer={async (traineeId, trainerIds) => {
                   await assignTrainer(traineeId, trainerIds);
                   setFlash({ type: "success", message: "Ausbilder-Zuordnung gespeichert." });

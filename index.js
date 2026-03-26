@@ -187,6 +187,28 @@ function initDb() {
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(trainee_id) REFERENCES users(id)
     );
+
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      actor_user_id INTEGER,
+      actor_name TEXT NOT NULL DEFAULT '',
+      actor_role TEXT NOT NULL DEFAULT '',
+      action_type TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT NOT NULL DEFAULT '',
+      target_user_id INTEGER,
+      summary TEXT NOT NULL DEFAULT '',
+      changes_json TEXT,
+      metadata_json TEXT,
+      FOREIGN KEY(actor_user_id) REFERENCES users(id),
+      FOREIGN KEY(target_user_id) REFERENCES users(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_action_type ON audit_logs(action_type);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_actor_user_id ON audit_logs(actor_user_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_target_user_id ON audit_logs(target_user_id);
   `);
 }
 
@@ -811,6 +833,220 @@ function clearLoginFailures(req) {
   loginAttempts.delete(key);
 }
 
+function clearLoginFailuresForKey(ipAddress, identifier) {
+  const key = `${String(ipAddress || "unknown")}:${String(identifier || "").trim().toLowerCase()}`;
+  loginAttempts.delete(key);
+}
+
+function sanitizeAuditPayload(payload) {
+  if (payload == null) {
+    return null;
+  }
+
+  if (typeof payload === "object" && !Array.isArray(payload) && !Object.keys(payload).length) {
+    return null;
+  }
+
+  if (Array.isArray(payload) && !payload.length) {
+    return null;
+  }
+
+  return JSON.stringify(payload);
+}
+
+function parseAuditJson(value) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function buildAuditActor(user) {
+  return {
+    actorUserId: Number.isInteger(user?.id) ? user.id : null,
+    actorName: String(user?.name || "System"),
+    actorRole: String(user?.role || "system")
+  };
+}
+
+function writeAuditLog({ actor, actionType, entityType, entityId, targetUserId = null, summary = "", changes = null, metadata = null }) {
+  const actorSnapshot = buildAuditActor(actor);
+  db.prepare(`
+    INSERT INTO audit_logs (
+      created_at, actor_user_id, actor_name, actor_role, action_type, entity_type, entity_id,
+      target_user_id, summary, changes_json, metadata_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    new Date().toISOString(),
+    actorSnapshot.actorUserId,
+    actorSnapshot.actorName,
+    actorSnapshot.actorRole,
+    String(actionType || "").trim(),
+    String(entityType || "").trim(),
+    String(entityId || ""),
+    Number.isInteger(targetUserId) ? targetUserId : null,
+    String(summary || "").trim(),
+    sanitizeAuditPayload(changes),
+    sanitizeAuditPayload(metadata)
+  );
+}
+
+function computeChangedFields(before, after, fields) {
+  const changes = {};
+  fields.forEach((field) => {
+    const previousValue = before?.[field] ?? "";
+    const nextValue = after?.[field] ?? "";
+    if (previousValue !== nextValue) {
+      changes[field] = {
+        before: previousValue,
+        after: nextValue
+      };
+    }
+  });
+  return changes;
+}
+
+function summarizeFieldLabels(changes, labels) {
+  const fields = Object.keys(changes || {});
+  if (!fields.length) {
+    return "Keine fachlich relevanten Aenderungen.";
+  }
+
+  return fields.map((field) => labels[field] || field).join(", ");
+}
+
+function getUsersByIds(ids) {
+  const uniqueIds = [...new Set(ids.filter((value) => Number.isInteger(value)))];
+  if (!uniqueIds.length) {
+    return [];
+  }
+
+  return db.prepare(`
+    SELECT id, name, username, email, role
+    FROM users
+    WHERE id IN (${uniqueIds.map(() => "?").join(", ")})
+  `).all(...uniqueIds);
+}
+
+function logTrainerAssignmentChanges({ actor, traineeId, traineeName, beforeTrainerIds, afterTrainerIds }) {
+  const previous = [...new Set((beforeTrainerIds || []).filter((value) => Number.isInteger(value)))];
+  const next = [...new Set((afterTrainerIds || []).filter((value) => Number.isInteger(value)))];
+  const assignedIds = next.filter((trainerId) => !previous.includes(trainerId));
+  const unassignedIds = previous.filter((trainerId) => !next.includes(trainerId));
+  const trainers = getUsersByIds([...assignedIds, ...unassignedIds]);
+  const trainerMap = new Map(trainers.map((trainer) => [trainer.id, trainer]));
+
+  assignedIds.forEach((trainerId) => {
+    const trainer = trainerMap.get(trainerId);
+    writeAuditLog({
+      actor,
+      actionType: "TRAINER_ASSIGNED",
+      entityType: "user",
+      entityId: String(traineeId),
+      targetUserId: traineeId,
+      summary: `${trainer?.name || "Ausbilder"} wurde ${traineeName} zugeordnet.`,
+      metadata: {
+        traineeId,
+        traineeName,
+        trainerId,
+        trainerName: trainer?.name || "",
+        trainerUsername: trainer?.username || ""
+      }
+    });
+  });
+
+  unassignedIds.forEach((trainerId) => {
+    const trainer = trainerMap.get(trainerId);
+    writeAuditLog({
+      actor,
+      actionType: "TRAINER_UNASSIGNED",
+      entityType: "user",
+      entityId: String(traineeId),
+      targetUserId: traineeId,
+      summary: `${trainer?.name || "Ausbilder"} wurde von ${traineeName} entfernt.`,
+      metadata: {
+        traineeId,
+        traineeName,
+        trainerId,
+        trainerName: trainer?.name || "",
+        trainerUsername: trainer?.username || ""
+      }
+    });
+  });
+}
+
+function listAuditLogs({ page = 1, pageSize = 20, actionType = "", userId = null, search = "", from = "", to = "" }) {
+  const normalizedPage = Math.max(1, Number(page) || 1);
+  const normalizedPageSize = Math.min(100, Math.max(10, Number(pageSize) || 20));
+  const params = [];
+  const conditions = [];
+
+  if (actionType) {
+    conditions.push("action_type = ?");
+    params.push(actionType);
+  }
+
+  if (Number.isInteger(userId)) {
+    conditions.push("(actor_user_id = ? OR target_user_id = ?)");
+    params.push(userId, userId);
+  }
+
+  if (search) {
+    conditions.push("(summary LIKE ? OR actor_name LIKE ? OR action_type LIKE ? OR entity_type LIKE ?)");
+    const like = `%${search}%`;
+    params.push(like, like, like, like);
+  }
+
+  if (from) {
+    conditions.push("datetime(created_at) >= datetime(?)");
+    params.push(from.length === 10 ? `${from} 00:00:00` : from);
+  }
+
+  if (to) {
+    conditions.push("datetime(created_at) <= datetime(?)");
+    params.push(to.length === 10 ? `${to} 23:59:59` : to);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+  const total = db.prepare(`SELECT COUNT(*) AS count FROM audit_logs ${whereClause}`).get(...params).count;
+  const rows = db.prepare(`
+    SELECT id, created_at, actor_user_id, actor_name, actor_role, action_type, entity_type,
+           entity_id, target_user_id, summary, changes_json, metadata_json
+    FROM audit_logs
+    ${whereClause}
+    ORDER BY datetime(created_at) DESC, id DESC
+    LIMIT ? OFFSET ?
+  `).all(...params, normalizedPageSize, (normalizedPage - 1) * normalizedPageSize);
+
+  return {
+    items: rows.map((row) => ({
+      id: row.id,
+      createdAt: row.created_at,
+      actorUserId: row.actor_user_id,
+      actorName: row.actor_name,
+      actorRole: row.actor_role,
+      actionType: row.action_type,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      targetUserId: row.target_user_id,
+      summary: row.summary,
+      changes: parseAuditJson(row.changes_json),
+      metadata: parseAuditJson(row.metadata_json)
+    })),
+    pagination: {
+      page: normalizedPage,
+      pageSize: normalizedPageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / normalizedPageSize))
+    }
+  };
+}
+
 function getCurrentUser(req) {
   if (!req.session.userId) {
     return null;
@@ -1209,6 +1445,82 @@ function validateThemePreferencePayload(input) {
   };
 }
 
+function validatePasswordChangePayload(input) {
+  const currentPassword = String(input?.currentPassword || "");
+  const newPassword = String(input?.newPassword || "");
+  const newPasswordRepeat = String(input?.newPasswordRepeat || "");
+
+  if (!currentPassword) {
+    return { error: "Aktuelles Passwort fehlt." };
+  }
+
+  if (!newPassword) {
+    return { error: "Neues Passwort fehlt." };
+  }
+
+  if (newPassword !== newPasswordRepeat) {
+    return { error: "Neues Passwort und Wiederholung stimmen nicht ueberein." };
+  }
+
+  if (newPassword.length < 10) {
+    return { error: "Neues Passwort muss mindestens 10 Zeichen lang sein." };
+  }
+
+  if (newPassword === currentPassword) {
+    return { error: "Das neue Passwort muss sich vom aktuellen Passwort unterscheiden." };
+  }
+
+  return {
+    data: {
+      currentPassword,
+      newPassword
+    }
+  };
+}
+
+function resolveOwnPasswordTarget(req) {
+  const requestedIds = [
+    req.params?.userId,
+    req.body?.userId,
+    req.body?.targetUserId
+  ].filter((value) => value !== undefined && value !== null && String(value).trim() !== "");
+
+  for (const requestedId of requestedIds) {
+    const normalizedId = Number(requestedId);
+    if (!Number.isInteger(normalizedId) || normalizedId !== req.user.id) {
+      return { error: "Keine Berechtigung.", status: 403 };
+    }
+  }
+
+  return { userId: req.user.id };
+}
+
+function handleOwnPasswordChange(req, res) {
+  const target = resolveOwnPasswordTarget(req);
+  if (target.error) {
+    return res.status(target.status || 403).json({ error: target.error });
+  }
+
+  const result = validatePasswordChangePayload(req.body || {});
+  if (result.error) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  const currentUser = db.prepare("SELECT id, username, password_hash FROM users WHERE id = ?").get(target.userId);
+  if (!currentUser) {
+    return res.status(404).json({ error: "Benutzer nicht gefunden." });
+  }
+
+  if (!bcrypt.compareSync(result.data.currentPassword, currentUser.password_hash)) {
+    return res.status(400).json({ error: "Aktuelles Passwort ist nicht korrekt." });
+  }
+
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(result.data.newPassword), currentUser.id);
+  clearLoginFailuresForKey(getClientIp(req), currentUser.username);
+
+  return res.json({ ok: true });
+}
+
 function normalizeImportedRole(value) {
   const raw = String(value || "").trim().toLowerCase();
   if (["trainee", "azubi", "apprentice"].includes(raw)) return "trainee";
@@ -1450,7 +1762,7 @@ function buildUserImportPreview(payload) {
   };
 }
 
-function importUsersFromPreview(preview) {
+function importUsersFromPreview(preview, actor = null) {
   const validRows = (preview?.rows || []).filter((row) => row.canImport);
   if (!validRows.length) {
     return { error: "Keine gueltigen Nutzer zum Import vorhanden." };
@@ -1466,8 +1778,9 @@ function importUsersFromPreview(preview) {
         INSERT INTO users (name, username, email, password_hash, role, trainer_id, ausbildung, betrieb, berufsschule)
         VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
       `).run(row.name, row.username, row.email, hashPassword(password), row.role, row.ausbildung, row.betrieb, row.berufsschule);
+      const createdUserId = insertResult.lastInsertRowid;
 
-      createdUserIds.set(row.username, insertResult.lastInsertRowid);
+      createdUserIds.set(row.username, createdUserId);
       createdCredentials.push({
         rowNumber: row.rowNumber,
         username: row.username,
@@ -1475,6 +1788,22 @@ function importUsersFromPreview(preview) {
         generatedPassword: row.password ? "" : password
       });
       saveEducation(row.ausbildung);
+
+      writeAuditLog({
+        actor,
+        actionType: "USER_CREATED",
+        entityType: "user",
+        entityId: String(createdUserId),
+        targetUserId: createdUserId,
+        summary: `${row.name} wurde per CSV als ${row.role} angelegt.`,
+        metadata: {
+          source: "csv_import",
+          username: row.username,
+          email: row.email,
+          role: row.role,
+          ausbildung: row.ausbildung || ""
+        }
+      });
     });
 
     validRows
@@ -1493,6 +1822,13 @@ function importUsersFromPreview(preview) {
           .filter((value) => Number.isInteger(value));
 
         syncTraineeTrainerAssignments(traineeId, trainerIds);
+        logTrainerAssignmentChanges({
+          actor,
+          traineeId,
+          traineeName: row.name,
+          beforeTrainerIds: [],
+          afterTrainerIds: trainerIds
+        });
       });
   });
 
@@ -2233,6 +2569,9 @@ app.post("/api/preferences/theme", requireAuth, (req, res) => {
   res.json({ ok: true, themePreference: result.data.themePreference });
 });
 
+app.post("/api/profile/password", requireAuth, handleOwnPasswordChange);
+app.post("/api/profile/:userId/password", requireAuth, handleOwnPasswordChange);
+
 app.post("/api/report", requireRole("trainee"), (req, res) => {
   const result = upsertTraineeEntries(req.user, req.body || {});
   if (result?.error) {
@@ -2346,12 +2685,47 @@ app.post("/api/profile/:userId", requireRole("trainer", "admin"), (req, res) => 
     return res.status(400).json({ error: result.error });
   }
 
+  const beforeProfile = db.prepare(`
+    SELECT id, name, username, email, role, ausbildung, betrieb, berufsschule
+    FROM users
+    WHERE id = ?
+  `).get(userId);
+
   db.prepare(`
     UPDATE users
     SET name = ?, ausbildung = ?, betrieb = ?, berufsschule = ?
     WHERE id = ?
   `).run(result.data.name, result.data.ausbildung, result.data.betrieb, result.data.berufsschule, userId);
   saveEducation(result.data.ausbildung);
+
+  if (req.user.role === "admin") {
+    const afterProfile = {
+      ...beforeProfile,
+      name: result.data.name,
+      ausbildung: result.data.ausbildung,
+      betrieb: result.data.betrieb,
+      berufsschule: result.data.berufsschule
+    };
+    const changes = computeChangedFields(beforeProfile, afterProfile, ["name", "ausbildung", "betrieb", "berufsschule"]);
+    writeAuditLog({
+      actor: req.user,
+      actionType: "PROFILE_UPDATED_BY_ADMIN",
+      entityType: "user",
+      entityId: String(userId),
+      targetUserId: userId,
+      summary: `${afterProfile.name} wurde im Profil aktualisiert: ${summarizeFieldLabels(changes, {
+        name: "Name",
+        ausbildung: "Ausbildung",
+        betrieb: "Betrieb",
+        berufsschule: "Berufsschule"
+      })}`,
+      changes,
+      metadata: {
+        username: afterProfile.username,
+        role: afterProfile.role
+      }
+    });
+  }
 
   res.json({ ok: true });
 });
@@ -2411,6 +2785,20 @@ app.post("/api/report/submit", requireRole("trainee"), (req, res) => {
     return res.status(404).json({ error: "Eintrag nicht gefunden oder bereits signiert." });
   }
 
+  writeAuditLog({
+    actor: req.user,
+    actionType: "REPORT_SUBMITTED",
+    entityType: "report_entry",
+    entityId: entryId,
+    targetUserId: req.user.id,
+    summary: `${entry.weekLabel || "Bericht"} wurde eingereicht.`,
+    metadata: {
+      dateFrom: entry.dateFrom,
+      dateTo: entry.dateTo,
+      statusBefore: entry.status
+    }
+  });
+
   res.json({ ok: true, entries: listEntriesForTrainee(req.user.id) });
 });
 
@@ -2452,6 +2840,32 @@ app.post("/api/trainer/sign", requireRole("trainer", "admin"), (req, res) => {
     WHERE id = ? AND status = 'submitted'
   `).run(new Date().toISOString(), req.user.name, trainerComment, entryId);
 
+  writeAuditLog({
+    actor: req.user,
+    actionType: "REPORT_APPROVED",
+    entityType: "report_entry",
+    entityId: entryId,
+    targetUserId: entry.trainee_id,
+    summary: `${entry.weekLabel || "Bericht"} wurde freigegeben.`,
+    metadata: {
+      dateFrom: entry.dateFrom,
+      dateTo: entry.dateTo,
+      trainerComment
+    }
+  });
+  writeAuditLog({
+    actor: req.user,
+    actionType: "REPORT_SIGNED",
+    entityType: "report_entry",
+    entityId: entryId,
+    targetUserId: entry.trainee_id,
+    summary: `${entry.weekLabel || "Bericht"} wurde signiert.`,
+    metadata: {
+      dateFrom: entry.dateFrom,
+      dateTo: entry.dateTo
+    }
+  });
+
   res.json({ ok: true });
 });
 
@@ -2485,6 +2899,18 @@ app.post("/api/trainer/comment", requireRole("trainer", "admin"), (req, res) => 
     SET status = 'rejected', trainerComment = ?, rejectionReason = ?, signedAt = NULL, signerName = '', updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND status != 'signed'
   `).run(comment, comment, entryId);
+
+  writeAuditLog({
+    actor: req.user,
+    actionType: "REPORT_RETURNED",
+    entityType: "report_entry",
+    entityId: entryId,
+    targetUserId: entry.trainee_id,
+    summary: `Bericht wurde mit Kommentar zurueckgegeben.`,
+    metadata: {
+      reason: comment
+    }
+  });
 
   res.json({ ok: true });
 });
@@ -2520,6 +2946,18 @@ app.post("/api/trainer/reject", requireRole("trainer", "admin"), (req, res) => {
     WHERE id = ? AND status != 'signed'
   `).run(reason, entryId);
 
+  writeAuditLog({
+    actor: req.user,
+    actionType: "REPORT_RETURNED",
+    entityType: "report_entry",
+    entityId: entryId,
+    targetUserId: entry.trainee_id,
+    summary: `Bericht wurde abgelehnt und zurueckgegeben.`,
+    metadata: {
+      reason
+    }
+  });
+
   res.json({ ok: true });
 });
 
@@ -2542,10 +2980,32 @@ app.post("/api/admin/users", requireRole("admin"), (req, res) => {
       INSERT INTO users (name, username, email, password_hash, role, trainer_id, ausbildung, betrieb, berufsschule)
       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
     `).run(name, username, email, hashPassword(password), role, ausbildung, betrieb, berufsschule);
+    const createdUserId = insertResult.lastInsertRowid;
     saveEducation(ausbildung);
     if (role === "trainee") {
-      syncTraineeTrainerAssignments(insertResult.lastInsertRowid, trainerIds);
+      syncTraineeTrainerAssignments(createdUserId, trainerIds);
+      logTrainerAssignmentChanges({
+        actor: req.user,
+        traineeId: createdUserId,
+        traineeName: name,
+        beforeTrainerIds: [],
+        afterTrainerIds: trainerIds
+      });
     }
+    writeAuditLog({
+      actor: req.user,
+      actionType: "USER_CREATED",
+      entityType: "user",
+      entityId: String(createdUserId),
+      targetUserId: createdUserId,
+      summary: `${name} wurde als ${role} angelegt.`,
+      metadata: {
+        username,
+        email,
+        role,
+        ausbildung
+      }
+    });
     res.json({ ok: true });
   } catch (error) {
     res.status(400).json({ error: "Benutzer konnte nicht angelegt werden. Benutzername oder E-Mail existiert bereits." });
@@ -2572,7 +3032,16 @@ app.post("/api/admin/assign-trainer", requireRole("admin"), (req, res) => {
     return res.status(400).json({ error: "Mindestens ein ausgewaehlter Ausbilder wurde nicht gefunden." });
   }
 
+  const traineeProfile = db.prepare("SELECT id, name FROM users WHERE id = ?").get(traineeId);
+  const previousTrainerIds = db.prepare("SELECT trainer_id FROM trainee_trainers WHERE trainee_id = ?").all(traineeId).map((row) => row.trainer_id);
   syncTraineeTrainerAssignments(traineeId, trainerIds);
+  logTrainerAssignmentChanges({
+    actor: req.user,
+    traineeId,
+    traineeName: traineeProfile?.name || "Azubi",
+    beforeTrainerIds: previousTrainerIds,
+    afterTrainerIds: trainerIds
+  });
   res.json({ ok: true });
 });
 
@@ -2591,10 +3060,23 @@ app.post("/api/admin/users/import", requireRole("admin"), (req, res) => {
     return res.status(400).json({ error: preview.error });
   }
 
-  const result = importUsersFromPreview(preview);
+  const result = importUsersFromPreview(preview, req.user);
   if (result.error) {
     return res.status(400).json({ error: result.error });
   }
+
+  writeAuditLog({
+    actor: req.user,
+    actionType: "CSV_IMPORT_EXECUTED",
+    entityType: "user_import",
+    entityId: "csv-import",
+    summary: `${result.importedCount} Nutzer per CSV importiert.`,
+    metadata: {
+      importedCount: result.importedCount,
+      skippedCount: result.skippedCount,
+      generatedCredentials: result.generatedCredentials.length
+    }
+  });
 
   res.json(result);
 });
@@ -2607,7 +3089,11 @@ app.post("/api/admin/users/:id", requireRole("admin"), (req, res) => {
   }
 
   const { name, username, email, role, password, ausbildung, betrieb, berufsschule, trainerIds } = result.data;
-  const existingUser = db.prepare("SELECT id, role FROM users WHERE id = ?").get(userId);
+  const existingUser = db.prepare(`
+    SELECT id, name, username, email, role, ausbildung, betrieb, berufsschule
+    FROM users
+    WHERE id = ?
+  `).get(userId);
   if (!existingUser) {
     return res.status(404).json({ error: "Benutzer nicht gefunden." });
   }
@@ -2625,6 +3111,10 @@ app.post("/api/admin/users/:id", requireRole("admin"), (req, res) => {
   }
 
   try {
+    const previousTrainerIds = existingUser.role === "trainee"
+      ? db.prepare("SELECT trainer_id FROM trainee_trainers WHERE trainee_id = ?").all(userId).map((row) => row.trainer_id)
+      : [];
+
     if (password) {
       db.prepare(`
         UPDATE users
@@ -2651,10 +3141,77 @@ app.post("/api/admin/users/:id", requireRole("admin"), (req, res) => {
       db.prepare("DELETE FROM trainee_trainers WHERE trainer_id = ?").run(userId);
     }
 
+    const updatedUser = {
+      ...existingUser,
+      name,
+      username,
+      email,
+      role,
+      ausbildung,
+      betrieb,
+      berufsschule
+    };
+    const changes = computeChangedFields(existingUser, updatedUser, ["name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule"]);
+    writeAuditLog({
+      actor: req.user,
+      actionType: "USER_UPDATED",
+      entityType: "user",
+      entityId: String(userId),
+      targetUserId: userId,
+      summary: `${name} wurde aktualisiert: ${summarizeFieldLabels(changes, {
+        name: "Name",
+        username: "Benutzername",
+        email: "E-Mail",
+        role: "Rolle",
+        ausbildung: "Ausbildung",
+        betrieb: "Betrieb",
+        berufsschule: "Berufsschule"
+      })}`,
+      changes
+    });
+    if (existingUser.role !== role) {
+      writeAuditLog({
+        actor: req.user,
+        actionType: "ROLE_CHANGED",
+        entityType: "user",
+        entityId: String(userId),
+        targetUserId: userId,
+        summary: `${name} Rolle geaendert: ${existingUser.role} -> ${role}.`,
+        changes: {
+          role: {
+            before: existingUser.role,
+            after: role
+          }
+        }
+      });
+    }
+    logTrainerAssignmentChanges({
+      actor: req.user,
+      traineeId: userId,
+      traineeName: name,
+      beforeTrainerIds: previousTrainerIds,
+      afterTrainerIds: role === "trainee" ? validTrainerIds : []
+    });
+
     res.json({ ok: true });
   } catch (error) {
     res.status(400).json({ error: "Benutzer konnte nicht aktualisiert werden. Benutzername oder E-Mail existiert bereits." });
   }
+});
+
+app.get("/api/admin/audit-logs", requireRole("admin"), (req, res) => {
+  const userId = Number(req.query?.userId);
+  const result = listAuditLogs({
+    page: req.query?.page,
+    pageSize: req.query?.pageSize,
+    actionType: String(req.query?.actionType || "").trim(),
+    userId: Number.isInteger(userId) ? userId : null,
+    search: String(req.query?.search || "").trim(),
+    from: String(req.query?.from || "").trim(),
+    to: String(req.query?.to || "").trim()
+  });
+
+  res.json(result);
 });
 
 app.get("/api/grades", requireRole("trainee", "trainer", "admin"), (req, res) => {
@@ -2682,6 +3239,9 @@ app.post("/api/grades", requireRole("trainee", "admin"), (req, res) => {
   }
 
   const traineeId = access.trainee.id;
+  const existingGrade = grade.id
+    ? db.prepare("SELECT id, fach, typ, bezeichnung, datum, note, gewicht, trainee_id FROM grades WHERE id = ? AND trainee_id = ?").get(grade.id, traineeId)
+    : null;
 
   if (grade.id) {
     db.prepare(`
@@ -2694,6 +3254,43 @@ app.post("/api/grades", requireRole("trainee", "admin"), (req, res) => {
       INSERT INTO grades (trainee_id, fach, typ, bezeichnung, datum, note, gewicht)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(traineeId, grade.fach, grade.typ, grade.bezeichnung, grade.datum, grade.note, grade.gewicht);
+  }
+
+  const gradeRow = grade.id
+    ? { ...existingGrade, ...grade }
+    : db.prepare(`
+        SELECT id, fach, typ, bezeichnung, datum, note, gewicht, trainee_id
+        FROM grades
+        WHERE trainee_id = ?
+        ORDER BY id DESC
+        LIMIT 1
+      `).get(traineeId);
+  if (grade.id) {
+    writeAuditLog({
+      actor: req.user,
+      actionType: "GRADE_UPDATED",
+      entityType: "grade",
+      entityId: String(grade.id),
+      targetUserId: traineeId,
+      summary: `Note ${grade.bezeichnung || grade.fach} wurde aktualisiert.`,
+      changes: computeChangedFields(existingGrade, grade, ["fach", "typ", "bezeichnung", "datum", "note", "gewicht"])
+    });
+  } else {
+    writeAuditLog({
+      actor: req.user,
+      actionType: "GRADE_CREATED",
+      entityType: "grade",
+      entityId: String(gradeRow?.id || ""),
+      targetUserId: traineeId,
+      summary: `Note ${grade.bezeichnung || grade.fach} wurde angelegt.`,
+      metadata: {
+        fach: grade.fach,
+        typ: grade.typ,
+        datum: grade.datum,
+        note: grade.note,
+        gewicht: grade.gewicht
+      }
+    });
   }
 
   res.json({ ok: true, traineeId, grades: listGradesForTrainee(traineeId) });
@@ -2711,10 +3308,32 @@ app.delete("/api/grades/:id", requireRole("trainee", "admin"), (req, res) => {
   }
 
   const traineeId = access.trainee.id;
+  const existingGrade = db.prepare(`
+    SELECT id, fach, typ, bezeichnung, datum, note, gewicht, trainee_id
+    FROM grades
+    WHERE id = ? AND trainee_id = ?
+  `).get(gradeId, traineeId);
   const result = db.prepare("DELETE FROM grades WHERE id = ? AND trainee_id = ?").run(gradeId, traineeId);
   if (!result.changes) {
     return res.status(404).json({ error: "Note nicht gefunden." });
   }
+
+  writeAuditLog({
+    actor: req.user,
+    actionType: "GRADE_DELETED",
+    entityType: "grade",
+    entityId: String(gradeId),
+    targetUserId: traineeId,
+    summary: `Note ${existingGrade?.bezeichnung || existingGrade?.fach || gradeId} wurde geloescht.`,
+    metadata: existingGrade
+      ? {
+          fach: existingGrade.fach,
+          typ: existingGrade.typ,
+          datum: existingGrade.datum,
+          note: existingGrade.note
+        }
+      : null
+  });
 
   res.json({ ok: true, traineeId, grades: listGradesForTrainee(traineeId) });
 });

@@ -1,5 +1,0 @@
-Demo-Accounts
-
-azubi@example.com / azubi123
-trainer@example.com / trainer123
-admin@example.com / admin123
