@@ -87,16 +87,24 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
     );
   }
 
-  const rows = trainees.flatMap((trainee) =>
-    trainee.entries.map((entry) => ({
-      ...entry,
-      traineeName: trainee.name,
-      traineeId: trainee.id
-    }))
+  const rows = useMemo(
+    () =>
+      trainees.flatMap((trainee) =>
+        trainee.entries.map((entry) => ({
+          ...entry,
+          traineeName: trainee.name,
+          traineeId: trainee.id
+        }))
+      ),
+    [trainees]
   );
-  const traineeOptions = [...trainees]
-    .map((trainee) => ({ id: String(trainee.id), name: trainee.name }))
-    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+  const traineeOptions = useMemo(
+    () =>
+      [...trainees]
+        .map((trainee) => ({ id: String(trainee.id), name: trainee.name }))
+        .sort((a, b) => a.name.localeCompare(b.name, "de")),
+    [trainees]
+  );
 
   const inPeriod = (dateValue) => {
     if (periodFilter === "all" || !dateValue) {
@@ -154,7 +162,11 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
   );
 
   const pendingCount = rows.filter((row) => row.status === "submitted").length;
-  const selectedEntry = filteredRows.find((row) => row.id === selected) || null;
+  const selectedEntry = useMemo(
+    () => filteredRows.find((row) => row.id === selected) || null,
+    [filteredRows, selected]
+  );
+  const canEditFeedback = selectedEntry?.status === "submitted";
 
   useEffect(() => {
     if (!filteredRows.length) {
@@ -178,7 +190,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
     setComment(selectedEntry.trainerComment || "");
     setReason(selectedEntry.rejectionReason || "");
     setActionError("");
-  }, [selectedEntry]);
+  }, [selectedEntry?.id, selectedEntry?.trainerComment, selectedEntry?.rejectionReason]);
 
   async function runAction(type, handler) {
     setBusyAction(type);
@@ -354,32 +366,48 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
               <div className="approval-feedback-grid">
                 <label>
                   Rueckmeldung / Kommentar
-                  <textarea rows="5" value={comment} onChange={(event) => setComment(event.target.value)} disabled={Boolean(busyAction)} />
+                  <textarea
+                    rows="5"
+                    value={comment}
+                    onChange={(event) => setComment(event.target.value)}
+                    disabled={Boolean(busyAction) || !canEditFeedback}
+                  />
                 </label>
                 <label>
                   Grund fuer Rueckgabe
-                  <textarea rows="5" value={reason} onChange={(event) => setReason(event.target.value)} disabled={Boolean(busyAction)} />
+                  <textarea
+                    rows="5"
+                    value={reason}
+                    onChange={(event) => setReason(event.target.value)}
+                    disabled={Boolean(busyAction) || !canEditFeedback}
+                  />
                 </label>
               </div>
+
+              {!canEditFeedback ? (
+                <div className="inline-notice">
+                  <strong>Hinweis:</strong> Kommentare und Rueckgabegruende koennen nur bei eingereichten Berichten bearbeitet werden.
+                </div>
+              ) : null}
 
               <div className="approval-action-bar">
                 <PrimaryButton
                   variant="secondary"
                   onClick={() => runAction("comment", () => onComment(selectedEntry.id, comment))}
-                  disabled={busyAction === "sign" || busyAction === "reject"}
+                  disabled={busyAction === "sign" || busyAction === "reject" || !canEditFeedback}
                 >
                   {busyAction === "comment" ? "Speichert..." : "Kommentar speichern"}
                 </PrimaryButton>
                 <PrimaryButton
                   onClick={() => runAction("sign", () => onSign(selectedEntry.id, comment))}
-                  disabled={Boolean(busyAction)}
+                  disabled={Boolean(busyAction) || !canEditFeedback}
                 >
                   {busyAction === "sign" ? "Freigabe laeuft..." : "Freigeben"}
                 </PrimaryButton>
                 <PrimaryButton
                   variant="ghost"
                   onClick={() => runAction("reject", () => onReject(selectedEntry.id, reason))}
-                  disabled={Boolean(busyAction) || !reason.trim()}
+                  disabled={Boolean(busyAction) || !reason.trim() || !canEditFeedback}
                 >
                   {busyAction === "reject" ? "Rueckgabe laeuft..." : "Zurueckgeben"}
                 </PrimaryButton>
