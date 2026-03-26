@@ -36,8 +36,11 @@ function ProtectedApp() {
     createUser,
     assignTrainer,
     updateUser,
+    previewUserImport,
+    importUsers,
     updateManagedProfile,
     saveThemePreference,
+    refreshGrades,
     saveGrade,
     deleteGrade,
     toggleTheme
@@ -126,9 +129,15 @@ function ProtectedApp() {
         <Route
           path="/noten"
           element={
-            role === "trainee" ? (
+            ["trainee", "trainer", "admin"].includes(role) ? (
               <NotenPage
+                role={role}
                 grades={grades}
+                report={report}
+                currentUser={session.user}
+                trainees={trainees}
+                users={users}
+                onLoadGrades={refreshGrades}
                 onSaveGrade={async (payload) => {
                   await saveGrade(payload);
                   setFlash({ type: "success", message: "Note gespeichert." });
@@ -198,6 +207,12 @@ function ProtectedApp() {
               <AdminUsersPage
                 users={users}
                 educations={educations}
+                onPreviewUserImport={previewUserImport}
+                onImportUsers={async (payload) => {
+                  const data = await importUsers(payload);
+                  setFlash({ type: "success", message: `${data.importedCount} Nutzer importiert.` });
+                  return data;
+                }}
                 onAssignTrainer={async (traineeId, trainerIds) => {
                   await assignTrainer(traineeId, trainerIds);
                   setFlash({ type: "success", message: "Ausbilder-Zuordnung gespeichert." });

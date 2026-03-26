@@ -200,6 +200,65 @@ test("Admin kann Benutzer mit Benutzername anlegen", async () => {
   assert.equal(response.status, 200);
 });
 
+test("Admin kann Benutzer bearbeiten und Bearbeitungsdaten speichern", async () => {
+  const adminLogin = await postJson(`${baseUrl}/api/login`, {
+    identifier: "admin",
+    password: "admin123"
+  });
+  const adminCookie = extractCookie(adminLogin);
+
+  const secondTrainerResponse = await postJson(
+    `${baseUrl}/api/admin/users`,
+    {
+      name: "Bearbeitungs Ausbilder",
+      username: "bearbeitungs-ausbilder",
+      email: "bearbeitungs-ausbilder@example.com",
+      password: "Trainerkonto123",
+      role: "trainer",
+      betrieb: "WIWEB"
+    },
+    adminCookie
+  );
+  assert.equal(secondTrainerResponse.status, 200);
+
+  const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: adminCookie }
+  });
+  const adminDashboard = await adminDashboardResponse.json();
+  const trainee = adminDashboard.users.find((user) => user.username === "azubi");
+  const trainerIds = adminDashboard.users
+    .filter((user) => ["trainer", "bearbeitungs-ausbilder"].includes(user.username))
+    .map((user) => user.id);
+
+  const updateResponse = await postJson(
+    `${baseUrl}/api/admin/users/${trainee.id}`,
+    {
+      name: "Max Mustermann Bearbeitet",
+      username: "azubi",
+      email: "azubi@example.com",
+      role: "trainee",
+      password: "",
+      ausbildung: "Fachinformatiker Daten und Prozessanalyse",
+      betrieb: "Neue Muster GmbH",
+      berufsschule: "Neue BBS",
+      trainerIds
+    },
+    adminCookie
+  );
+  assert.equal(updateResponse.status, 200);
+
+  const refreshedAdminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: adminCookie }
+  });
+  const refreshedAdminDashboard = await refreshedAdminDashboardResponse.json();
+  const updatedTrainee = refreshedAdminDashboard.users.find((user) => user.id === trainee.id);
+
+  assert.equal(updatedTrainee.name, "Max Mustermann Bearbeitet");
+  assert.equal(updatedTrainee.ausbildung, "Fachinformatiker Daten und Prozessanalyse");
+  assert.equal(updatedTrainee.betrieb, "Neue Muster GmbH");
+  assert.deepEqual(updatedTrainee.trainerIds.slice().sort((a, b) => a - b), trainerIds.slice().sort((a, b) => a - b));
+});
+
 test("Admin kann Azubi mit Ausbildung und mehreren Ausbildern verwalten", async () => {
   const adminLogin = await postJson(`${baseUrl}/api/login`, {
     identifier: "admin",
@@ -264,6 +323,241 @@ test("Admin kann Azubi mit Ausbildung und mehreren Ausbildern verwalten", async 
   });
   const trainerDashboard = await trainerDashboardResponse.json();
   assert.equal(trainerDashboard.trainees.some((trainee) => trainee.username === "mehrfach-azubi"), true);
+});
+
+test("Admin kann Nutzer per CSV validieren und importieren", async () => {
+  const adminLogin = await postJson(`${baseUrl}/api/login`, {
+    identifier: "admin",
+    password: "admin123"
+  });
+  const adminCookie = extractCookie(adminLogin);
+
+  const previewCsv = [
+    "name,username,email,role,password,ausbildung,betrieb,berufsschule,trainer_usernames",
+    "CSV Ausbilder,csv-trainer,csv-trainer@example.com,trainer,Passwort123!,,,,",
+    "CSV Azubi,csv-azubi,csv-azubi@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,csv-trainer",
+    "Fehler Doppelung,azubi,azubi@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,trainer"
+  ].join("\n");
+
+  const previewResponse = await postJson(
+    `${baseUrl}/api/admin/users/import-preview`,
+    {
+      filename: "benutzer.csv",
+      contentBase64: Buffer.from(previewCsv, "utf8").toString("base64")
+    },
+    adminCookie
+  );
+  assert.equal(previewResponse.status, 200);
+  const preview = await previewResponse.json();
+  assert.equal(preview.summary.totalRows, 3);
+  assert.equal(preview.summary.validRows, 2);
+  assert.equal(preview.summary.invalidRows, 1);
+  assert.equal(preview.rows.find((row) => row.username === "csv-azubi").trainerUsernames.includes("csv-trainer"), true);
+  assert.equal(preview.rows.find((row) => row.username === "azubi").errors.some((error) => error.includes("existiert bereits")), true);
+
+  const importCsv = [
+    "name,username,email,role,password,ausbildung,betrieb,berufsschule,trainer_usernames",
+    "CSV Import Ausbilder,csv-import-trainer,csv-import-trainer@example.com,trainer,Passwort123!,,,,",
+    "CSV Import Azubi,csv-import-azubi,csv-import-azubi@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,csv-import-trainer"
+  ].join("\n");
+
+  const importResponse = await postJson(
+    `${baseUrl}/api/admin/users/import`,
+    {
+      filename: "benutzer-import.csv",
+      contentBase64: Buffer.from(importCsv, "utf8").toString("base64")
+    },
+    adminCookie
+  );
+  assert.equal(importResponse.status, 200);
+  const importResult = await importResponse.json();
+  assert.equal(importResult.importedCount, 2);
+
+  const refreshedAdminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: adminCookie }
+  });
+  const refreshedAdminDashboard = await refreshedAdminDashboardResponse.json();
+  const importedTrainer = refreshedAdminDashboard.users.find((user) => user.username === "csv-import-trainer");
+  const importedTrainee = refreshedAdminDashboard.users.find((user) => user.username === "csv-import-azubi");
+
+  assert.ok(importedTrainer);
+  assert.ok(importedTrainee);
+  assert.equal(importedTrainee.trainerIds.includes(importedTrainer.id), true);
+});
+
+test("Noten-API erzwingt Rollen und Azubi-Ausbilder-Zuordnung", async () => {
+  const adminLogin = await postJson(`${baseUrl}/api/login`, {
+    identifier: "admin",
+    password: "admin123"
+  });
+  const adminCookie = extractCookie(adminLogin);
+
+  const createTrainerResponse = await postJson(
+    `${baseUrl}/api/admin/users`,
+    {
+      name: "Noten Ausbilder Zwei",
+      username: "noten-ausbilder-zwei",
+      email: "noten-ausbilder-zwei@example.com",
+      password: "Trainerkonto123",
+      role: "trainer",
+      betrieb: "WIWEB"
+    },
+    adminCookie
+  );
+  assert.equal(createTrainerResponse.status, 200);
+
+  const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: adminCookie }
+  });
+  const adminDashboard = await adminDashboardResponse.json();
+  const demoTrainee = adminDashboard.users.find((user) => user.username === "azubi");
+  const defaultTrainer = adminDashboard.users.find((user) => user.username === "trainer");
+  const secondTrainer = adminDashboard.users.find((user) => user.username === "noten-ausbilder-zwei");
+
+  assert.ok(demoTrainee);
+  assert.ok(defaultTrainer);
+  assert.ok(secondTrainer);
+
+  const assignSecondTrainerResponse = await postJson(
+    `${baseUrl}/api/admin/assign-trainer`,
+    {
+      traineeId: demoTrainee.id,
+      trainerIds: [defaultTrainer.id, secondTrainer.id]
+    },
+    adminCookie
+  );
+  assert.equal(assignSecondTrainerResponse.status, 200);
+
+  const adminCreateDemoGrade = await postJson(
+    `${baseUrl}/api/grades`,
+    {
+      traineeId: demoTrainee.id,
+      fach: "API Rechte",
+      typ: "Schulaufgabe",
+      bezeichnung: "Zugriff Demo-Azubi",
+      datum: "2026-03-15",
+      note: 2
+    },
+    adminCookie
+  );
+  assert.equal(adminCreateDemoGrade.status, 200);
+  const adminDemoGrades = await adminCreateDemoGrade.json();
+  const demoCreatedGrade = adminDemoGrades.grades.find((grade) => grade.bezeichnung === "Zugriff Demo-Azubi");
+  assert.ok(demoCreatedGrade);
+
+  const createForeignTraineeResponse = await postJson(
+    `${baseUrl}/api/admin/users`,
+    {
+      name: "Fremder Azubi",
+      username: "fremder-azubi",
+      email: "fremder-azubi@example.com",
+      password: "Azubikonto123",
+      role: "trainee",
+      ausbildung: "Fachinformatiker Systemintegration",
+      betrieb: "WIWEB",
+      trainerIds: [secondTrainer.id]
+    },
+    adminCookie
+  );
+  assert.equal(createForeignTraineeResponse.status, 200);
+
+  const refreshedAdminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: adminCookie }
+  });
+  const refreshedAdminDashboard = await refreshedAdminDashboardResponse.json();
+  const foreignTrainee = refreshedAdminDashboard.users.find((user) => user.username === "fremder-azubi");
+  assert.ok(foreignTrainee);
+
+  const adminCreateForeignGrade = await postJson(
+    `${baseUrl}/api/grades`,
+    {
+      traineeId: foreignTrainee.id,
+      fach: "API Rechte",
+      typ: "Stegreifaufgabe",
+      bezeichnung: "Zugriff Fremd-Azubi",
+      datum: "2026-03-16",
+      note: 3
+    },
+    adminCookie
+  );
+  assert.equal(adminCreateForeignGrade.status, 200);
+  const adminForeignGrades = await adminCreateForeignGrade.json();
+  const foreignCreatedGrade = adminForeignGrades.grades.find((grade) => grade.bezeichnung === "Zugriff Fremd-Azubi");
+  assert.ok(foreignCreatedGrade);
+
+  const traineeLogin = await postJson(`${baseUrl}/api/login`, {
+    identifier: "azubi",
+    password: "azubi123"
+  });
+  const traineeCookie = extractCookie(traineeLogin);
+
+  const traineeOwnGradesResponse = await fetch(`${baseUrl}/api/grades`, {
+    headers: { Cookie: traineeCookie }
+  });
+  assert.equal(traineeOwnGradesResponse.status, 200);
+  const traineeOwnGrades = await traineeOwnGradesResponse.json();
+  assert.equal(traineeOwnGrades.grades.some((grade) => grade.bezeichnung === "Zugriff Demo-Azubi"), true);
+
+  const traineeForeignGradesResponse = await fetch(`${baseUrl}/api/grades?traineeId=${foreignTrainee.id}`, {
+    headers: { Cookie: traineeCookie }
+  });
+  assert.equal(traineeForeignGradesResponse.status, 200);
+  const traineeForeignGrades = await traineeForeignGradesResponse.json();
+  assert.equal(traineeForeignGrades.traineeId, demoTrainee.id);
+  assert.equal(traineeForeignGrades.grades.some((grade) => grade.bezeichnung === "Zugriff Fremd-Azubi"), false);
+
+  const defaultTrainerLogin = await postJson(`${baseUrl}/api/login`, {
+    identifier: "trainer",
+    password: "trainer123"
+  });
+  const defaultTrainerCookie = extractCookie(defaultTrainerLogin);
+
+  const defaultTrainerAssignedResponse = await fetch(`${baseUrl}/api/grades?traineeId=${demoTrainee.id}`, {
+    headers: { Cookie: defaultTrainerCookie }
+  });
+  assert.equal(defaultTrainerAssignedResponse.status, 200);
+  const defaultTrainerAssignedGrades = await defaultTrainerAssignedResponse.json();
+  assert.equal(defaultTrainerAssignedGrades.grades.some((grade) => grade.bezeichnung === "Zugriff Demo-Azubi"), true);
+
+  const defaultTrainerForbiddenResponse = await fetch(`${baseUrl}/api/grades?traineeId=${foreignTrainee.id}`, {
+    headers: { Cookie: defaultTrainerCookie }
+  });
+  assert.equal(defaultTrainerForbiddenResponse.status, 403);
+
+  const secondTrainerLogin = await postJson(`${baseUrl}/api/login`, {
+    identifier: "noten-ausbilder-zwei",
+    password: "Trainerkonto123"
+  });
+  const secondTrainerCookie = extractCookie(secondTrainerLogin);
+
+  const secondTrainerDemoResponse = await fetch(`${baseUrl}/api/grades?traineeId=${demoTrainee.id}`, {
+    headers: { Cookie: secondTrainerCookie }
+  });
+  assert.equal(secondTrainerDemoResponse.status, 200);
+  const secondTrainerDemoGrades = await secondTrainerDemoResponse.json();
+  assert.equal(secondTrainerDemoGrades.grades.some((grade) => grade.bezeichnung === "Zugriff Demo-Azubi"), true);
+
+  const secondTrainerForeignResponse = await fetch(`${baseUrl}/api/grades?traineeId=${foreignTrainee.id}`, {
+    headers: { Cookie: secondTrainerCookie }
+  });
+  assert.equal(secondTrainerForeignResponse.status, 200);
+  const secondTrainerForeignGrades = await secondTrainerForeignResponse.json();
+  assert.equal(secondTrainerForeignGrades.grades.some((grade) => grade.bezeichnung === "Zugriff Fremd-Azubi"), true);
+
+  const adminReadForeignResponse = await fetch(`${baseUrl}/api/grades?traineeId=${foreignTrainee.id}`, {
+    headers: { Cookie: adminCookie }
+  });
+  assert.equal(adminReadForeignResponse.status, 200);
+  const adminReadForeignGrades = await adminReadForeignResponse.json();
+  assert.equal(adminReadForeignGrades.grades.some((grade) => grade.bezeichnung === "Zugriff Fremd-Azubi"), true);
+
+  const adminDeleteForeignResponse = await fetch(`${baseUrl}/api/grades/${foreignCreatedGrade.id}`, {
+    method: "DELETE",
+    headers: { Cookie: adminCookie }
+  });
+  assert.equal(adminDeleteForeignResponse.status, 200);
+  const adminDeleteForeignResult = await adminDeleteForeignResponse.json();
+  assert.equal(adminDeleteForeignResult.grades.some((grade) => grade.id === foreignCreatedGrade.id), false);
 });
 
 test("Trainee kann Profil nicht ueber Report-Speichern aendern", async () => {

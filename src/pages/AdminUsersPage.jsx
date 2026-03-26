@@ -1,6 +1,8 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { PrimaryButton } from "../components/PrimaryButton";
+import { EmptyState } from "../components/EmptyState";
+import { StatusBadge } from "../components/StatusBadge";
 
 function buildUserForm(user = null) {
   return {
@@ -29,6 +31,18 @@ function toggleId(list, id) {
 function formatRelationshipList(items, emptyLabel) {
   if (!items?.length) return emptyLabel;
   return items.map((item) => item.name).join(", ");
+}
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      resolve(result.includes(",") ? result.split(",")[1] : result);
+    };
+    reader.onerror = () => reject(new Error("Datei konnte nicht gelesen werden."));
+    reader.readAsDataURL(file);
+  });
 }
 
 function EducationField({ value, educations, onChange, listId }) {
@@ -115,8 +129,7 @@ function UserForm({ title, subtitle, form, setForm, trainers, educations, submit
               setForm({
                 ...form,
                 role: nextRole,
-                trainerIds: nextRole === "trainee" ? form.trainerIds : [],
-                ausbildung: nextRole === "trainee" ? form.ausbildung : form.ausbildung
+                trainerIds: nextRole === "trainee" ? form.trainerIds : []
               });
             }}
           >
@@ -161,17 +174,189 @@ function UserForm({ title, subtitle, form, setForm, trainers, educations, submit
   );
 }
 
-export function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUpdateUser }) {
+function UserImportRowPreview({ row }) {
+  const canImport = row.canImport;
+
+  return (
+    <div className={`import-row-card${canImport ? "" : " invalid"}`}>
+      <div className="import-row-head">
+        <strong>Zeile {row.rowNumber}</strong>
+        <StatusBadge status={canImport ? "signed" : "invalid"} />
+      </div>
+      <div className="import-row-grid">
+        <span>{row.name || "-"}</span>
+        <span>{row.username || "-"}</span>
+        <span>{row.email || "-"}</span>
+        <span>{roleLabel(row.role || "-")}</span>
+      </div>
+      <div className="import-row-grid">
+        <span>{row.ausbildung || "-"}</span>
+        <span>{row.betrieb || "-"}</span>
+        <span>{row.berufsschule || "-"}</span>
+        <span>{row.trainerUsernames?.length ? row.trainerUsernames.join(" | ") : "-"}</span>
+      </div>
+      {row.errors?.length ? <p className="field-message error">{row.errors.join(" | ")}</p> : null}
+      {row.warnings?.length ? <p className="field-message">{row.warnings.join(" | ")}</p> : null}
+    </div>
+  );
+}
+
+function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [importPayload, setImportPayload] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+
+  const summary = preview?.summary || { totalRows: 0, validRows: 0, invalidRows: 0 };
+
+  async function handlePreview() {
+    if (!selectedFile) {
+      setError("Bitte zuerst eine CSV-Datei auswaehlen.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    setResult(null);
+
+    try {
+      const contentBase64 = await readFileAsBase64(selectedFile);
+      const payload = {
+        filename: selectedFile.name,
+        contentBase64
+      };
+      const data = await onPreviewUserImport(payload);
+      setImportPayload(payload);
+      setPreview(data);
+    } catch (previewError) {
+      setPreview(null);
+      setImportPayload(null);
+      setError(previewError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleImport() {
+    if (!importPayload) {
+      setError("Bitte zuerst eine Vorschau erzeugen.");
+      return;
+    }
+
+    setBusy(true);
+    setError("");
+    try {
+      const data = await onImportUsers(importPayload);
+      setResult(data);
+      setPreview(null);
+      setImportPayload(null);
+      setSelectedFile(null);
+    } catch (importError) {
+      setError(importError.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <article className="panel-card admin-form-card">
+      <PageHeader
+        kicker="CSV-Import"
+        title="Benutzer gesammelt importieren"
+        subtitle="CSV hochladen, serverseitig pruefen, Vorschau ansehen und erst dann anlegen."
+      />
+      <div className="export-panel">
+        <label>
+          CSV-Datei
+          <input
+            type="file"
+            accept=".csv"
+            onChange={(event) => {
+              setSelectedFile(event.target.files?.[0] || null);
+              setPreview(null);
+              setImportPayload(null);
+              setResult(null);
+              setError("");
+            }}
+          />
+        </label>
+        <div className="inline-notice">
+          <strong>Erwartete Spalten:</strong> `name`, `username`, `email`, `role`, optional `password`, `ausbildung`, `betrieb`, `berufsschule`, `trainer_usernames`
+        </div>
+        <div className="page-actions">
+          <a className="button button-secondary" href="/benutzer_import_vorlage.csv" download>
+            Beispiel-CSV herunterladen
+          </a>
+          <PrimaryButton onClick={handlePreview} disabled={busy}>
+            Vorschau laden
+          </PrimaryButton>
+        </div>
+        {selectedFile ? <p>Ausgewaehlt: {selectedFile.name}</p> : null}
+        {error ? <div className="field-message error">{error}</div> : null}
+        {result?.generatedCredentials?.length ? (
+          <div className="inline-notice">
+            <strong>Zufaellige Initialpasswoerter:</strong> {result.generatedCredentials.map((entry) => `${entry.username}: ${entry.generatedPassword}`).join(" | ")}
+          </div>
+        ) : null}
+      </div>
+
+      {preview ? (
+        <div className="page-stack">
+          <div className="import-summary-grid">
+            <div className="read-only-card">
+              <span>Erkannte Zeilen</span>
+              <strong>{summary.totalRows}</strong>
+            </div>
+            <div className="read-only-card">
+              <span>Gueltig</span>
+              <strong>{summary.validRows}</strong>
+            </div>
+            <div className="read-only-card">
+              <span>Fehlerhaft</span>
+              <strong>{summary.invalidRows}</strong>
+            </div>
+            <div className="read-only-card">
+              <span>Importmodus</span>
+              <strong>Nur neue Nutzer</strong>
+            </div>
+          </div>
+          <div className="editor-footer">
+            <PrimaryButton onClick={handleImport} disabled={busy || !summary.validRows}>
+              {summary.validRows} Nutzer importieren
+            </PrimaryButton>
+          </div>
+          <div className="import-row-list">
+            {preview.rows.length ? preview.rows.map((row) => <UserImportRowPreview key={`${row.rowNumber}-${row.username}-${row.email}`} row={row} />) : null}
+          </div>
+        </div>
+      ) : (
+        <EmptyState title="Noch keine Vorschau" description="Lade eine CSV hoch, um gueltige und fehlerhafte Datensaetze vor dem Import zu sehen." />
+      )}
+    </article>
+  );
+}
+
+export function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUpdateUser, onPreviewUserImport, onImportUsers }) {
   const [form, setForm] = useState(buildUserForm());
   const [editingUserId, setEditingUserId] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [createError, setCreateError] = useState("");
   const [editError, setEditError] = useState("");
   const [assignError, setAssignError] = useState("");
+  const editPanelRef = useRef(null);
 
   const trainers = useMemo(() => users.filter((user) => user.role === "trainer"), [users]);
   const trainees = useMemo(() => users.filter((user) => user.role === "trainee"), [users]);
   const managedEducations = useMemo(() => educations || [], [educations]);
+  const editingUser = users.find((user) => user.id === editingUserId) || null;
+
+  useEffect(() => {
+    if (editingUserId && editPanelRef.current) {
+      editPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [editingUserId]);
 
   function startEditing(user) {
     setEditingUserId(user.id);
@@ -219,21 +404,43 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
       <PageHeader
         kicker="Verwaltung"
         title="Benutzerverwaltung"
-        subtitle="Nutzer, Rollen, Ausbildung und Ausbilder-Zuordnungen verwalten."
+        subtitle="Nutzer, Rollen, Ausbildung, CSV-Import und Ausbilder-Zuordnungen verwalten."
       />
 
+      {editingUserId && editForm ? (
+        <section ref={editPanelRef}>
+          <UserForm
+            title={`Benutzer bearbeiten${editingUser ? `: ${editingUser.name}` : ""}`}
+            subtitle="Bearbeitung wird direkt mit den vorhandenen Stammdaten und Mehrfach-Zuordnungen befuellt."
+            form={editForm}
+            setForm={setEditForm}
+            trainers={trainers}
+            educations={managedEducations}
+            submitLabel="Aenderungen speichern"
+            onSubmit={() => handleUpdateUser(editingUserId)}
+            onCancel={stopEditing}
+            error={editError}
+            editingUserId={editingUserId}
+          />
+        </section>
+      ) : null}
+
       <section className="admin-users-layout">
-        <UserForm
-          title="Benutzer anlegen"
-          subtitle="Neuen Nutzer erfassen."
-          form={form}
-          setForm={setForm}
-          trainers={trainers}
-          educations={managedEducations}
-          submitLabel="Nutzer speichern"
-          onSubmit={handleCreateUser}
-          error={createError}
-        />
+        <div className="page-stack">
+          <UserForm
+            title="Benutzer anlegen"
+            subtitle="Neuen Nutzer erfassen."
+            form={form}
+            setForm={setForm}
+            trainers={trainers}
+            educations={managedEducations}
+            submitLabel="Nutzer speichern"
+            onSubmit={handleCreateUser}
+            error={createError}
+          />
+
+          <UserImportPanel onPreviewUserImport={onPreviewUserImport} onImportUsers={onImportUsers} />
+        </div>
 
         <article className="panel-card admin-overview-card">
           <PageHeader kicker="Uebersicht" title="Benutzer" subtitle={`${users.length} Konten`} />
@@ -271,22 +478,6 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
           </div>
         </article>
       </section>
-
-      {editingUserId && editForm ? (
-        <UserForm
-          title="Benutzer bearbeiten"
-          subtitle="Stammdaten und Zuordnungen aendern."
-          form={editForm}
-          setForm={setEditForm}
-          trainers={trainers}
-          educations={managedEducations}
-          submitLabel="Aenderungen speichern"
-          onSubmit={() => handleUpdateUser(editingUserId)}
-          onCancel={stopEditing}
-          error={editError}
-          editingUserId={editingUserId}
-        />
-      ) : null}
 
       <section className="panel-card admin-assignment-card">
         <PageHeader

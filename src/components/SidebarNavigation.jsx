@@ -4,7 +4,7 @@ import { NavLink } from "react-router-dom";
 const items = [
   { to: "/dashboard", label: "Dashboard", roles: ["trainee", "trainer", "admin"] },
   { to: "/berichte", label: "Berichte", roles: ["trainee"] },
-  { to: "/noten", label: "Noten", roles: ["trainee"] },
+  { to: "/noten", label: "Noten", roles: ["trainee", "trainer", "admin"] },
   { to: "/freigaben", label: "Freigaben", roles: ["trainee", "trainer", "admin"] },
   { to: "/profil", label: "Profil", roles: ["trainee", "trainer", "admin"] },
   { to: "/export", label: "Export", roles: ["trainee"] },

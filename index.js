@@ -7,6 +7,7 @@ const bcrypt = require("bcryptjs");
 const Database = require("better-sqlite3");
 const PDFDocument = require("pdfkit");
 const XLSX = require("xlsx");
+const crypto = require("crypto");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -863,7 +864,8 @@ function requireRole(...roles) {
 function listEntriesForTrainee(traineeId) {
   return db.prepare(`
     SELECT id, weekLabel, dateFrom, dateTo, betrieb, schule,
-           status, signedAt, signerName, trainerComment, rejectionReason
+           status, signedAt, signerName, trainerComment, rejectionReason,
+           created_at AS createdAt, updated_at AS updatedAt
     FROM entries
     WHERE trainee_id = ?
     ORDER BY dateFrom DESC, id DESC
@@ -881,6 +883,95 @@ function listGradesForTrainee(traineeId) {
     WHERE trainee_id = ?
     ORDER BY datum DESC, id DESC
   `).all(traineeId);
+}
+
+function findTraineeById(traineeId) {
+  return db.prepare(`
+    SELECT id, name, username, email, ausbildung, betrieb, berufsschule
+    FROM users
+    WHERE id = ? AND role = 'trainee'
+    LIMIT 1
+  `).get(traineeId);
+}
+
+function parseTraineeId(value) {
+  const traineeId = Number(value);
+  return Number.isInteger(traineeId) ? traineeId : null;
+}
+
+function resolveReadableGradesTrainee(user, requestedTraineeId) {
+  if (user.role === "trainee") {
+    return { trainee: findTraineeById(user.id) };
+  }
+
+  if (requestedTraineeId == null || requestedTraineeId === "") {
+    return { trainee: null };
+  }
+
+  const traineeId = parseTraineeId(requestedTraineeId);
+  if (!traineeId) {
+    return { error: "Ungueltige Azubi-ID.", status: 400 };
+  }
+
+  const trainee = findTraineeById(traineeId);
+  if (!trainee) {
+    return { error: "Azubi nicht gefunden.", status: 404 };
+  }
+
+  if (user.role === "trainer" && !isTrainerAssignedToTrainee(user.id, traineeId)) {
+    return { error: "Keine Berechtigung.", status: 403 };
+  }
+
+  if (user.role !== "admin" && user.role !== "trainer") {
+    return { error: "Keine Berechtigung.", status: 403 };
+  }
+
+  return { trainee };
+}
+
+function resolveWritableGradesTrainee(user, requestedTraineeId, gradeId = null) {
+  if (user.role === "trainee") {
+    if (gradeId) {
+      const existing = db.prepare("SELECT id FROM grades WHERE id = ? AND trainee_id = ?").get(gradeId, user.id);
+      if (!existing) {
+        return { error: "Note nicht gefunden.", status: 404 };
+      }
+    }
+
+    return { trainee: findTraineeById(user.id) };
+  }
+
+  if (user.role !== "admin") {
+    return { error: "Keine Berechtigung.", status: 403 };
+  }
+
+  if (gradeId) {
+    const gradeOwner = db.prepare(`
+      SELECT users.id, users.name, users.username, users.email, users.ausbildung, users.betrieb, users.berufsschule
+      FROM grades
+      JOIN users ON users.id = grades.trainee_id
+      WHERE grades.id = ? AND users.role = 'trainee'
+      LIMIT 1
+    `).get(gradeId);
+
+    if (!gradeOwner) {
+      return { error: "Note nicht gefunden.", status: 404 };
+    }
+
+    return { trainee: gradeOwner };
+  }
+
+  const traineeId = parseTraineeId(requestedTraineeId);
+  if (!traineeId) {
+    return { error: "Azubi-ID fehlt.", status: 400 };
+  }
+
+  const trainee = findTraineeById(traineeId);
+  if (!trainee) {
+    return { error: "Azubi nicht gefunden.", status: 404 };
+  }
+
+  return { trainee };
 }
 
 function validateGrade(input) {
@@ -1118,6 +1209,27 @@ function validateThemePreferencePayload(input) {
   };
 }
 
+function normalizeImportedRole(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (["trainee", "azubi", "apprentice"].includes(raw)) return "trainee";
+  if (["trainer", "ausbilder"].includes(raw)) return "trainer";
+  if (raw === "admin") return "admin";
+  return "";
+}
+
+function parseTrainerUsernames(value) {
+  return [...new Set(
+    String(value || "")
+      .split("|")
+      .map((item) => normalizeUsername(item))
+      .filter(Boolean)
+  )];
+}
+
+function generateImportPassword() {
+  return crypto.randomBytes(9).toString("base64url");
+}
+
 function parseImportRows(filename, contentBase64) {
   if (!filename || !contentBase64) {
     return { error: "Dateiinhalt fehlt." };
@@ -1172,6 +1284,230 @@ function detectImportColumns(headerRow) {
   });
 
   return mapping;
+}
+
+function detectUserImportColumns(headerRow) {
+  const mapping = {};
+  const normalizedHeader = headerRow.map((cell) =>
+    String(cell || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "")
+  );
+
+  const aliases = {
+    name: ["name", "fullname", "vollername"],
+    username: ["username", "benutzername", "login"],
+    email: ["email", "mail", "emailadresse"],
+    role: ["role", "rolle"],
+    password: ["password", "passwort", "kennwort"],
+    ausbildung: ["ausbildung", "education", "training"],
+    betrieb: ["betrieb", "company", "unternehmen"],
+    berufsschule: ["berufsschule", "schule", "school"],
+    trainerUsernames: ["trainerusernames", "trainer", "ausbilder", "ausbilderusernames", "trainerusername"]
+  };
+
+  Object.entries(aliases).forEach(([field, values]) => {
+    const index = normalizedHeader.findIndex((item) => values.includes(item));
+    if (index >= 0) {
+      mapping[field] = index;
+    }
+  });
+
+  return mapping;
+}
+
+function buildUserImportPreview(payload) {
+  const parsed = parseImportRows(payload?.filename, payload?.contentBase64);
+  if (parsed.error) {
+    return parsed;
+  }
+
+  const rows = parsed.rows;
+  const mapping = detectUserImportColumns(rows[0] || []);
+  const requiredFields = ["name", "username", "email", "role"];
+  const missingColumns = requiredFields.filter((field) => mapping[field] === undefined);
+  if (missingColumns.length) {
+    return { error: `Die CSV braucht mindestens diese Spalten: ${missingColumns.join(", ")}.` };
+  }
+
+  const existingUsers = db.prepare(`
+    SELECT id, username, email, role
+    FROM users
+  `).all();
+  const existingByUsername = new Map(existingUsers.map((user) => [normalizeUsername(user.username), user]));
+  const existingByEmail = new Map(existingUsers.map((user) => [String(user.email || "").trim().toLowerCase(), user]));
+
+  const fileRows = [];
+  const usernameRows = new Map();
+  const emailRows = new Map();
+
+  for (let index = 1; index < rows.length; index += 1) {
+    const rawRow = rows[index];
+    const rowNumber = index + 1;
+    const name = String(rawRow[mapping.name] || "").trim();
+    const username = normalizeUsername(rawRow[mapping.username]);
+    const email = String(rawRow[mapping.email] || "").trim().toLowerCase();
+    const role = normalizeImportedRole(rawRow[mapping.role]);
+    const password = String(mapping.password !== undefined ? rawRow[mapping.password] || "" : "");
+    const ausbildung = normalizeEducationName(mapping.ausbildung !== undefined ? rawRow[mapping.ausbildung] || "" : "");
+    const betrieb = String(mapping.betrieb !== undefined ? rawRow[mapping.betrieb] || "" : "").trim();
+    const berufsschule = String(mapping.berufsschule !== undefined ? rawRow[mapping.berufsschule] || "" : "").trim();
+    const trainerUsernames = parseTrainerUsernames(mapping.trainerUsernames !== undefined ? rawRow[mapping.trainerUsernames] || "" : "");
+    const errors = [];
+    const warnings = [];
+
+    if (!name && !username && !email && !role && !password && !ausbildung && !betrieb && !berufsschule && !trainerUsernames.length) {
+      continue;
+    }
+
+    if (!name) errors.push("Name fehlt");
+    if (!username) errors.push("Benutzername fehlt");
+    if (!email) errors.push("E-Mail fehlt");
+    if (email && !isValidEmail(email)) errors.push("E-Mail ist ungueltig");
+    if (!role) errors.push("Rolle ist ungueltig");
+    if (password && password.length < 10) errors.push("Passwort muss mindestens 10 Zeichen lang sein");
+    if (role === "trainee" && !ausbildung) errors.push("Azubis benoetigen eine Ausbildung");
+    if (role !== "trainee" && trainerUsernames.length) errors.push("trainer_usernames ist nur fuer Azubis erlaubt");
+
+    if (usernameRows.has(username)) {
+      errors.push(`Benutzername doppelt in Datei (Zeile ${usernameRows.get(username)})`);
+    } else if (username) {
+      usernameRows.set(username, rowNumber);
+    }
+
+    if (emailRows.has(email)) {
+      errors.push(`E-Mail doppelt in Datei (Zeile ${emailRows.get(email)})`);
+    } else if (email) {
+      emailRows.set(email, rowNumber);
+    }
+
+    if (username && existingByUsername.has(username)) {
+      errors.push("Benutzername existiert bereits");
+    }
+
+    if (email && existingByEmail.has(email)) {
+      errors.push("E-Mail existiert bereits");
+    }
+
+    if (!password) {
+      warnings.push("Kein Passwort angegeben: Beim Import wird ein zufaelliges Initialpasswort erzeugt.");
+    }
+
+    fileRows.push({
+      rowNumber,
+      name,
+      username,
+      email,
+      role,
+      password,
+      ausbildung,
+      betrieb,
+      berufsschule,
+      trainerUsernames,
+      errors,
+      warnings
+    });
+  }
+
+  const trainerCandidates = new Map();
+  existingUsers
+    .filter((user) => user.role === "trainer")
+    .forEach((user) => trainerCandidates.set(normalizeUsername(user.username), { source: "existing", role: user.role, rowNumber: null }));
+  fileRows
+    .filter((row) => row.role === "trainer")
+    .forEach((row) => trainerCandidates.set(row.username, { source: "file", role: row.role, rowNumber: row.rowNumber }));
+
+  fileRows.forEach((row) => {
+    if (row.role !== "trainee") {
+      return;
+    }
+
+    row.trainerUsernames.forEach((trainerUsername) => {
+      const candidate = trainerCandidates.get(trainerUsername);
+      if (!candidate) {
+        row.errors.push(`Ausbilder '${trainerUsername}' wurde nicht gefunden`);
+      } else if (candidate.role !== "trainer") {
+        row.errors.push(`'${trainerUsername}' ist kein Ausbilder`);
+      }
+    });
+  });
+
+  const previewRows = fileRows.map((row) => ({
+    ...row,
+    canImport: row.errors.length === 0
+  }));
+
+  return {
+    ok: true,
+    mapping,
+    summary: {
+      totalRows: previewRows.length,
+      validRows: previewRows.filter((row) => row.canImport).length,
+      invalidRows: previewRows.filter((row) => !row.canImport).length
+    },
+    rows: previewRows
+  };
+}
+
+function importUsersFromPreview(preview) {
+  const validRows = (preview?.rows || []).filter((row) => row.canImport);
+  if (!validRows.length) {
+    return { error: "Keine gueltigen Nutzer zum Import vorhanden." };
+  }
+
+  const createdCredentials = [];
+  const transaction = db.transaction(() => {
+    const createdUserIds = new Map();
+
+    validRows.forEach((row) => {
+      const password = row.password || generateImportPassword();
+      const insertResult = db.prepare(`
+        INSERT INTO users (name, username, email, password_hash, role, trainer_id, ausbildung, betrieb, berufsschule)
+        VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
+      `).run(row.name, row.username, row.email, hashPassword(password), row.role, row.ausbildung, row.betrieb, row.berufsschule);
+
+      createdUserIds.set(row.username, insertResult.lastInsertRowid);
+      createdCredentials.push({
+        rowNumber: row.rowNumber,
+        username: row.username,
+        email: row.email,
+        generatedPassword: row.password ? "" : password
+      });
+      saveEducation(row.ausbildung);
+    });
+
+    validRows
+      .filter((row) => row.role === "trainee")
+      .forEach((row) => {
+        const traineeId = createdUserIds.get(row.username);
+        const trainerIds = row.trainerUsernames
+          .map((trainerUsername) => {
+            const createdId = createdUserIds.get(trainerUsername);
+            if (createdId) {
+              return createdId;
+            }
+            const existing = db.prepare("SELECT id FROM users WHERE username = ? AND role = 'trainer'").get(trainerUsername);
+            return existing?.id || null;
+          })
+          .filter((value) => Number.isInteger(value));
+
+        syncTraineeTrainerAssignments(traineeId, trainerIds);
+      });
+  });
+
+  try {
+    transaction();
+  } catch (error) {
+    return { error: "Import konnte nicht abgeschlossen werden. Benutzername oder E-Mail existiert bereits." };
+  }
+
+  return {
+    ok: true,
+    importedCount: validRows.length,
+    skippedCount: (preview?.rows || []).length - validRows.length,
+    generatedCredentials: createdCredentials.filter((row) => row.generatedPassword)
+  };
 }
 
 function buildImportPreview(user, payload) {
@@ -2240,6 +2576,29 @@ app.post("/api/admin/assign-trainer", requireRole("admin"), (req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/api/admin/users/import-preview", requireRole("admin"), (req, res) => {
+  const preview = buildUserImportPreview(req.body || {});
+  if (preview.error) {
+    return res.status(400).json({ error: preview.error });
+  }
+
+  res.json(preview);
+});
+
+app.post("/api/admin/users/import", requireRole("admin"), (req, res) => {
+  const preview = buildUserImportPreview(req.body || {});
+  if (preview.error) {
+    return res.status(400).json({ error: preview.error });
+  }
+
+  const result = importUsersFromPreview(preview);
+  if (result.error) {
+    return res.status(400).json({ error: result.error });
+  }
+
+  res.json(result);
+});
+
 app.post("/api/admin/users/:id", requireRole("admin"), (req, res) => {
   const userId = Number(req.params.id);
   const result = validateAdminUserPayload(req.body || {});
@@ -2298,55 +2657,78 @@ app.post("/api/admin/users/:id", requireRole("admin"), (req, res) => {
   }
 });
 
-app.get("/api/grades", requireRole("trainee"), (req, res) => {
-  res.json({ grades: listGradesForTrainee(req.user.id) });
+app.get("/api/grades", requireRole("trainee", "trainer", "admin"), (req, res) => {
+  const access = resolveReadableGradesTrainee(req.user, req.query?.traineeId);
+  if (access.error) {
+    return res.status(access.status || 400).json({ error: access.error });
+  }
+
+  res.json({
+    traineeId: access.trainee?.id || null,
+    grades: access.trainee ? listGradesForTrainee(access.trainee.id) : []
+  });
 });
 
-app.post("/api/grades", requireRole("trainee"), (req, res) => {
+app.post("/api/grades", requireRole("trainee", "admin"), (req, res) => {
   const result = validateGrade(req.body || {});
   if (result.error) {
     return res.status(400).json({ error: result.error });
   }
 
   const grade = result.data;
+  const access = resolveWritableGradesTrainee(req.user, req.body?.traineeId, grade.id);
+  if (access.error) {
+    return res.status(access.status || 400).json({ error: access.error });
+  }
+
+  const traineeId = access.trainee.id;
 
   if (grade.id) {
-    const existing = db.prepare("SELECT id FROM grades WHERE id = ? AND trainee_id = ?").get(grade.id, req.user.id);
-    if (!existing) {
-      return res.status(404).json({ error: "Note nicht gefunden." });
-    }
-
     db.prepare(`
       UPDATE grades
       SET fach = ?, typ = ?, bezeichnung = ?, datum = ?, note = ?, gewicht = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND trainee_id = ?
-    `).run(grade.fach, grade.typ, grade.bezeichnung, grade.datum, grade.note, grade.gewicht, grade.id, req.user.id);
+    `).run(grade.fach, grade.typ, grade.bezeichnung, grade.datum, grade.note, grade.gewicht, grade.id, traineeId);
   } else {
     db.prepare(`
       INSERT INTO grades (trainee_id, fach, typ, bezeichnung, datum, note, gewicht)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(req.user.id, grade.fach, grade.typ, grade.bezeichnung, grade.datum, grade.note, grade.gewicht);
+    `).run(traineeId, grade.fach, grade.typ, grade.bezeichnung, grade.datum, grade.note, grade.gewicht);
   }
 
-  res.json({ ok: true, grades: listGradesForTrainee(req.user.id) });
+  res.json({ ok: true, traineeId, grades: listGradesForTrainee(traineeId) });
 });
 
-app.delete("/api/grades/:id", requireRole("trainee"), (req, res) => {
+app.delete("/api/grades/:id", requireRole("trainee", "admin"), (req, res) => {
   const gradeId = Number(req.params.id);
   if (!Number.isInteger(gradeId)) {
     return res.status(400).json({ error: "Ungueltige Note." });
   }
 
-  const result = db.prepare("DELETE FROM grades WHERE id = ? AND trainee_id = ?").run(gradeId, req.user.id);
+  const access = resolveWritableGradesTrainee(req.user, null, gradeId);
+  if (access.error) {
+    return res.status(access.status || 400).json({ error: access.error });
+  }
+
+  const traineeId = access.trainee.id;
+  const result = db.prepare("DELETE FROM grades WHERE id = ? AND trainee_id = ?").run(gradeId, traineeId);
   if (!result.changes) {
     return res.status(404).json({ error: "Note nicht gefunden." });
   }
 
-  res.json({ ok: true, grades: listGradesForTrainee(req.user.id) });
+  res.json({ ok: true, traineeId, grades: listGradesForTrainee(traineeId) });
 });
 
-app.get("/api/grades/pdf", requireRole("trainee"), (req, res) => {
-  renderGradesPdf(res, req.user, listGradesForTrainee(req.user.id));
+app.get("/api/grades/pdf", requireRole("trainee", "trainer", "admin"), (req, res) => {
+  const access = resolveReadableGradesTrainee(req.user, req.query?.traineeId);
+  if (access.error) {
+    return res.status(access.status || 400).json({ error: access.error });
+  }
+  if (!access.trainee) {
+    return res.status(400).json({ error: "Azubi-ID fehlt." });
+  }
+
+  renderGradesPdf(res, access.trainee, listGradesForTrainee(access.trainee.id));
 });
 
 function handlePdfRequest(req, res) {

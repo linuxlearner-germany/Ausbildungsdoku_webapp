@@ -1,21 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { formatLocalDate, getTodayLocalDateString } from "../lib/date.mjs";
+import { applyThemeAttribute, getSystemPrefersDark, isThemePreference, readStoredThemePreference, resolveTheme, THEME_STORAGE_KEY } from "../lib/theme.mjs";
 
 const AppContext = createContext(null);
-const THEME_STORAGE_KEY = "berichtsheft-theme";
-
-function isThemePreference(value) {
-  return ["light", "dark", "system"].includes(value);
-}
-
-function resolveTheme(preference) {
-  if (preference === "light" || preference === "dark") {
-    return preference;
-  }
-
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
 
 function buildEmptyEntry(date = "") {
   return {
@@ -34,18 +22,22 @@ function buildEmptyEntry(date = "") {
 }
 
 export function AppProvider({ children }) {
+  const initialThemePreference = readStoredThemePreference(typeof window !== "undefined" ? window.localStorage : null);
+  const initialResolvedTheme = resolveTheme(initialThemePreference, getSystemPrefersDark());
   const [session, setSession] = useState({ user: null, ready: false });
   const [dashboard, setDashboard] = useState(null);
   const [grades, setGrades] = useState([]);
-  const [themePreference, setThemePreference] = useState("system");
-  const [theme, setTheme] = useState("light");
+  const [themePreference, setThemePreference] = useState(initialThemePreference);
+  const [theme, setTheme] = useState(initialResolvedTheme);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(null);
 
   function applyThemePreference(preference) {
     const nextPreference = isThemePreference(preference) ? preference : "system";
+    const nextTheme = resolveTheme(nextPreference, getSystemPrefersDark());
     setThemePreference(nextPreference);
-    setTheme(resolveTheme(nextPreference));
+    setTheme(nextTheme);
+    applyThemeAttribute(nextTheme);
     window.localStorage.setItem(THEME_STORAGE_KEY, nextPreference);
   }
 
@@ -78,25 +70,20 @@ export function AppProvider({ children }) {
     return data;
   }
 
-  async function refreshGrades() {
-    const data = await api("/api/grades");
+  async function refreshGrades(traineeId = null) {
+    const query = traineeId ? `?traineeId=${encodeURIComponent(traineeId)}` : "";
+    const data = await api(`/api/grades${query}`);
     setGrades(data.grades);
     return data.grades;
   }
 
   useEffect(() => {
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    if (isThemePreference(storedTheme)) {
-      applyThemePreference(storedTheme);
-    } else {
-      applyThemePreference("system");
-    }
     restoreSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+    applyThemeAttribute(theme);
   }, [theme]);
 
   useEffect(() => {
@@ -105,7 +92,11 @@ export function AppProvider({ children }) {
     }
 
     const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const update = () => setTheme(resolveTheme("system"));
+    const update = () => {
+      const nextTheme = resolveTheme("system", media.matches);
+      setTheme(nextTheme);
+      applyThemeAttribute(nextTheme);
+    };
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, [themePreference]);
@@ -310,6 +301,22 @@ export function AppProvider({ children }) {
     await refreshDashboard();
   }
 
+  async function previewUserImport(payload) {
+    return api("/api/admin/users/import-preview", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+  }
+
+  async function importUsers(payload) {
+    const data = await api("/api/admin/users/import", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    });
+    await refreshDashboard();
+    return data;
+  }
+
   async function updateManagedProfile(userId, payload) {
     await api(`/api/profile/${userId}`, {
       method: "POST",
@@ -319,30 +326,40 @@ export function AppProvider({ children }) {
   }
 
   async function saveThemePreference(nextPreference) {
+    const previousPreference = themePreference;
+    const previousTheme = theme;
     applyThemePreference(nextPreference);
 
     if (!session.user) {
       return nextPreference;
     }
 
-    const data = await api("/api/preferences/theme", {
-      method: "POST",
-      body: JSON.stringify({ themePreference: nextPreference })
-    });
+    try {
+      const data = await api("/api/preferences/theme", {
+        method: "POST",
+        body: JSON.stringify({ themePreference: nextPreference })
+      });
 
-    setSession((current) =>
-      current.user
-        ? {
-            ...current,
-            user: {
-              ...current.user,
-              themePreference: data.themePreference
+      setSession((current) =>
+        current.user
+          ? {
+              ...current,
+              user: {
+                ...current.user,
+                themePreference: data.themePreference
+              }
             }
-          }
-        : current
-    );
+          : current
+      );
 
-    return data.themePreference;
+      return data.themePreference;
+    } catch (error) {
+      setThemePreference(previousPreference);
+      setTheme(previousTheme);
+      applyThemeAttribute(previousTheme);
+      window.localStorage.setItem(THEME_STORAGE_KEY, previousPreference);
+      throw error;
+    }
   }
 
   async function saveGrade(payload) {
@@ -417,6 +434,8 @@ export function AppProvider({ children }) {
         createUser,
         assignTrainer,
         updateUser,
+        previewUserImport,
+        importUsers,
         updateManagedProfile,
         saveThemePreference,
         refreshGrades,
