@@ -33,6 +33,7 @@
 - [API-Überblick](#api-überblick)
 - [Sicherheit und Qualität](#sicherheit-und-qualität)
 - [Tests](#tests)
+- [Anleitungen](#anleitungen)
 - [Bekannte Rahmenbedingungen](#bekannte-rahmenbedingungen)
 
 ## Überblick
@@ -162,7 +163,7 @@ berichtsheft_webapp/
 ### Installation
 
 ```bash
-git clone <repo-url> berichtsheft_webapp
+git clone https://github.com/linuxlearner-germany/Ausbildungsdoku_webapp berichtsheft_webapp
 cd berichtsheft_webapp
 npm install
 cp .env.example .env
@@ -469,6 +470,11 @@ Start:
 npm test
 ```
 
+## Anleitungen
+
+- [`Anleitung/LOKAL_STARTEN.md`](./Anleitung/LOKAL_STARTEN.md)
+- [`Anleitung/SERVER_INSTALLATION.md`](./Anleitung/SERVER_INSTALLATION.md)
+
 ## Bekannte Rahmenbedingungen
 
 - Das Projekt nutzt aktuell **keinen** separaten Docker- oder Compose-Ordner.
@@ -477,11 +483,12 @@ npm test
 - Build-Artefakte in `public/` sind in `.gitignore` eingetragen, können lokal aber vorhanden sein.
 - Die Datenbank liegt standardmäßig lokal in `data/` und ist nicht für verteilte Mehrinstanz-Deployments ausgelegt.
 
-## Lokale Zusatzdoku
+## Weitere Referenzen
 
-- [`Anleitung/LOKAL_STARTEN.md`](./Anleitung/LOKAL_STARTEN.md)
 - [`.env.example`](./.env.example)
+- [`LICENSE`](./LICENSE)
 
 ## Lizenz
 
 Dieses Projekt ist aktuell als `UNLICENSED` gekennzeichnet.
+Details stehen in [`LICENSE`](./LICENSE).
