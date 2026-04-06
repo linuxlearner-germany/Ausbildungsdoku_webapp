@@ -6,7 +6,7 @@ const labels = {
   signed: "Signiert",
   rejected: "Nachbearbeitung",
   missing: "Leer",
-  invalid: "Unvollstaendig"
+  invalid: "Unvollständig"
 };
 
 export function StatusBadge({ status }) {

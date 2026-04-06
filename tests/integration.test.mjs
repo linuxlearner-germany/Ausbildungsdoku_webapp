@@ -167,6 +167,271 @@ await test("Signieren nur fuer eingereichte Eintraege", { concurrency: false }, 
   });
 });
 
+await test("Azubi kann mehrere eigene Berichte gesammelt einreichen", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const loginResponse = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+    const cookie = extractCookie(loginResponse);
+
+    const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: cookie }
+    });
+    const dashboard = await dashboardResponse.json();
+    const draftEntry = dashboard.report.entries.find((entry) => entry.status === "draft");
+    const rejectedEntry = dashboard.report.entries.find((entry) => entry.status === "rejected");
+
+    const batchResponse = await postJson(
+      `${baseUrl}/api/report/submit-batch`,
+      { entryIds: [draftEntry.id, rejectedEntry.id] },
+      cookie
+    );
+    const batchData = await batchResponse.json();
+
+    assert.equal(batchResponse.status, 200);
+    assert.equal(batchData.processedCount, 2);
+    assert.equal(batchData.failed.length, 0);
+    assert.ok(batchData.entries.some((entry) => entry.id === draftEntry.id && entry.status === "submitted"));
+    assert.ok(batchData.entries.some((entry) => entry.id === rejectedEntry.id && entry.status === "submitted"));
+  });
+});
+
+await test("Sammel-Einreichung meldet Teilfehler fuer unzulaessige Berichte", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const loginResponse = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+    const cookie = extractCookie(loginResponse);
+
+    const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: cookie }
+    });
+    const dashboard = await dashboardResponse.json();
+    const draftEntry = dashboard.report.entries.find((entry) => entry.status === "draft");
+    const signedEntry = dashboard.report.entries.find((entry) => entry.status === "signed");
+
+    const batchResponse = await postJson(
+      `${baseUrl}/api/report/submit-batch`,
+      { entryIds: [draftEntry.id, signedEntry.id] },
+      cookie
+    );
+    const batchData = await batchResponse.json();
+
+    assert.equal(batchResponse.status, 200);
+    assert.equal(batchData.processedCount, 1);
+    assert.equal(batchData.failed.length, 1);
+    assert.match(batchData.failed[0].error, /Signierte Einträge/i);
+    assert.ok(batchData.entries.some((entry) => entry.id === draftEntry.id && entry.status === "submitted"));
+    assert.ok(batchData.entries.some((entry) => entry.id === signedEntry.id && entry.status === "signed"));
+  });
+});
+
+await test("Ausbilder kann mehrere eingereichte Berichte gesammelt freigeben", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const traineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+    const traineeCookie = extractCookie(traineeLogin);
+
+    const createDraft = await postJson(
+      `${baseUrl}/api/report/draft`,
+      { dateFrom: "2026-04-03", weekLabel: "Batch Freigabe", betrieb: "Support", schule: "" },
+      traineeCookie
+    );
+    const createdDraft = await createDraft.json();
+    await postJson(
+      `${baseUrl}/api/report/entry/${createdDraft.entry.id}`,
+      { ...createdDraft.entry, betrieb: "Support", schule: "" },
+      traineeCookie
+    );
+    await postJson(`${baseUrl}/api/report/submit`, { entryId: createdDraft.entry.id }, traineeCookie);
+
+    const trainerLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "trainer",
+      password: "trainer123"
+    });
+    const trainerCookie = extractCookie(trainerLogin);
+
+    const trainerDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: trainerCookie }
+    });
+    const trainerDashboard = await trainerDashboardResponse.json();
+    const submittedEntries = trainerDashboard.trainees.flatMap((trainee) => trainee.entries).filter((entry) => entry.status === "submitted");
+
+    const batchResponse = await postJson(
+      `${baseUrl}/api/trainer/batch`,
+      { action: "sign", entryIds: submittedEntries.slice(0, 2).map((entry) => entry.id), trainerComment: "Batch-Freigabe" },
+      trainerCookie
+    );
+    const batchData = await batchResponse.json();
+
+    assert.equal(batchResponse.status, 200);
+    assert.equal(batchData.processedCount, 2);
+    assert.equal(batchData.failed.length, 0);
+
+    const refreshedResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: trainerCookie }
+    });
+    const refreshedDashboard = await refreshedResponse.json();
+    const refreshedEntries = refreshedDashboard.trainees.flatMap((trainee) => trainee.entries);
+    for (const entryId of submittedEntries.slice(0, 2).map((entry) => entry.id)) {
+      assert.ok(refreshedEntries.some((entry) => entry.id === entryId && entry.status === "signed" && entry.trainerComment === "Batch-Freigabe"));
+    }
+  });
+});
+
+await test("Ausbilder kann mehrere eingereichte Berichte gesammelt zurueckgeben", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const traineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+    const traineeCookie = extractCookie(traineeLogin);
+
+    const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: traineeCookie }
+    });
+    const dashboard = await dashboardResponse.json();
+
+    const draftResponse = await postJson(
+      `${baseUrl}/api/report/draft`,
+      { dateFrom: "2026-04-03", weekLabel: "Batch Rueckgabe Neu", betrieb: "Support", schule: "" },
+      traineeCookie
+    );
+    const draft = await draftResponse.json();
+    await postJson(
+      `${baseUrl}/api/report/entry/${draft.entry.id}`,
+      { ...draft.entry, weekLabel: "Batch Rueckgabe Neu", betrieb: "Support", schule: "" },
+      traineeCookie
+    );
+    await postJson(`${baseUrl}/api/report/submit`, { entryId: draft.entry.id }, traineeCookie);
+
+    const trainerLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "trainer",
+      password: "trainer123"
+    });
+    const trainerCookie = extractCookie(trainerLogin);
+
+    const trainerDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: trainerCookie }
+    });
+    const trainerDashboard = await trainerDashboardResponse.json();
+    const submittedEntries = trainerDashboard.trainees.flatMap((trainee) => trainee.entries).filter((entry) => entry.status === "submitted");
+
+    const batchResponse = await postJson(
+      `${baseUrl}/api/trainer/batch`,
+      { action: "reject", entryIds: submittedEntries.slice(0, 2).map((entry) => entry.id), reason: "Bitte nacharbeiten" },
+      trainerCookie
+    );
+    const batchData = await batchResponse.json();
+
+    assert.equal(batchResponse.status, 200);
+    assert.equal(batchData.processedCount, 2);
+    assert.equal(batchData.failed.length, 0);
+
+    const refreshedResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: traineeCookie }
+    });
+    const refreshedDashboard = await refreshedResponse.json();
+    for (const entryId of submittedEntries.slice(0, 2).map((entry) => entry.id)) {
+      assert.ok(refreshedDashboard.report.entries.some((entry) => entry.id === entryId && entry.status === "rejected" && entry.rejectionReason === "Bitte nacharbeiten"));
+    }
+  });
+});
+
+await test("Sammelfreigabe blockiert fremde Berichte mit Teilfehler", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    await postJson(
+      `${baseUrl}/api/admin/users`,
+      { name: "Trainer Zwei", username: "trainer-zwei", email: "trainer-zwei@example.com", password: "Trainerkonto123", role: "trainer" },
+      adminCookie
+    );
+
+    const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const adminDashboard = await adminDashboardResponse.json();
+    const secondTrainer = adminDashboard.users.find((user) => user.username === "trainer-zwei");
+
+    const createTraineeResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "Fremder Azubi",
+        username: "fremder-azubi",
+        email: "fremder-azubi@example.com",
+        password: "Azubikonto123",
+        role: "trainee",
+        ausbildung: "Fremd",
+        trainerIds: [secondTrainer.id]
+      },
+      adminCookie
+    );
+    assert.equal(createTraineeResponse.status, 200);
+
+    const foreignTraineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "fremder-azubi",
+      password: "Azubikonto123"
+    });
+    const foreignTraineeCookie = extractCookie(foreignTraineeLogin);
+
+    const foreignDraftResponse = await postJson(
+      `${baseUrl}/api/report/draft`,
+      { dateFrom: "2026-04-03", weekLabel: "Fremdbericht", betrieb: "Support", schule: "" },
+      foreignTraineeCookie
+    );
+    const foreignDraft = await foreignDraftResponse.json();
+    await postJson(`${baseUrl}/api/report/submit`, { entryId: foreignDraft.entry.id }, foreignTraineeCookie);
+    const foreignBeforeResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: foreignTraineeCookie }
+    });
+    const foreignBefore = await foreignBeforeResponse.json();
+    const foreignBeforeEntry = foreignBefore.report.entries.find((entry) => entry.id === foreignDraft.entry.id);
+
+    const trainerLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "trainer",
+      password: "trainer123"
+    });
+    const trainerCookie = extractCookie(trainerLogin);
+
+    const trainerDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: trainerCookie }
+    });
+    const trainerDashboard = await trainerDashboardResponse.json();
+    const ownSubmitted = trainerDashboard.trainees.flatMap((trainee) => trainee.entries).find((entry) => entry.status === "submitted");
+
+    const batchResponse = await postJson(
+      `${baseUrl}/api/trainer/batch`,
+      { action: "sign", entryIds: [ownSubmitted.id, foreignDraft.entry.id], trainerComment: "Gemischt" },
+      trainerCookie
+    );
+    const batchData = await batchResponse.json();
+
+    assert.equal(batchResponse.status, 200);
+    assert.equal(batchData.processedCount, 1);
+    assert.equal(batchData.failed.length, 1);
+    assert.match(batchData.failed[0].error, /gehört nicht zu dir/i);
+
+    const foreignDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: foreignTraineeCookie }
+    });
+    const foreignDashboard = await foreignDashboardResponse.json();
+    assert.ok(
+      foreignDashboard.report.entries.some(
+        (entry) => entry.id === foreignDraft.entry.id && entry.status === foreignBeforeEntry.status
+      )
+    );
+  });
+});
+
 await test("Health-Endpoint ist erreichbar", { concurrency: false }, async () => {
   await withIsolatedServer(async () => {
     const response = await fetch(`${baseUrl}/api/health`);

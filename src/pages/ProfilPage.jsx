@@ -36,18 +36,17 @@ function ThemeSettingsPanel({ theme, themePreference, onToggleTheme, onSaveTheme
   return (
     <section className="panel-card">
       <PageHeader
-        kicker="Persoenliche Einstellungen"
+        kicker="Persönliche Einstellungen"
         title="Anzeige und Theme"
-        subtitle="Diese Einstellungen betreffen nur deine Benutzeroberflaeche und keine Stammdaten."
       />
       <div className="theme-settings-layout">
         <div className="theme-state">
           <strong>Aktive Darstellung</strong>
           <span>{theme === "dark" ? "Dark Mode" : "Light Mode"}</span>
-          <small className="field-message">Gespeicherte Praeferenz: {themePreference === "system" ? "System" : themePreference}</small>
+          <small className="field-message">Gespeicherte Präferenz: {themePreference === "system" ? "System" : themePreference}</small>
         </div>
         <label>
-          Theme-Praeferenz
+          Theme-Präferenz
           <select value={themePreference} onChange={(event) => onSaveThemePreference(event.target.value)}>
             <option value="system">System</option>
             <option value="light">Light</option>
@@ -98,7 +97,7 @@ function PasswordChangePanel({ onChangeOwnPassword }) {
     }
 
     if (form.newPassword !== form.newPasswordRepeat) {
-      setError("Neues Passwort und Wiederholung stimmen nicht ueberein.");
+      setError("Neues Passwort und Wiederholung stimmen nicht überein.");
       return;
     }
 
@@ -115,7 +114,7 @@ function PasswordChangePanel({ onChangeOwnPassword }) {
         newPassword: "",
         newPasswordRepeat: ""
       });
-      setSuccess("Dein Passwort wurde erfolgreich geaendert.");
+      setSuccess("Dein Passwort wurde erfolgreich geändert.");
     } catch (submitError) {
       setError(submitError.message);
     } finally {
@@ -127,8 +126,7 @@ function PasswordChangePanel({ onChangeOwnPassword }) {
     <section className="panel-card">
       <PageHeader
         kicker="Sicherheit"
-        title="Passwort aendern"
-        subtitle="Hier aenderst du ausschliesslich das Passwort deines eigenen Benutzerkontos."
+        title="Passwort ändern"
       />
       <div className="form-grid">
         <label>
@@ -214,8 +212,7 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
       <div className="page-stack">
         <PageHeader
           kicker="Profil"
-          title="Persoenliche und betriebliche Daten"
-          subtitle="Deine Stammdaten werden durch Ausbilder oder Admin gepflegt. Du kannst sie hier nur einsehen."
+          title="Persönliche und betriebliche Daten"
           actions={
             <a className="button button-secondary" href="/api/report/pdf">
               PDF exportieren
@@ -224,9 +221,6 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
         />
         <section className="panel-card">
           <ProfileDetailGrid profile={report?.trainee} />
-          <div className="inline-notice">
-            <strong>Hinweis:</strong> Aenderungen an Name, Ausbildung, Betrieb oder Berufsschule koennen nur durch Ausbilder oder Admins vorgenommen werden.
-          </div>
         </section>
         <ThemeSettingsPanel
           theme={theme}
@@ -244,11 +238,10 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
       <PageHeader
         kicker="Profilpflege"
         title={role === "trainer" ? "Azubi-Stammdaten pflegen" : "Stammdaten verwalten"}
-        subtitle="Aendere nur die fachlich relevanten Profilinformationen. Login-Daten und Rollen bleiben in der Verwaltung."
         actions={
           selectedProfile ? (
             <a className="button button-secondary" href={`/api/report/pdf/${selectedProfile.id}`}>
-              PDF fuer Auswahl
+              PDF für Auswahl
             </a>
           ) : null
         }
@@ -258,8 +251,7 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
         <article className="panel-card profile-picker">
           <PageHeader
             kicker="Auswahl"
-            title={role === "trainer" ? "Zugeordnete Azubis" : "Azubi waehlen"}
-            subtitle="Waehle einen Azubi aus und aktualisiere anschliessend dessen Stammdaten."
+            title={role === "trainer" ? "Zugeordnete Azubis" : "Azubi wählen"}
           />
           {targets.length ? (
             <div className="profile-target-list">
@@ -277,7 +269,7 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
             </div>
           ) : (
             <EmptyState
-              title="Keine Profile verfuegbar"
+              title="Keine Profile verfügbar"
               description={role === "trainer" ? "Dir sind aktuell keine Azubis zugeordnet." : "Es sind noch keine Azubi-Profile vorhanden."}
             />
           )}
@@ -286,8 +278,7 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
         <article className="panel-card">
           <PageHeader
             kicker="Bearbeitung"
-            title={selectedProfile ? `Stammdaten fuer ${selectedProfile.name}` : "Kein Profil ausgewaehlt"}
-            subtitle="Diese Aenderungen wirken direkt auf Profilansicht, Dashboard und PDF-Export."
+            title={selectedProfile ? `Stammdaten für ${selectedProfile.name}` : "Kein Profil ausgewählt"}
           />
           {selectedProfile ? (
             <>
@@ -309,15 +300,12 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
                   <input value={form.berufsschule} onChange={(event) => setForm({ ...form, berufsschule: event.target.value })} />
                 </label>
               </div>
-              <div className="inline-notice">
-                <strong>Hinweis:</strong> Nutzer koennen diese Profilfelder selbst nicht bearbeiten. Login-Daten, Rollen und Zuweisungen bleiben in der Verwaltung.
-              </div>
               <div className="editor-footer">
                 <PrimaryButton onClick={() => onSaveManagedProfile(selectedProfile.id, form)}>Stammdaten speichern</PrimaryButton>
               </div>
             </>
           ) : (
-            <EmptyState title="Keine Auswahl" description="Waehle links einen Azubi aus, um seine Profildaten zu bearbeiten." />
+            <EmptyState title="Keine Auswahl" />
           )}
         </article>
       </section>

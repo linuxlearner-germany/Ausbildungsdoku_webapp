@@ -4,7 +4,7 @@
   "description": "Berichtsheft Portal mit Rollen fuer Azubi, Ausbilder und Verwaltung",
   "main": "index.js",
   "scripts": {
-    "dev": "node index.js",
+    "dev": "npm run build && node index.js",
     "build": "esbuild src/main.jsx --bundle --format=esm --sourcemap --outfile=public/app.js && cp src/styles.css public/app.css",
     "start": "npm run build && node index.js",
     "check": "node --check index.js",

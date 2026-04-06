@@ -51,7 +51,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
 
   async function handlePreview() {
     if (!selectedFile) {
-      setError("Bitte zuerst eine .xlsx- oder .csv-Datei auswaehlen.");
+      setError("Bitte zuerst eine .xlsx- oder .csv-Datei auswählen.");
       return;
     }
 
@@ -103,7 +103,6 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
       <PageHeader
         kicker="Export"
         title="PDF-Export und Import"
-        subtitle="Lade dein Berichtsheft als PDF herunter oder uebernimm bestehende Eintraege aus einer Datei."
         actions={
           <a className="button button-primary" href="/api/report/pdf">
             PDF herunterladen
@@ -113,8 +112,8 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
       <section className="stats-grid">
         <StatCard label="Tagesberichte" value={entries.length} note="Alle vorhandenen Tagesberichte" />
         <StatCard label="Freigegeben" value={signedEntries} note="Bereits signierte Berichte" />
-        <StatCard label="In Pruefung" value={submittedEntries} note="Aktuell beim Ausbilder" />
-        <StatCard label="Importierbar" value={previewSummary.validRows} note="Gueltige Zeilen in der aktuellen Vorschau" />
+        <StatCard label="In Prüfung" value={submittedEntries} note="Aktuell beim Ausbilder" />
+        <StatCard label="Importierbar" value={previewSummary.validRows} note="Gültige Zeilen in der aktuellen Vorschau" />
       </section>
 
       <section className="reports-layout">
@@ -122,30 +121,26 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
           <PageHeader
             kicker="PDF"
             title="Berichtsheft als PDF"
-            subtitle="Das PDF enthaelt signierte Tagesberichte in kompakten Bloecken plus Unterschriftsblatt."
           />
           {entries.length ? (
             <div className="export-panel">
-              <strong>PDF-Export bereit</strong>
-              <p>Es werden nur signierte Berichte ausgegeben. Eingereichte oder noch offene Entwuerfe erscheinen nicht im PDF.</p>
               <a className="button button-secondary" href="/api/report/pdf">
                 PDF herunterladen
               </a>
             </div>
           ) : (
-            <EmptyState title="Noch keine Berichte zum Export" description="Sobald Tagesberichte vorhanden sind, kannst du hier dein PDF herunterladen." />
+            <EmptyState title="Noch keine Berichte zum Export" />
           )}
         </article>
 
         <article className="panel-card">
           <PageHeader
             kicker="Import"
-            title="Berichte aus Excel oder CSV uebernehmen"
-            subtitle="Importierte Berichte werden als eingereicht angelegt. Signaturen werden nie automatisch gesetzt."
+            title="Berichte aus Excel oder CSV übernehmen"
           />
           <div className="export-panel">
             <label>
-              Datei auswaehlen
+              Datei auswählen
               <input
                 type="file"
                 accept=".xlsx,.csv"
@@ -157,9 +152,6 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
                 }}
               />
             </label>
-            <div className="inline-notice">
-              <strong>Erwartete Spalten:</strong> `Datum`, `Titel`, optional `Betrieb`, `Berufsschule`
-            </div>
             <div className="page-actions">
               <a className="button button-secondary" href="/report-import-template.csv" download>
                 Vorlage herunterladen
@@ -168,7 +160,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
                 Vorschau laden
               </PrimaryButton>
             </div>
-            {selectedFile ? <p>Ausgewaehlt: {selectedFile.name}</p> : null}
+            {selectedFile ? <p>Ausgewählt: {selectedFile.name}</p> : null}
             {error ? <div className="field-message error">{error}</div> : null}
           </div>
         </article>
@@ -178,7 +170,6 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
         <PageHeader
           kicker="Importvorschau"
           title="Erkannte Zeilen und Validierung"
-          subtitle="Pruefe vor dem Import, welche Eintraege uebernommen werden, welche Dubletten enthalten und welche Zeilen ungueltig sind."
           actions={
             preview ? (
               <PrimaryButton onClick={handleImport} disabled={busy || !preview.summary.validRows}>
@@ -195,7 +186,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
                 <strong>{preview.summary.totalRows}</strong>
               </div>
               <div className="read-only-card">
-                <span>Gueltig</span>
+                <span>Gültig</span>
                 <strong>{preview.summary.validRows}</strong>
               </div>
               <div className="read-only-card">
@@ -212,7 +203,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
             </div>
           </div>
         ) : (
-          <EmptyState title="Noch keine Vorschau" description="Waehle eine Datei aus und lade die Vorschau, um erkannte Zeilen, Dubletten und Validierungsfehler zu sehen." />
+          <EmptyState title="Noch keine Vorschau" />
         )}
       </section>
     </div>

@@ -32,7 +32,6 @@ export function DashboardPage({ role, report, trainees, users }) {
         <PageHeader
           kicker="Dashboard"
           title="Mein Überblick"
-          subtitle="Status, letzte Aktivitäten und Schnellzugriffe für deine tägliche Berichtsheft-Führung."
           actions={<Link className="button button-primary" to="/berichte?view=write">Tagesbericht erstellen</Link>}
         />
         <section className="stats-grid">
@@ -43,7 +42,7 @@ export function DashboardPage({ role, report, trainees, users }) {
         </section>
         <section className="two-column-grid">
           <article className="panel-card">
-            <PageHeader kicker="Aktivitäten" title="Letzte Einträge" subtitle="Die zuletzt bearbeiteten Tagesberichte." />
+            <PageHeader kicker="Aktivitäten" title="Letzte Einträge" />
             {latest.length ? (
               <div className="list-stack">
                 {latest.map((entry) => (
@@ -57,11 +56,11 @@ export function DashboardPage({ role, report, trainees, users }) {
                 ))}
               </div>
             ) : (
-              <EmptyState title="Noch keine Aktivitäten" description="Lege deinen ersten Tagesbericht an, um hier Inhalte zu sehen." />
+              <EmptyState title="Noch keine Aktivitäten" />
             )}
           </article>
           <article className="panel-card">
-            <PageHeader kicker="Schnellzugriffe" title="Direkte Aktionen" subtitle="Springe direkt in die wichtigsten Arbeitsbereiche." />
+            <PageHeader kicker="Schnellzugriffe" title="Direkte Aktionen" />
             <div className="quick-actions">
               <Link className="quick-action-card" to="/berichte?view=write">Berichte schreiben</Link>
               <Link className="quick-action-card" to="/berichte?view=calendar">Kalenderansicht</Link>
@@ -86,7 +85,6 @@ export function DashboardPage({ role, report, trainees, users }) {
         <PageHeader
           kicker="Dashboard"
           title="Freigabeübersicht"
-          subtitle="Offene Prüfungen, Statusentwicklung und Schnellzugriffe für Ausbilder."
           actions={<Link className="button button-primary" to="/freigaben">Freigaben öffnen</Link>}
         />
         <section className="stats-grid">
@@ -97,7 +95,7 @@ export function DashboardPage({ role, report, trainees, users }) {
         </section>
         <section className="two-column-grid">
           <article className="panel-card">
-            <PageHeader kicker="Offene Fälle" title="Warten auf Freigabe" subtitle="Die nächsten eingereichten Berichte, die geprüft werden sollten." />
+            <PageHeader kicker="Offene Fälle" title="Warten auf Freigabe" />
             {openEntries.length ? (
               <div className="list-stack">
                 {openEntries.slice(0, 6).map((entry) => {
@@ -114,11 +112,11 @@ export function DashboardPage({ role, report, trainees, users }) {
                 })}
               </div>
             ) : (
-              <EmptyState title="Keine offenen Freigaben" description="Aktuell liegen keine eingereichten Berichte zur Prüfung vor." />
+              <EmptyState title="Keine offenen Freigaben" />
             )}
           </article>
           <article className="panel-card">
-            <PageHeader kicker="Schnellzugriffe" title="Arbeitsbereiche" subtitle="Direkter Zugriff auf Prüfung, Archiv und PDFs der zugeordneten Azubis." />
+            <PageHeader kicker="Schnellzugriffe" title="Arbeitsbereiche" />
             <div className="quick-actions">
               <Link className="quick-action-card" to="/freigaben">Freigaben bearbeiten</Link>
               <Link className="quick-action-card" to="/archiv">Archiv öffnen</Link>
@@ -131,7 +129,7 @@ export function DashboardPage({ role, report, trainees, users }) {
           </article>
         </section>
         <section className="panel-card">
-          <PageHeader kicker="Azubi-Status" title="Zugeordnete Auszubildende" subtitle="Status pro Azubi mit letzter Aktivität und aktuellem Prüfstand." />
+          <PageHeader kicker="Azubi-Status" title="Zugeordnete Auszubildende" />
           {trainees.length ? (
             <div className="trainer-overview-grid">
               {trainees.map((trainee) => {
@@ -161,14 +159,14 @@ export function DashboardPage({ role, report, trainees, users }) {
                         <StatusBadge status={summary.latest.status} />
                       </div>
                     ) : (
-                      <EmptyState title="Noch keine Berichte" description="Für diesen Azubi wurden noch keine Tagesberichte angelegt." />
+                      <EmptyState title="Noch keine Berichte" />
                     )}
                   </article>
                 );
               })}
             </div>
           ) : (
-            <EmptyState title="Keine Azubis zugeordnet" description="Sobald ein Azubi dir zugewiesen ist, erscheint er hier mit seinem Status." />
+            <EmptyState title="Keine Azubis zugeordnet" />
           )}
         </section>
       </div>
@@ -177,7 +175,7 @@ export function DashboardPage({ role, report, trainees, users }) {
 
   return (
     <div className="page-stack">
-      <PageHeader kicker="Dashboard" title="Verwaltungsübersicht" subtitle="Nutzerbestand, Rollenverteilung und zentrale Verwaltungsaktionen." />
+      <PageHeader kicker="Dashboard" title="Verwaltungsübersicht" />
       <section className="stats-grid">
         <StatCard label="Benutzer" value={users.length} note="Alle registrierten Konten" />
         <StatCard label="Azubis" value={users.filter((user) => user.role === "trainee").length} note="Aktive Auszubildende" />

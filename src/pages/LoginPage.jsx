@@ -26,7 +26,6 @@ export function LoginPage() {
           <div>
             <p className="page-kicker">Berichtsheft Portal</p>
             <h1>Willkommen im Ausbildungsportal</h1>
-            <p>Melde dich an, um Tagesberichte zu führen, Freigaben zu prüfen und dein Archiv zu verwalten.</p>
           </div>
         </div>
         <form className="login-form" onSubmit={handleSubmit}>
@@ -40,7 +39,7 @@ export function LoginPage() {
           </label>
           {error ? <div className="field-message error">{error}</div> : null}
           <PrimaryButton disabled={busy} type="submit">
-            {busy ? "Anmeldung..." : "Einloggen"}
+            {busy ? "Anmeldung..." : "Anmelden"}
           </PrimaryButton>
         </form>
       </div>

@@ -225,6 +225,15 @@ export function AppProvider({ children }) {
     await refreshDashboard();
   }
 
+  async function submitEntries(entryIds) {
+    const data = await api("/api/report/submit-batch", {
+      method: "POST",
+      body: JSON.stringify({ entryIds })
+    });
+    await refreshDashboard();
+    return data;
+  }
+
   async function signEntry(entryId, trainerComment) {
     await api("/api/trainer/sign", {
       method: "POST",
@@ -239,6 +248,20 @@ export function AppProvider({ children }) {
       body: JSON.stringify({ entryId, reason })
     });
     await refreshDashboard();
+  }
+
+  async function processTrainerEntries(action, entryIds, payload = {}) {
+    const data = await api("/api/trainer/batch", {
+      method: "POST",
+      body: JSON.stringify({
+        action,
+        entryIds,
+        trainerComment: payload.trainerComment || "",
+        reason: payload.reason || ""
+      })
+    });
+    await refreshDashboard();
+    return data;
   }
 
   async function saveTrainerComment(entryId, comment) {
@@ -449,11 +472,13 @@ export function AppProvider({ children }) {
         saveEntry,
         deleteEntry,
         submitEntry,
+        submitEntries,
         previewReportImport,
         importReports,
         createOrFocusEntry,
         signEntry,
         rejectEntry,
+        processTrainerEntries,
         saveTrainerComment,
         createUser,
         assignTrainer,

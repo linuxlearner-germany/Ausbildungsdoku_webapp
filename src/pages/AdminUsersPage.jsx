@@ -67,7 +67,6 @@ function TrainerMultiSelect({ trainers, value, onChange, excludeUserId }) {
     <div className="admin-trainer-selector">
       <div className="admin-section-label">
         <strong>Zugeordnete Ausbilder</strong>
-        <small>Mehrfachauswahl, doppelte Zuordnungen werden verhindert.</small>
       </div>
       {availableTrainers.length ? (
         <div className="admin-chip-grid">
@@ -214,7 +213,7 @@ function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
 
   async function handlePreview() {
     if (!selectedFile) {
-      setError("Bitte zuerst eine CSV-Datei auswaehlen.");
+      setError("Bitte zuerst eine CSV-Datei auswählen.");
       return;
     }
 
@@ -266,7 +265,6 @@ function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
       <PageHeader
         kicker="CSV-Import"
         title="Benutzer gesammelt importieren"
-        subtitle="CSV hochladen, serverseitig pruefen, Vorschau ansehen und erst dann anlegen."
       />
       <div className="export-panel">
         <label>
@@ -283,9 +281,6 @@ function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
             }}
           />
         </label>
-        <div className="inline-notice">
-          <strong>Erwartete Spalten:</strong> `name`, `username`, `email`, `role`, optional `password`, `ausbildung`, `betrieb`, `berufsschule`, `trainer_usernames`
-        </div>
         <div className="page-actions">
           <a className="button button-secondary" href="/benutzer_import_vorlage.csv" download>
             Beispiel-CSV herunterladen
@@ -294,11 +289,11 @@ function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
             Vorschau laden
           </PrimaryButton>
         </div>
-        {selectedFile ? <p>Ausgewaehlt: {selectedFile.name}</p> : null}
+        {selectedFile ? <p>Ausgewählt: {selectedFile.name}</p> : null}
         {error ? <div className="field-message error">{error}</div> : null}
         {result?.generatedCredentials?.length ? (
           <div className="inline-notice">
-            <strong>Zufaellige Initialpasswoerter:</strong> {result.generatedCredentials.map((entry) => `${entry.username}: ${entry.generatedPassword}`).join(" | ")}
+            <strong>Zufällige Initialpasswörter:</strong> {result.generatedCredentials.map((entry) => `${entry.username}: ${entry.generatedPassword}`).join(" | ")}
           </div>
         ) : null}
       </div>
@@ -311,7 +306,7 @@ function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
               <strong>{summary.totalRows}</strong>
             </div>
             <div className="read-only-card">
-              <span>Gueltig</span>
+              <span>Gültig</span>
               <strong>{summary.validRows}</strong>
             </div>
             <div className="read-only-card">
@@ -333,7 +328,7 @@ function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
           </div>
         </div>
       ) : (
-        <EmptyState title="Noch keine Vorschau" description="Lade eine CSV hoch, um gueltige und fehlerhafte Datensaetze vor dem Import zu sehen." />
+        <EmptyState title="Noch keine Vorschau" />
       )}
     </article>
   );
@@ -412,7 +407,7 @@ function AuditLogRow({ log, usersById }) {
       </div>
       <div className="audit-log-grid">
         <span>
-          <strong>Ausgefuehrt von:</strong> {log.actorName} ({roleLabel(log.actorRole)})
+          <strong>Ausgeführt von:</strong> {log.actorName} ({roleLabel(log.actorRole)})
         </span>
         <span>
           <strong>Betroffen:</strong> {targetLabel}
@@ -515,7 +510,6 @@ function AdminAuditLogPanel({ users, onLoadAuditLogs }) {
         <PageHeader
           kicker="Audit-Log"
           title="Admin-Logs"
-          subtitle="Read-only Verlauf fachlich relevanter Verwaltungs- und Systemaktionen."
         />
         <div className="audit-log-toolbar">
           <label>
@@ -558,18 +552,16 @@ function AdminAuditLogPanel({ users, onLoadAuditLogs }) {
             Filter anwenden
           </PrimaryButton>
           <PrimaryButton variant="ghost" onClick={resetFilters} disabled={busy}>
-            Zuruecksetzen
+            Zurücksetzen
           </PrimaryButton>
         </div>
         {error ? <div className="field-message error">{error}</div> : null}
-        <div className="inline-notice">
-          <strong>Sortierung:</strong> Neueste Eintraege zuerst. Seite {result.pagination.page} von {result.pagination.totalPages}.
-        </div>
+        <div className="field-message">Seite {result.pagination.page} von {result.pagination.totalPages}</div>
       </article>
 
       {busy ? <div className="field-message">Audit-Log wird geladen...</div> : null}
       {!busy && !result.items.length ? (
-        <EmptyState title="Keine Logeintraege gefunden" description="Passe Filter an oder pruefe spaeter erneut." />
+        <EmptyState title="Keine Logeinträge gefunden" />
       ) : null}
       {result.items.length ? (
         <div className="audit-log-list">
@@ -583,7 +575,7 @@ function AdminAuditLogPanel({ users, onLoadAuditLogs }) {
           Vorherige Seite
         </PrimaryButton>
         <PrimaryButton onClick={() => setPage((current) => Math.min(result.pagination.totalPages, current + 1))} disabled={busy || result.pagination.page >= result.pagination.totalPages}>
-          Naechste Seite
+          Nächste Seite
         </PrimaryButton>
       </div>
     </section>
@@ -657,7 +649,6 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
       <PageHeader
         kicker="Verwaltung"
         title="Benutzerverwaltung"
-        subtitle="Nutzer, Rollen, Ausbildung, CSV-Import und Ausbilder-Zuordnungen verwalten."
       />
       <div className="admin-section-tabs">
         <button type="button" className={`admin-section-tab${activeView === "users" ? " active" : ""}`} onClick={() => setActiveView("users")}>
@@ -674,7 +665,7 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
             <section ref={editPanelRef}>
               <UserForm
                 title={`Benutzer bearbeiten${editingUser ? `: ${editingUser.name}` : ""}`}
-                subtitle="Bearbeitung wird direkt mit den vorhandenen Stammdaten und Mehrfach-Zuordnungen befuellt."
+                subtitle=""
                 form={editForm}
                 setForm={setEditForm}
                 trainers={trainers}
@@ -692,7 +683,7 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
             <div className="page-stack">
               <UserForm
                 title="Benutzer anlegen"
-                subtitle="Neuen Nutzer erfassen."
+                subtitle=""
                 form={form}
                 setForm={setForm}
                 trainers={trainers}
@@ -706,7 +697,7 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
             </div>
 
             <article className="panel-card admin-overview-card">
-              <PageHeader kicker="Uebersicht" title="Benutzer" subtitle={`${users.length} Konten`} />
+              <PageHeader kicker="Übersicht" title="Benutzer" subtitle={`${users.length} Konten`} />
               <div className="admin-user-grid">
                 {users.map((user) => (
                   <article key={user.id} className="admin-user-card">
@@ -746,7 +737,6 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
             <PageHeader
               kicker="Zuordnungen"
               title="Azubis mehreren Ausbildern zuordnen"
-              subtitle={`${trainees.length} Azubis`}
             />
             {assignError ? <div className="field-message error">{assignError}</div> : null}
             <div className="admin-assignment-list">

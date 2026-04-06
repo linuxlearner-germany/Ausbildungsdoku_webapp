@@ -24,8 +24,18 @@ function statusText(status) {
   return status || "-";
 }
 
-export function FreigabenPage({ role, report, trainees, onSign, onReject, onComment }) {
+function summarizeBatchFailures(failures = []) {
+  if (!failures.length) {
+    return "";
+  }
+
+  const preview = failures.slice(0, 3).map((item) => item.error).join(" | ");
+  return failures.length > 3 ? `${preview} | weitere ${failures.length - 3}` : preview;
+}
+
+export function FreigabenPage({ role, report, trainees, onSign, onReject, onComment, onProcessEntries }) {
   const [selected, setSelected] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
   const [comment, setComment] = useState("");
   const [reason, setReason] = useState("");
   const [statusFilter, setStatusFilter] = useState("submitted");
@@ -48,7 +58,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
 
     return (
       <div className="page-stack">
-        <PageHeader kicker="Freigaben" title="Status deiner Einreichungen" subtitle="Prüfverlauf und Signaturstatus deiner Tagesberichte." />
+        <PageHeader kicker="Freigaben" title="Status deiner Einreichungen" />
         <section className="panel-card">
           <div className="mobile-records">
             {entries.length ? (
@@ -65,7 +75,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
                 </article>
               ))
             ) : (
-              <EmptyState title="Keine Freigaben vorhanden" description="Sobald Berichte eingereicht werden, erscheinen sie hier." />
+              <EmptyState title="Keine Freigaben vorhanden" />
             )}
           </div>
           <DataTable
@@ -162,6 +172,14 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
   );
 
   const pendingCount = rows.filter((row) => row.status === "submitted").length;
+  const selectableFilteredRows = useMemo(
+    () => filteredRows.filter((row) => row.status === "submitted"),
+    [filteredRows]
+  );
+  const selectableFilteredIds = useMemo(
+    () => selectableFilteredRows.map((row) => row.id),
+    [selectableFilteredRows]
+  );
   const selectedEntry = useMemo(
     () => filteredRows.find((row) => row.id === selected) || null,
     [filteredRows, selected]
@@ -192,16 +210,49 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
     setActionError("");
   }, [selectedEntry?.id, selectedEntry?.trainerComment, selectedEntry?.rejectionReason]);
 
+  useEffect(() => {
+    const allowedIds = new Set(selectableFilteredIds);
+    setSelectedIds((current) => current.filter((entryId) => allowedIds.has(entryId)));
+  }, [selectableFilteredIds]);
+
   async function runAction(type, handler) {
     setBusyAction(type);
     setActionError("");
     try {
       await handler();
     } catch (error) {
-      setActionError(error.message || "Aktion konnte nicht ausgefuehrt werden.");
+      setActionError(error.message || "Aktion konnte nicht ausgeführt werden.");
     } finally {
       setBusyAction("");
     }
+  }
+
+  async function runBatchAction(type, action, payload) {
+    if (!selectedIds.length || !onProcessEntries) {
+      return;
+    }
+
+    setBusyAction(type);
+    setActionError("");
+    try {
+      const result = await onProcessEntries(action, selectedIds, payload);
+      setSelectedIds([]);
+      if (result.failed?.length) {
+        setActionError(`Nicht verarbeitet: ${summarizeBatchFailures(result.failed)}`);
+      }
+    } catch (error) {
+      setActionError(error.message || "Sammelaktion konnte nicht ausgeführt werden.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  function toggleSelection(entryId) {
+    setSelectedIds((current) =>
+      current.includes(entryId)
+        ? current.filter((value) => value !== entryId)
+        : [...current, entryId]
+    );
   }
 
   return (
@@ -209,7 +260,6 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
       <PageHeader
         kicker="Freigaben"
         title="Prüfungen und Freigaben"
-        subtitle="Offene Berichte links sichten, rechts pruefen und direkt freigeben oder zurueckgeben."
       />
 
       <section className="approval-summary">
@@ -221,7 +271,6 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
         <article className="approval-summary-item">
           <span>Aktuelle Treffer</span>
           <strong>{filteredRows.length}</strong>
-          <small>Nach Suche und Filtern sichtbar</small>
         </article>
       </section>
 
@@ -231,7 +280,6 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
             <div>
               <p className="page-kicker">Queue</p>
               <h3>Berichte zur Prüfung</h3>
-              <p>Ein kompakter Arbeitsvorrat fuer Auswahl, Filter und Sortierung.</p>
             </div>
             <span className="approval-count">{filteredRows.length}</span>
           </div>
@@ -276,9 +324,50 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
                 setSortBy("date-desc");
               }}
             >
-              Zuruecksetzen
+              Zurücksetzen
             </PrimaryButton>
           </FilterBar>
+
+          {selectableFilteredIds.length ? (
+            <div className="approval-bulk-bar">
+              <label className="selection-check">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.length > 0 && selectedIds.length === selectableFilteredIds.length}
+                  onChange={() =>
+                    setSelectedIds((current) =>
+                      current.length === selectableFilteredIds.length ? [] : selectableFilteredIds
+                    )
+                  }
+                />
+                <span>Alle auswählen</span>
+              </label>
+              <PrimaryButton
+                variant="ghost"
+                onClick={() => setSelectedIds([])}
+                disabled={!selectedIds.length || Boolean(busyAction)}
+              >
+                Auswahl aufheben
+              </PrimaryButton>
+              {selectedIds.length ? (
+                <>
+                  <PrimaryButton
+                    onClick={() => runBatchAction("batch-sign", "sign", { trainerComment: comment })}
+                    disabled={Boolean(busyAction)}
+                  >
+                    {busyAction === "batch-sign" ? "Freigabe läuft..." : `${selectedIds.length} Berichte freigeben`}
+                  </PrimaryButton>
+                  <PrimaryButton
+                    variant="ghost"
+                    onClick={() => runBatchAction("batch-reject", "reject", { reason })}
+                    disabled={Boolean(busyAction) || !reason.trim()}
+                  >
+                    {busyAction === "batch-reject" ? "Rückgabe läuft..." : `${selectedIds.length} Berichte zurückgeben`}
+                  </PrimaryButton>
+                </>
+              ) : null}
+            </div>
+          ) : null}
 
           {filteredRows.length ? (
             <div className="approval-list">
@@ -290,6 +379,19 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
                   onClick={() => setSelected(row.id)}
                 >
                   <div className="approval-row-main">
+                    {row.status === "submitted" ? (
+                      <label
+                        className="selection-check selection-check-compact"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(row.id)}
+                          onChange={() => toggleSelection(row.id)}
+                        />
+                        <span>Auswählen</span>
+                      </label>
+                    ) : null}
                     <div className="approval-row-copy">
                       <strong>{row.weekLabel || "Ohne Titel"}</strong>
                       <span>{row.traineeName}</span>
@@ -304,7 +406,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
               ))}
             </div>
           ) : (
-            <EmptyState title="Keine passenden Freigaben" description="Mit den aktuellen Filtern wurde kein Bericht gefunden." />
+            <EmptyState title="Keine passenden Freigaben" />
           )}
         </article>
 
@@ -320,7 +422,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
                 <div className="approval-detail-actions">
                   <StatusBadge status={selectedEntry.status} />
                   <a className="button button-secondary" href={`/api/report/pdf/${selectedEntry.traineeId}`}>
-                    PDF oeffnen
+                    PDF öffnen
                   </a>
                 </div>
               </div>
@@ -352,20 +454,20 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
                     <strong>Betrieb</strong>
                     <small>Arbeitsinhalte des Tages</small>
                   </div>
-                  <p>{selectedEntry.betrieb || "Keine Inhalte fuer Betrieb hinterlegt."}</p>
+                  <p>{selectedEntry.betrieb || "Keine Inhalte für Betrieb hinterlegt."}</p>
                 </section>
                 <section className="approval-content-card">
                   <div className="approval-section-head">
                     <strong>Berufsschule</strong>
                     <small>Schulische Inhalte des Tages</small>
                   </div>
-                  <p>{selectedEntry.schule || "Keine Inhalte fuer Berufsschule hinterlegt."}</p>
+                  <p>{selectedEntry.schule || "Keine Inhalte für Berufsschule hinterlegt."}</p>
                 </section>
               </div>
 
               <div className="approval-feedback-grid">
                 <label>
-                  Rueckmeldung / Kommentar
+                  Rückmeldung / Kommentar
                   <textarea
                     rows="5"
                     value={comment}
@@ -374,7 +476,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
                   />
                 </label>
                 <label>
-                  Grund fuer Rueckgabe
+                  Grund für Rückgabe
                   <textarea
                     rows="5"
                     value={reason}
@@ -386,7 +488,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
 
               {!canEditFeedback ? (
                 <div className="inline-notice">
-                  <strong>Hinweis:</strong> Kommentare und Rueckgabegruende koennen nur bei eingereichten Berichten bearbeitet werden.
+                  <strong>Hinweis:</strong> Kommentare und Rückgabegründe können nur bei eingereichten Berichten bearbeitet werden.
                 </div>
               ) : null}
 
@@ -402,22 +504,21 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
                   onClick={() => runAction("sign", () => onSign(selectedEntry.id, comment))}
                   disabled={Boolean(busyAction) || !canEditFeedback}
                 >
-                  {busyAction === "sign" ? "Freigabe laeuft..." : "Freigeben"}
+                  {busyAction === "sign" ? "Freigabe läuft..." : "Freigeben"}
                 </PrimaryButton>
                 <PrimaryButton
                   variant="ghost"
                   onClick={() => runAction("reject", () => onReject(selectedEntry.id, reason))}
                   disabled={Boolean(busyAction) || !reason.trim() || !canEditFeedback}
                 >
-                  {busyAction === "reject" ? "Rueckgabe laeuft..." : "Zurueckgeben"}
+                  {busyAction === "reject" ? "Rückgabe läuft..." : "Zurückgeben"}
                 </PrimaryButton>
               </div>
             </>
           ) : (
             <div className="approval-empty">
               <EmptyState
-                title="Noch kein Bericht ausgewaehlt"
-                description="Waehle links einen Bericht aus, um Inhalte, Kommentar und Freigabeaktionen zu sehen."
+                title="Noch kein Bericht ausgewählt"
               />
             </div>
           )}

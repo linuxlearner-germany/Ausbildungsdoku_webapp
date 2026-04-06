@@ -17,7 +17,6 @@ export function ArchivPage({ role, report, trainees }) {
       <PageHeader
         kicker="Archiv"
         title="Freigegebene Berichte und PDF-Archiv"
-        subtitle="Historie aller freigegebenen Tagesberichte mit Direktzugriff auf den PDF-Export."
         actions={
           role === "trainee" ? (
             <a className="button button-primary" href="/api/report/pdf">
@@ -56,7 +55,7 @@ export function ArchivPage({ role, report, trainees }) {
               </article>
             ))
           ) : (
-            <EmptyState title="Noch kein Archiv" description="Freigegebene Berichte erscheinen automatisch im Archiv." />
+            <EmptyState title="Noch kein Archiv" />
           )}
         </div>
         <DataTable

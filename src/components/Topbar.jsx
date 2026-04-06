@@ -24,7 +24,6 @@ export function Topbar({ user, theme, themePreference, onLogout, onToggleTheme, 
         </button>
         <div className="topbar-copy">
           <p className="page-kicker">Berichtsheft Portal</p>
-          <strong>Internes Ausbildungsportal</strong>
           <small className="topbar-theme-label">Ansicht: {themeLabel(themePreference, theme)}</small>
         </div>
       </div>
@@ -38,7 +37,7 @@ export function Topbar({ user, theme, themePreference, onLogout, onToggleTheme, 
         </div>
         {user ? (
           <button className="button button-secondary" onClick={onLogout} type="button">
-            Logout
+            Abmelden
           </button>
         ) : null}
       </div>

@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
 import {
   isThemePreference,
   readStoredThemePreference,
@@ -36,4 +38,24 @@ test("Gespeicherte Theme-Praeferenz faellt sauber auf system zurueck", () => {
   assert.equal(readStoredThemePreference(validStorage), "dark");
   assert.equal(readStoredThemePreference(invalidStorage), "system");
   assert.equal(readStoredThemePreference(null), "system");
+});
+
+test("Dark-Mode-CSS definiert alle zentralen Flaechenvariablen", () => {
+  const css = fs.readFileSync(path.join(process.cwd(), "src", "styles.css"), "utf8");
+  const darkThemeBlock = css.match(/:root\[data-theme="dark"\]\s*\{([\s\S]*?)\n\}/);
+
+  assert.ok(darkThemeBlock, "Dark-Theme-Block fehlt in styles.css");
+
+  const block = darkThemeBlock[1];
+  for (const variableName of [
+    "--bg",
+    "--surface",
+    "--sidebar-bg",
+    "--topbar-bg",
+    "--card-bg",
+    "--text",
+    "--field-bg"
+  ]) {
+    assert.match(block, new RegExp(`${variableName}:\\s*[^;]+;`), `${variableName} fehlt im Dark-Theme-Block`);
+  }
 });

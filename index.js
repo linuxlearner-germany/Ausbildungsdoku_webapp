@@ -1268,6 +1268,203 @@ function findEntryByDate(traineeId, dateFrom) {
   `).get(traineeId, dateFrom);
 }
 
+function findEntryWithOwnerById(entryId) {
+  return db.prepare(`
+    SELECT id, trainee_id, weekLabel, dateFrom, dateTo, betrieb, schule,
+           status, signedAt, signerName, trainerComment, rejectionReason
+    FROM entries
+    WHERE id = ?
+    LIMIT 1
+  `).get(entryId);
+}
+
+function normalizeEntryIdList(input) {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return [...new Set(
+    input
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  )];
+}
+
+function submitReportEntryForTrainee(user, entryId) {
+  const entry = db.prepare(`
+    SELECT id, weekLabel, dateFrom, dateTo, betrieb, schule, status
+    FROM entries
+    WHERE id = ? AND trainee_id = ?
+  `).get(entryId, user.id);
+
+  if (!entry) {
+    return { error: "Eintrag nicht gefunden." };
+  }
+
+  const missing = validateEntry(entry);
+  if (missing.length) {
+    return { error: `Pflichtfelder fehlen: ${missing.join(", ")}` };
+  }
+
+  if (entry.status === "submitted") {
+    return { error: "Eintrag ist bereits eingereicht." };
+  }
+
+  if (entry.status === "signed") {
+    return { error: "Signierte Einträge können nicht erneut eingereicht werden." };
+  }
+
+  const result = db.prepare(`
+    UPDATE entries
+    SET status = 'submitted', rejectionReason = '', updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND trainee_id = ? AND status != 'signed'
+  `).run(entryId, user.id);
+
+  if (!result.changes) {
+    return { error: "Eintrag nicht gefunden oder bereits signiert." };
+  }
+
+  writeAuditLog({
+    actor: user,
+    actionType: "REPORT_SUBMITTED",
+    entityType: "report_entry",
+    entityId: entryId,
+    targetUserId: user.id,
+    summary: `${entry.weekLabel || "Bericht"} wurde eingereicht.`,
+    metadata: {
+      dateFrom: entry.dateFrom,
+      dateTo: entry.dateTo,
+      statusBefore: entry.status
+    }
+  });
+
+  return { ok: true, entry };
+}
+
+function signReportEntryForActor(user, entryId, trainerComment = "") {
+  const entry = findEntryWithOwnerById(entryId);
+
+  if (!entry) {
+    return { error: "Eintrag nicht gefunden." };
+  }
+
+  if (user.role === "trainer" && !isTrainerAssignedToTrainee(user.id, entry.trainee_id)) {
+    return { error: "Eintrag gehört nicht zu dir." };
+  }
+
+  const missing = validateEntry(entry);
+  if (missing.length) {
+    return { error: `Eintrag ist unvollständig: ${missing.join(", ")}` };
+  }
+
+  if (entry.status === "signed") {
+    return { error: "Eintrag ist bereits signiert." };
+  }
+
+  if (entry.status !== "submitted") {
+    return { error: "Nur eingereichte Einträge können signiert werden." };
+  }
+
+  db.prepare(`
+    UPDATE entries
+    SET status = 'signed', signedAt = ?, signerName = ?, trainerComment = ?, rejectionReason = '', updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND status = 'submitted'
+  `).run(new Date().toISOString(), user.name, trainerComment, entryId);
+
+  writeAuditLog({
+    actor: user,
+    actionType: "REPORT_APPROVED",
+    entityType: "report_entry",
+    entityId: entryId,
+    targetUserId: entry.trainee_id,
+    summary: `${entry.weekLabel || "Bericht"} wurde freigegeben.`,
+    metadata: {
+      dateFrom: entry.dateFrom,
+      dateTo: entry.dateTo,
+      trainerComment
+    }
+  });
+  writeAuditLog({
+    actor: user,
+    actionType: "REPORT_SIGNED",
+    entityType: "report_entry",
+    entityId: entryId,
+    targetUserId: entry.trainee_id,
+    summary: `${entry.weekLabel || "Bericht"} wurde signiert.`,
+    metadata: {
+      dateFrom: entry.dateFrom,
+      dateTo: entry.dateTo
+    }
+  });
+
+  return { ok: true, entry };
+}
+
+function rejectReportEntryForActor(user, entryId, reason) {
+  const trimmedReason = String(reason || "").trim();
+  if (!trimmedReason) {
+    return { error: "Ablehnungsgrund fehlt." };
+  }
+
+  const entry = findEntryWithOwnerById(entryId);
+
+  if (!entry) {
+    return { error: "Eintrag nicht gefunden." };
+  }
+
+  if (user.role === "trainer" && !isTrainerAssignedToTrainee(user.id, entry.trainee_id)) {
+    return { error: "Eintrag gehört nicht zu dir." };
+  }
+
+  if (entry.status === "signed") {
+    return { error: "Signierte Einträge können nicht abgelehnt werden." };
+  }
+
+  if (entry.status !== "submitted") {
+    return { error: "Nur eingereichte Einträge können zurückgegeben werden." };
+  }
+
+  db.prepare(`
+    UPDATE entries
+    SET status = 'rejected', signedAt = NULL, signerName = '', trainerComment = ?, rejectionReason = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND status = 'submitted'
+  `).run(trimmedReason, trimmedReason, entryId);
+
+  writeAuditLog({
+    actor: user,
+    actionType: "REPORT_RETURNED",
+    entityType: "report_entry",
+    entityId: entryId,
+    targetUserId: entry.trainee_id,
+    summary: "Bericht wurde abgelehnt und zurückgegeben.",
+    metadata: {
+      reason: trimmedReason
+    }
+  });
+
+  return { ok: true, entry };
+}
+
+function buildBatchResult(entryIds, handler) {
+  const successIds = [];
+  const failed = [];
+
+  for (const entryId of entryIds) {
+    const result = handler(entryId);
+    if (result?.error) {
+      failed.push({ entryId, error: result.error });
+      continue;
+    }
+    successIds.push(entryId);
+  }
+
+  return {
+    processedCount: successIds.length,
+    failed,
+    successIds
+  };
+}
+
 function createDraftEntry(user, payload) {
   const entry = normalizeEntry(payload || {});
   if (!entry.dateFrom) {
@@ -2752,119 +2949,43 @@ app.delete("/api/report/:entryId", requireRole("trainee"), (req, res) => {
 
 app.post("/api/report/submit", requireRole("trainee"), (req, res) => {
   const entryId = String(req.body?.entryId || "");
-  const entry = db.prepare(`
-    SELECT id, weekLabel, dateFrom, dateTo, betrieb, schule, status
-    FROM entries
-    WHERE id = ? AND trainee_id = ?
-  `).get(entryId, req.user.id);
-
-  if (!entry) {
-    return res.status(404).json({ error: "Eintrag nicht gefunden." });
+  const result = submitReportEntryForTrainee(req.user, entryId);
+  if (result?.error) {
+    return res.status(result.error === "Eintrag nicht gefunden." ? 404 : 400).json({ error: result.error });
   }
-
-  const missing = validateEntry(entry);
-  if (missing.length) {
-    return res.status(400).json({ error: `Pflichtfelder fehlen: ${missing.join(", ")}` });
-  }
-
-  if (entry.status === "submitted") {
-    return res.status(400).json({ error: "Eintrag ist bereits eingereicht." });
-  }
-
-  if (entry.status === "signed") {
-    return res.status(400).json({ error: "Signierte Eintraege koennen nicht erneut eingereicht werden." });
-  }
-
-  const result = db.prepare(`
-    UPDATE entries
-    SET status = 'submitted', rejectionReason = '', updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND trainee_id = ? AND status != 'signed'
-  `).run(entryId, req.user.id);
-
-  if (!result.changes) {
-    return res.status(404).json({ error: "Eintrag nicht gefunden oder bereits signiert." });
-  }
-
-  writeAuditLog({
-    actor: req.user,
-    actionType: "REPORT_SUBMITTED",
-    entityType: "report_entry",
-    entityId: entryId,
-    targetUserId: req.user.id,
-    summary: `${entry.weekLabel || "Bericht"} wurde eingereicht.`,
-    metadata: {
-      dateFrom: entry.dateFrom,
-      dateTo: entry.dateTo,
-      statusBefore: entry.status
-    }
-  });
 
   res.json({ ok: true, entries: listEntriesForTrainee(req.user.id) });
+});
+
+app.post("/api/report/submit-batch", requireRole("trainee"), (req, res) => {
+  const entryIds = normalizeEntryIdList(req.body?.entryIds);
+  if (!entryIds.length) {
+    return res.status(400).json({ error: "Keine Einträge ausgewählt." });
+  }
+
+  const batch = buildBatchResult(entryIds, (entryId) => submitReportEntryForTrainee(req.user, entryId));
+  if (!batch.processedCount) {
+    return res.status(400).json({
+      error: batch.failed[0]?.error || "Keine Einträge konnten eingereicht werden.",
+      failed: batch.failed
+    });
+  }
+
+  res.json({
+    ok: batch.failed.length === 0,
+    processedCount: batch.processedCount,
+    failed: batch.failed,
+    entries: listEntriesForTrainee(req.user.id)
+  });
 });
 
 app.post("/api/trainer/sign", requireRole("trainer", "admin"), (req, res) => {
   const entryId = String(req.body?.entryId || "");
   const trainerComment = String(req.body?.trainerComment || "").trim();
-
-  const entry = db.prepare(`
-    SELECT entries.id, entries.trainee_id, entries.status, entries.weekLabel, entries.dateFrom, entries.dateTo,
-           entries.betrieb, entries.schule
-    FROM entries
-    WHERE entries.id = ?
-  `).get(entryId);
-
-  if (!entry) {
-    return res.status(404).json({ error: "Eintrag nicht gefunden." });
+  const result = signReportEntryForActor(req.user, entryId, trainerComment);
+  if (result?.error) {
+    return res.status(result.error === "Eintrag nicht gefunden." ? 404 : result.error.includes("gehört nicht zu dir") ? 403 : 400).json({ error: result.error });
   }
-
-  if (req.user.role === "trainer" && !isTrainerAssignedToTrainee(req.user.id, entry.trainee_id)) {
-    return res.status(403).json({ error: "Eintrag gehoert nicht zu dir." });
-  }
-
-  const missing = validateEntry(entry);
-  if (missing.length) {
-    return res.status(400).json({ error: `Eintrag ist unvollstaendig: ${missing.join(", ")}` });
-  }
-
-  if (entry.status === "signed") {
-    return res.status(400).json({ error: "Eintrag ist bereits signiert." });
-  }
-
-  if (entry.status !== "submitted") {
-    return res.status(400).json({ error: "Nur eingereichte Eintraege koennen signiert werden." });
-  }
-
-  db.prepare(`
-    UPDATE entries
-    SET status = 'signed', signedAt = ?, signerName = ?, trainerComment = ?, rejectionReason = '', updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND status = 'submitted'
-  `).run(new Date().toISOString(), req.user.name, trainerComment, entryId);
-
-  writeAuditLog({
-    actor: req.user,
-    actionType: "REPORT_APPROVED",
-    entityType: "report_entry",
-    entityId: entryId,
-    targetUserId: entry.trainee_id,
-    summary: `${entry.weekLabel || "Bericht"} wurde freigegeben.`,
-    metadata: {
-      dateFrom: entry.dateFrom,
-      dateTo: entry.dateTo,
-      trainerComment
-    }
-  });
-  writeAuditLog({
-    actor: req.user,
-    actionType: "REPORT_SIGNED",
-    entityType: "report_entry",
-    entityId: entryId,
-    targetUserId: entry.trainee_id,
-    summary: `${entry.weekLabel || "Bericht"} wurde signiert.`,
-    metadata: {
-      dateFrom: entry.dateFrom,
-      dateTo: entry.dateTo
-    }
-  });
 
   res.json({ ok: true });
 });
@@ -2918,47 +3039,45 @@ app.post("/api/trainer/comment", requireRole("trainer", "admin"), (req, res) => 
 app.post("/api/trainer/reject", requireRole("trainer", "admin"), (req, res) => {
   const entryId = String(req.body?.entryId || "");
   const reason = String(req.body?.reason || "").trim();
-  if (!reason) {
-    return res.status(400).json({ error: "Ablehnungsgrund fehlt." });
+  const result = rejectReportEntryForActor(req.user, entryId, reason);
+  if (result?.error) {
+    return res.status(result.error === "Eintrag nicht gefunden." ? 404 : result.error.includes("gehört nicht zu dir") ? 403 : 400).json({ error: result.error });
   }
-
-  const entry = db.prepare(`
-    SELECT entries.id, entries.trainee_id, entries.status
-    FROM entries
-    WHERE entries.id = ?
-  `).get(entryId);
-
-  if (!entry) {
-    return res.status(404).json({ error: "Eintrag nicht gefunden." });
-  }
-
-  if (req.user.role === "trainer" && !isTrainerAssignedToTrainee(req.user.id, entry.trainee_id)) {
-    return res.status(403).json({ error: "Eintrag gehoert nicht zu dir." });
-  }
-
-  if (entry.status === "signed") {
-    return res.status(400).json({ error: "Signierte Eintraege koennen nicht abgelehnt werden." });
-  }
-
-  db.prepare(`
-    UPDATE entries
-    SET status = 'rejected', signedAt = NULL, signerName = '', rejectionReason = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND status != 'signed'
-  `).run(reason, entryId);
-
-  writeAuditLog({
-    actor: req.user,
-    actionType: "REPORT_RETURNED",
-    entityType: "report_entry",
-    entityId: entryId,
-    targetUserId: entry.trainee_id,
-    summary: `Bericht wurde abgelehnt und zurueckgegeben.`,
-    metadata: {
-      reason
-    }
-  });
 
   res.json({ ok: true });
+});
+
+app.post("/api/trainer/batch", requireRole("trainer", "admin"), (req, res) => {
+  const action = String(req.body?.action || "").trim();
+  const entryIds = normalizeEntryIdList(req.body?.entryIds);
+  const trainerComment = String(req.body?.trainerComment || "").trim();
+  const reason = String(req.body?.reason || "").trim();
+
+  if (!entryIds.length) {
+    return res.status(400).json({ error: "Keine Einträge ausgewählt." });
+  }
+
+  let batch;
+  if (action === "sign") {
+    batch = buildBatchResult(entryIds, (entryId) => signReportEntryForActor(req.user, entryId, trainerComment));
+  } else if (action === "reject") {
+    batch = buildBatchResult(entryIds, (entryId) => rejectReportEntryForActor(req.user, entryId, reason));
+  } else {
+    return res.status(400).json({ error: "Ungültige Sammelaktion." });
+  }
+
+  if (!batch.processedCount) {
+    return res.status(400).json({
+      error: batch.failed[0]?.error || "Keine Einträge konnten verarbeitet werden.",
+      failed: batch.failed
+    });
+  }
+
+  res.json({
+    ok: batch.failed.length === 0,
+    processedCount: batch.processedCount,
+    failed: batch.failed
+  });
 });
 
 app.post("/api/admin/users", requireRole("admin"), (req, res) => {

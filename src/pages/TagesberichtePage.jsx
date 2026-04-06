@@ -42,12 +42,12 @@ function validateEntry(entry) {
   const errors = {};
   if (!entry.weekLabel?.trim()) errors.weekLabel = "Titel fehlt";
   if (!entry.dateFrom) errors.dateFrom = "Tag fehlt";
-  if (!entry.betrieb?.trim() && !entry.schule?.trim()) errors.kind = "Betrieb oder Berufsschule ausfuellen";
+  if (!entry.betrieb?.trim() && !entry.schule?.trim()) errors.kind = "Betrieb oder Berufsschule ausfüllen";
   return errors;
 }
 
 function formatLongDate(date) {
-  if (!date) return "Kein Tag ausgewaehlt";
+  if (!date) return "Kein Tag ausgewählt";
   return formatLocalDate(date, {
     weekday: "long",
     day: "2-digit",
@@ -57,10 +57,10 @@ function formatLongDate(date) {
 }
 
 function dayTone(entry) {
-  if (!entry) return { label: "Noch kein Bericht", description: "Fuer diesen Tag wurde noch kein Eintrag angelegt." };
+  if (!entry) return { label: "Noch kein Bericht", description: "Für diesen Tag wurde noch kein Eintrag angelegt." };
   if (entry.status === "submitted") return { label: "Eingereicht", description: "Dieser Bericht wartet auf Freigabe." };
   if (entry.status === "signed") return { label: "Signiert", description: "Der Bericht ist abgeschlossen und signiert." };
-  if (entry.status === "rejected") return { label: "Nachbearbeitung", description: "Rueckmeldung liegt vor. Bitte den Bericht anpassen." };
+  if (entry.status === "rejected") return { label: "Nachbearbeitung", description: "Rückmeldung liegt vor. Bitte den Bericht anpassen." };
   return { label: "Entwurf", description: "Der Bericht ist angelegt und kann weiterbearbeitet werden." };
 }
 
@@ -91,7 +91,7 @@ function getEntryPermissions(entry) {
       deletable: false,
       submittable: true,
       readOnly: false,
-      notice: "Der Bericht wurde zur Nachbearbeitung zurueckgegeben und kann erneut bearbeitet werden."
+      notice: "Der Bericht wurde zur Nachbearbeitung zurückgegeben und kann erneut bearbeitet werden."
     };
   }
 
@@ -101,7 +101,7 @@ function getEntryPermissions(entry) {
       deletable: false,
       submittable: false,
       readOnly: true,
-      notice: "Dieser Bericht ist eingereicht und bleibt schreibgeschuetzt, bis er freigegeben oder zur Nachbearbeitung zurueckgegeben wird."
+      notice: "Dieser Bericht ist eingereicht und bleibt schreibgeschützt, bis er freigegeben oder zur Nachbearbeitung zurückgegeben wird."
     };
   }
 
@@ -128,6 +128,15 @@ function buildWeekDates(date) {
   return buildLocalWeekDates(date || getTodayLocalDateString());
 }
 
+function summarizeBatchFailures(failures = []) {
+  if (!failures.length) {
+    return "";
+  }
+
+  const preview = failures.slice(0, 3).map((item) => item.error).join(" | ");
+  return failures.length > 3 ? `${preview} | weitere ${failures.length - 3}` : preview;
+}
+
 function getDesktopCalendarInteractionState() {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
     return false;
@@ -152,7 +161,7 @@ function ReportEditor({
   if (!draft) {
     return (
       <article className={`panel-card editor-card${inline ? " editor-card-inline" : ""}`}>
-        <EmptyState title="Kein Bericht ausgewaehlt" description="Waehle einen Tag oder oeffne einen bestehenden Bericht." />
+        <EmptyState title="Kein Bericht ausgewählt" />
       </article>
     );
   }
@@ -167,19 +176,18 @@ function ReportEditor({
     <article className={`panel-card editor-card${inline ? " editor-card-inline" : ""}`}>
       <PageHeader
         kicker={isExistingEntry ? "Bericht bearbeiten" : "Neuer Bericht"}
-        title={isExistingEntry ? entry.weekLabel || "Tagesbericht" : `Bericht fuer ${formatLongDate(selectedDate || draft.dateFrom)}`}
-        subtitle="Kompakter Schreibmodus mit klarer Tageszuordnung, Status und Freigabeweg."
+        title={isExistingEntry ? entry.weekLabel || "Tagesbericht" : `Bericht für ${formatLongDate(selectedDate || draft.dateFrom)}`}
         actions={
           <div className="page-actions">
             <StatusBadge status={entry?.status || "draft"} />
             {onClose ? (
               <PrimaryButton variant="secondary" onClick={onClose} disabled={busy}>
-                Schliessen
+                Schließen
               </PrimaryButton>
             ) : null}
             {isExistingEntry && permissions.deletable ? (
               <PrimaryButton variant="ghost" onClick={() => onDelete(entry.id)} disabled={busy}>
-                Loeschen
+                Löschen
               </PrimaryButton>
             ) : !isExistingEntry ? (
               <PrimaryButton variant="secondary" onClick={() => onCreateForDate(draft.dateFrom || selectedDate || "")} disabled={busy}>
@@ -277,7 +285,7 @@ function ReportEditor({
 
       {entry?.rejectionReason ? (
         <div className="inline-notice inline-notice-danger">
-          <strong>Rueckmeldung:</strong> {entry.rejectionReason}
+          <strong>Rückmeldung:</strong> {entry.rejectionReason}
         </div>
       ) : null}
 
@@ -295,7 +303,7 @@ function ReportEditor({
   );
 }
 
-export function TagesberichtePage({ report, initialView = "calendar", onCreate, onSaveEntry, onDeleteEntry, onSubmitEntry }) {
+export function TagesberichtePage({ report, initialView = "calendar", onCreate, onSaveEntry, onDeleteEntry, onSubmitEntry, onSubmitEntries }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const entries = report?.entries || [];
   const today = getTodayLocalDateString();
@@ -318,6 +326,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
   const [actionError, setActionError] = useState("");
   const [actionBusy, setActionBusy] = useState(false);
   const [enableDesktopDoubleClick, setEnableDesktopDoubleClick] = useState(getDesktopCalendarInteractionState);
+  const [selectedCalendarEntryIds, setSelectedCalendarEntryIds] = useState([]);
   const previousSelectedDateRef = useRef(selectedDate);
 
   const entryByDate = useMemo(() => new Map(entries.map((entry) => [entry.dateFrom, entry])), [entries]);
@@ -348,6 +357,28 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
   );
 
   const weekDates = useMemo(() => buildWeekDates(selectedDate || today), [selectedDate, today]);
+  const selectableCalendarEntries = useMemo(
+    () =>
+      entries.filter((entry) => {
+        const entryDate = parseLocalDate(entry.dateFrom);
+        if (!entryDate) {
+          return false;
+        }
+
+        return (
+          entry.status !== "submitted" &&
+          entry.status !== "signed" &&
+          getEntryPermissions(entry).submittable &&
+          entryDate.getFullYear() === visibleMonth.getFullYear() &&
+          entryDate.getMonth() === visibleMonth.getMonth()
+        );
+      }),
+    [entries, visibleMonth]
+  );
+  const selectableCalendarEntryIds = useMemo(
+    () => selectableCalendarEntries.map((entry) => entry.id),
+    [selectableCalendarEntries]
+  );
 
   useEffect(() => {
     if (selectedEntry) {
@@ -407,6 +438,11 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
     return () => mediaQuery.removeListener(syncInteractionMode);
   }, []);
 
+  useEffect(() => {
+    const allowedIds = new Set(selectableCalendarEntryIds);
+    setSelectedCalendarEntryIds((current) => current.filter((entryId) => allowedIds.has(entryId)));
+  }, [selectableCalendarEntryIds]);
+
   async function ensureEntry(date) {
     setActionError("");
     const targetDate = date || selectedDate || today;
@@ -462,7 +498,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
     const sourceEntry = nextDraft.id ? entries.find((entry) => entry.id === nextDraft.id) || null : selectedEntry;
     const sourcePermissions = getEntryPermissions(sourceEntry);
     if (!sourcePermissions.editable) {
-      throw new Error(sourcePermissions.notice || "Dieser Bericht ist schreibgeschuetzt.");
+      throw new Error(sourcePermissions.notice || "Dieser Bericht ist schreibgeschützt.");
     }
     if (sourceEntry?.id) {
       await onSaveEntry(sourceEntry.id, nextDraft);
@@ -512,6 +548,26 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
     }
   }
 
+  async function handleSubmitSelectedEntries() {
+    if (!selectedCalendarEntryIds.length || !onSubmitEntries) {
+      return;
+    }
+
+    try {
+      setActionBusy(true);
+      setActionError("");
+      const result = await onSubmitEntries(selectedCalendarEntryIds);
+      setSelectedCalendarEntryIds([]);
+      if (result.failed?.length) {
+        setActionError(`Nicht verarbeitet: ${summarizeBatchFailures(result.failed)}`);
+      }
+    } catch (error) {
+      setActionError(error.message || "Berichte konnten nicht eingereicht werden.");
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
   function handleChangeMonth(offset) {
     setVisibleMonth((current) => {
       const nextMonth = startOfLocalMonth(createLocalDate(current.getFullYear(), current.getMonth() + offset, 1));
@@ -548,7 +604,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
       setSelectedId(null);
       setDrawerOpen(false);
     } catch (error) {
-      setActionError(error.message || "Bericht konnte nicht geloescht werden.");
+      setActionError(error.message || "Bericht konnte nicht gelöscht werden.");
     } finally {
       setActionBusy(false);
     }
@@ -573,12 +629,19 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
     }
   }
 
+  function toggleCalendarEntrySelection(entryId) {
+    setSelectedCalendarEntryIds((current) =>
+      current.includes(entryId)
+        ? current.filter((value) => value !== entryId)
+        : [...current, entryId]
+    );
+  }
+
   return (
     <div className="page-stack report-module">
       <PageHeader
         kicker="Berichte"
         title="Berichte"
-        subtitle="Ein Arbeitsmodul mit drei klaren Modi: Kalender fuer Planung, Liste fuer Uebersicht und Schreiben fuer fokussiertes Erfassen."
         actions={
           <div className="page-actions">
             <div className="view-switch">
@@ -606,7 +669,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
                 }
               }}
             >
-              Bericht oeffnen
+              Bericht öffnen
             </PrimaryButton>
           </div>
         }
@@ -616,6 +679,31 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
 
       {activeView === "calendar" ? (
         <section className="report-module-calendar">
+          <div className="page-actions report-bulk-actions">
+            <span className="report-bulk-count">
+              {selectedCalendarEntryIds.length
+                ? `${selectedCalendarEntryIds.length} ausgewählt`
+                : `${selectableCalendarEntryIds.length} auswählbar`}
+            </span>
+            <PrimaryButton
+              variant="secondary"
+              onClick={() => setSelectedCalendarEntryIds(selectableCalendarEntryIds)}
+              disabled={actionBusy || !selectableCalendarEntryIds.length}
+            >
+              Alle auswählen
+            </PrimaryButton>
+            <PrimaryButton
+              variant="ghost"
+              onClick={() => setSelectedCalendarEntryIds([])}
+              disabled={actionBusy || !selectedCalendarEntryIds.length}
+            >
+              Auswahl aufheben
+            </PrimaryButton>
+            <PrimaryButton onClick={handleSubmitSelectedEntries} disabled={actionBusy || !selectedCalendarEntryIds.length}>
+              {actionBusy ? "Wird eingereicht..." : "Ausgewählte Berichte zur Freigabe einreichen"}
+            </PrimaryButton>
+          </div>
+
           <CalendarGrid
             entries={entries}
             month={visibleMonth}
@@ -623,6 +711,9 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
             onChangeMonth={handleChangeMonth}
             onSelectDate={handleSelectDate}
             onOpenDate={openReportForDate}
+            selectableEntryIds={selectableCalendarEntryIds}
+            selectedEntryIds={selectedCalendarEntryIds}
+            onToggleEntrySelection={toggleCalendarEntrySelection}
             enableDesktopDoubleClick={enableDesktopDoubleClick}
             variant="large"
           />
@@ -631,7 +722,6 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
             <PageHeader
               kicker="Woche"
               title={`Arbeitswoche ab ${formatLongDate(weekDates[0])}`}
-              subtitle="Springe schnell zwischen Tagen, ohne die Monatsansicht zu verlassen."
             />
             <div className="week-strip">
               {weekDates.map((date) => {
@@ -657,7 +747,6 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
               <div>
                 <p className="page-kicker">Tag</p>
                 <h3>{formatLongDate(selectedDate)}</h3>
-                <p>{selectedDayTone.description}</p>
               </div>
               <StatusBadge status={selectedDayEntry?.status || "missing"} />
             </div>
@@ -666,7 +755,6 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
                 <>
                   <div className="day-inspector-copy">
                     <strong>{selectedDayEntry.weekLabel || "Ohne Titel"}</strong>
-                    <small>{selectedDayEntry.betrieb && selectedDayEntry.schule ? "Betrieb und Berufsschule dokumentiert" : selectedDayEntry.betrieb ? "Betrieb dokumentiert" : selectedDayEntry.schule ? "Berufsschule dokumentiert" : "Noch ohne Inhalt"}</small>
                   </div>
                   <div className="day-inspector-button-row">
                     <PrimaryButton variant="secondary" onClick={() => switchView("write")}>Zur Schreibansicht</PrimaryButton>
@@ -677,7 +765,6 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
                 <>
                   <div className="day-inspector-copy">
                     <strong>Kein Bericht vorhanden</strong>
-                    <small>Lege direkt fuer den ausgewaehlten Tag einen neuen Entwurf an.</small>
                   </div>
                   <div className="day-inspector-button-row">
                     <PrimaryButton variant="secondary" onClick={() => switchView("write")}>Zur Schreibansicht</PrimaryButton>
@@ -715,8 +802,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
         <section className="panel-card report-listing-panel">
           <PageHeader
             kicker="Listenansicht"
-            title="Vorhandene Berichte schnell finden"
-            subtitle="Kompakte Uebersicht fuer Suche, Statusfilter und direkten Sprung in die Bearbeitung."
+            title="Berichte"
           />
           <FilterBar>
             <input placeholder="Nach Titel, Datum oder Inhalt suchen" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -740,12 +826,12 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
                     <span>{entry.dateFrom || "-"}</span>
                     <span>{entry.betrieb && entry.schule ? "Betrieb + Schule" : entry.betrieb ? "Betrieb" : entry.schule ? "Berufsschule" : "Noch ohne Inhalt"}</span>
                   </div>
-                  <p>{entry.trainerComment || "Direkt oeffnen, aktualisieren oder erneut einreichen."}</p>
+                  {entry.trainerComment ? <p>{entry.trainerComment}</p> : null}
                 </button>
               ))}
             </div>
           ) : (
-            <EmptyState title="Keine Berichte gefunden" description="Passe die Filter an oder starte einen neuen Bericht fuer einen Tag." />
+            <EmptyState title="Keine Berichte gefunden" />
           )}
         </section>
       ) : null}
@@ -755,8 +841,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
           <div className="panel-card writing-toolbar">
             <PageHeader
               kicker="Schreibansicht"
-              title="Fokussiert schreiben"
-              subtitle="Der Editor ist hier die Hauptflaeche. Tageswahl und Aktionen bleiben kompakt darueber."
+              title="Bericht"
             />
             <div className="writing-toolbar-controls">
               <label>

@@ -27,11 +27,13 @@ function ProtectedApp() {
     saveEntry,
     deleteEntry,
     submitEntry,
+    submitEntries,
     previewReportImport,
     importReports,
     createOrFocusEntry,
     signEntry,
     rejectEntry,
+    processTrainerEntries,
     saveTrainerComment,
     createUser,
     assignTrainer,
@@ -82,7 +84,7 @@ function ProtectedApp() {
                 initialView="calendar"
                 onCreate={async (date) => {
                   const id = await createOrFocusEntry(date);
-                  setFlash({ type: "success", message: `Tagesbericht fuer ${date || "heute"} geoeffnet.` });
+                  setFlash({ type: "success", message: `Tagesbericht für ${date || "heute"} geöffnet.` });
                   return id;
                 }}
                 onSaveEntry={async (entryId, entry) => {
@@ -91,12 +93,22 @@ function ProtectedApp() {
                 }}
                 onDeleteEntry={async (entryId) => {
                   await deleteEntry(entryId);
-                  setFlash({ type: "success", message: "Tagesbericht geloescht." });
+                  setFlash({ type: "success", message: "Tagesbericht gelöscht." });
                   navigate("/berichte", { replace: true });
                 }}
                 onSubmitEntry={async (entryId) => {
                   await submitEntry(entryId);
                   setFlash({ type: "success", message: "Tagesbericht eingereicht." });
+                }}
+                onSubmitEntries={async (entryIds) => {
+                  const data = await submitEntries(entryIds);
+                  setFlash({
+                    type: data.failed?.length ? "error" : "success",
+                    message: data.failed?.length
+                      ? `${data.processedCount} Berichte eingereicht, ${data.failed.length} nicht verarbeitet.`
+                      : `${data.processedCount} Berichte eingereicht.`
+                  });
+                  return data;
                 }}
               />
             ) : (
@@ -120,6 +132,21 @@ function ProtectedApp() {
               onReject={async (entryId, reason) => {
                 await rejectEntry(entryId, reason);
                 setFlash({ type: "success", message: "Bericht abgelehnt." });
+              }}
+              onProcessEntries={async (action, entryIds, payload) => {
+                const data = await processTrainerEntries(action, entryIds, payload);
+                setFlash({
+                  type: data.failed?.length ? "error" : "success",
+                  message:
+                    action === "sign"
+                      ? data.failed?.length
+                        ? `${data.processedCount} Berichte freigegeben, ${data.failed.length} nicht verarbeitet.`
+                        : `${data.processedCount} Berichte freigegeben.`
+                      : data.failed?.length
+                        ? `${data.processedCount} Berichte zurückgegeben, ${data.failed.length} nicht verarbeitet.`
+                        : `${data.processedCount} Berichte zurückgegeben.`
+                });
+                return data;
               }}
               onComment={async (entryId, comment) => {
                 await saveTrainerComment(entryId, comment);
@@ -179,7 +206,7 @@ function ProtectedApp() {
                 }}
                 onChangeOwnPassword={async (payload) => {
                   await changeOwnPassword(payload);
-                  setFlash({ type: "success", message: "Dein Passwort wurde erfolgreich geaendert." });
+                  setFlash({ type: "success", message: "Dein Passwort wurde erfolgreich geändert." });
                 }}
               />
             ) : (

@@ -240,16 +240,11 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
   }
 
   const pageTitle = role === "trainer" ? "Notenansicht" : "Notenverwaltung";
-  const pageSubtitle = role === "trainer"
-    ? "Es werden nur Noten deiner direkt zugeordneten Azubis geladen und angezeigt."
-    : role === "admin"
-      ? "Admins koennen alle Azubi-Noten gezielt pro Auswahl einsehen und verwalten."
-      : "Leistungsnachweise werden automatisch gewichtet, nach Fach sortiert und als strukturierte PDF exportiert.";
   const noTargetsMessage = role === "trainer"
     ? "Dir sind aktuell keine Azubis zugeordnet. Deshalb werden keine Noten angezeigt."
     : "Es sind noch keine Azubis vorhanden.";
   const noGradesMessage = role === "trainer"
-    ? "Fuer den ausgewaehlten Azubi sind aktuell keine Noten vorhanden."
+    ? "Für den ausgewählten Azubi sind aktuell keine Noten vorhanden."
     : "Lege den ersten Leistungsnachweis an, um Auswertungen pro Fach zu sehen.";
 
   return (
@@ -257,7 +252,6 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
       <PageHeader
         kicker="Noten"
         title={pageTitle}
-        subtitle={pageSubtitle}
         actions={selectedProfile ? <PrimaryButton variant="secondary" onClick={handleExportPdf}>Notenübersicht als PDF</PrimaryButton> : null}
       />
 
@@ -267,8 +261,7 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
         <section className="panel-card">
           <PageHeader
             kicker="Azubi-Auswahl"
-            title={role === "trainer" ? "Zugewiesene Azubis" : "Azubi auswaehlen"}
-            subtitle={role === "trainer" ? "Es werden ausschliesslich deine zugeordneten Azubis angeboten." : "Admins koennen zwischen allen Azubis wechseln."}
+            title={role === "trainer" ? "Zugewiesene Azubis" : "Azubi auswählen"}
           />
           {targetOptions.length ? (
             <div className="form-grid">
@@ -290,11 +283,10 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
               <div className="read-only-card">
                 <span>Berechtigung</span>
                 <strong>{isReadOnly ? "Nur lesen" : "Vollzugriff"}</strong>
-                <small>{isReadOnly ? "Ausbilder duerfen nur Noten zugeordneter Azubis sehen." : "Admins duerfen Noten fuer jeden Azubi verwalten."}</small>
               </div>
             </div>
           ) : (
-            <EmptyState title="Keine Azubis verfuegbar" description={noTargetsMessage} />
+            <EmptyState title="Keine Azubis verfügbar" description={noTargetsMessage} />
           )}
         </section>
       ) : null}
@@ -306,22 +298,17 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
       ) : (
         <>
           <section className="stats-grid">
-            <StatCard label="Gesamtdurchschnitt" value={statistics.overallAverage ? formatGrade(statistics.overallAverage) : "-"} note="Gewichtet ueber alle Faecher" />
+            <StatCard label="Gesamtdurchschnitt" value={statistics.overallAverage ? formatGrade(statistics.overallAverage) : "-"} note="Gewichtet über alle Fächer" />
             <StatCard label="Beste Note" value={statistics.bestGrade ? formatGrade(statistics.bestGrade) : "-"} note="Niedrigster Notenwert" />
-            <StatCard label="Schlechteste Note" value={statistics.worstGrade ? formatGrade(statistics.worstGrade) : "-"} note="Hoechster Notenwert" />
-            <StatCard label="Faecher" value={statistics.subjectCount} note={`${statistics.totalEntries} Leistungsnachweise gesamt`} />
+            <StatCard label="Schlechteste Note" value={statistics.worstGrade ? formatGrade(statistics.worstGrade) : "-"} note="Höchster Notenwert" />
+            <StatCard label="Fächer" value={statistics.subjectCount} note={`${statistics.totalEntries} Leistungsnachweise gesamt`} />
           </section>
 
           <section className="reports-layout">
             <article className="panel-card">
               <PageHeader
                 kicker={isReadOnly ? "Hinweis" : form.id ? "Bearbeiten" : "Neue Note"}
-                title={isReadOnly ? `Noten fuer ${selectedProfile.name}` : form.id ? "Leistungsnachweis bearbeiten" : "Leistungsnachweis anlegen"}
-                subtitle={
-                  isReadOnly
-                    ? "Ausbilder sehen hier nur die Noten des ausgewaehlten, zugeordneten Azubis."
-                    : "Schulaufgaben zaehlen doppelt, Stegreifaufgaben einfach. Das Gewicht wird automatisch gesetzt."
-                }
+                title={isReadOnly ? `Noten für ${selectedProfile.name}` : form.id ? "Leistungsnachweis bearbeiten" : "Leistungsnachweis anlegen"}
               />
               {canManageGrades ? (
                 <>
@@ -372,12 +359,12 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
                   </div>
                 </>
               ) : (
-                <EmptyState title="Read-only Ansicht" description="Ausbilder koennen Noten der zugewiesenen Azubis einsehen, aber nicht bearbeiten oder loeschen." />
+                <EmptyState title="Read-only Ansicht" />
               )}
             </article>
 
             <article className="panel-card">
-              <PageHeader kicker="Faecher" title="Fachschnitte" subtitle="Alle Faecher alphabetisch mit gewichteter Durchschnittsnote." />
+              <PageHeader kicker="Fächer" title="Fachschnitte" />
               {loadingGrades ? (
                 <div className="empty-table">Noten werden geladen.</div>
               ) : groupedGrades.length ? (
@@ -406,11 +393,11 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
           </section>
 
           <section className="panel-card">
-            <PageHeader kicker="Uebersicht" title="Leistungsnachweise nach Fach" subtitle="Alle Eintraege sind je Fach gruppiert und innerhalb des Fachs absteigend nach Datum sortiert." />
+            <PageHeader kicker="Übersicht" title="Leistungsnachweise nach Fach" />
             <FilterBar>
               <input placeholder="Suche nach Fach, Art, Bezeichnung oder Datum" value={query} onChange={(event) => setQuery(event.target.value)} />
               <select value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)}>
-                <option value="all">Alle Faecher</option>
+                <option value="all">Alle Fächer</option>
                 {subjects.map((subject) => (
                   <option key={subject} value={subject}>
                     {subject}
@@ -436,7 +423,7 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
                     <div className="grade-section-head">
                       <div>
                         <h3>{group.fach}</h3>
-                        <p>{group.count} Eintraege, neueste zuerst</p>
+                        <p>{group.count} Einträge, neueste zuerst</p>
                       </div>
                       <div className="grade-section-metrics">
                         <div className="grade-stat-detail">
@@ -469,7 +456,7 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
                                     Bearbeiten
                                   </PrimaryButton>
                                   <PrimaryButton variant="ghost" onClick={() => onDeleteGrade(row.id)}>
-                                    Loeschen
+                                    Löschen
                                   </PrimaryButton>
                                 </div>
                               )
@@ -481,7 +468,7 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
                 ))}
               </div>
             ) : (
-              <EmptyState title="Keine Noten gefunden" description={selectedProfile ? "Passe die Filter an oder pruefe die Auswahl des Azubis." : noTargetsMessage} />
+              <EmptyState title="Keine Noten gefunden" description={selectedProfile ? "" : noTargetsMessage} />
             )}
           </section>
         </>

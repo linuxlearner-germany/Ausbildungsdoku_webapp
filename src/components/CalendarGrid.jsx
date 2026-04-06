@@ -21,12 +21,17 @@ export function CalendarGrid({
   onChangeMonth,
   onSelectDate,
   onOpenDate,
+  selectableEntryIds = [],
+  selectedEntryIds = [],
+  onToggleEntrySelection = null,
   enableDesktopDoubleClick = false,
   variant = "default"
 }) {
   const label = formatLocalDate(month, { month: "long", year: "numeric" });
   const monthStart = startOfLocalMonth(month);
   const gridDates = buildCalendarGridDates(monthStart);
+  const selectableIds = new Set(selectableEntryIds);
+  const selectedIds = new Set(selectedEntryIds);
 
   function entryByDay(isoDate) {
     return entries.find((entry) => entry.dateFrom === isoDate);
@@ -53,14 +58,9 @@ export function CalendarGrid({
           <div>
             <p className="page-kicker">Kalender</p>
             <h3>{label}</h3>
-            <p className="page-subtitle">
-              {enableDesktopDoubleClick
-                ? "Ein Klick markiert den Tag. Ein Doppelklick oeffnet den Bericht oder einen neuen Entwurf fuer diesen Tag."
-                : "Ein Tipp markiert den Tag. Oeffne den Bericht anschliessend ueber die sichtbaren Aktionen."}
-            </p>
           </div>
           <div className="calendar-month-switcher">
-            <PrimaryButton variant="secondary" onClick={() => onChangeMonth(-1)}>Zurueck</PrimaryButton>
+            <PrimaryButton variant="secondary" onClick={() => onChangeMonth(-1)}>Zurück</PrimaryButton>
             <PrimaryButton variant="secondary" onClick={() => onSelectDate(getTodayLocalDateString())}>Heute</PrimaryButton>
             <PrimaryButton variant="secondary" onClick={() => onChangeMonth(1)}>Weiter</PrimaryButton>
           </div>
@@ -76,33 +76,53 @@ export function CalendarGrid({
           const entry = entryByDay(iso);
           const status = dayStatus(entry);
           const date = parseLocalDate(iso);
+          const isSelectable = Boolean(entry?.id && selectableIds.has(entry.id) && onToggleEntrySelection);
+          const isSelected = Boolean(entry?.id && selectedIds.has(entry.id));
           return (
-            <button
+            <article
               key={iso}
-              type="button"
-              className={`calendar-tile status-${status}${selectedDate === iso ? " selected" : ""}${date.getMonth() !== month.getMonth() ? " outside" : ""}`}
-              onClick={(event) => handleTileClick(iso, event)}
-              onDoubleClick={() => handleTileDoubleClick(iso)}
+              className={`calendar-tile-shell${date.getMonth() !== month.getMonth() ? " outside" : ""}${isSelected ? " is-selected" : ""}`}
             >
-              <div className="calendar-tile-top">
-                <span className="calendar-tile-day">{date.getDate()}</span>
-                {entry ? <StatusBadge status={status} /> : <span className="calendar-tile-empty-label">Leer</span>}
-              </div>
-              <div className="calendar-tile-body">
-                <strong>{entry?.weekLabel || "Kein Bericht"}</strong>
-                <small>
-                  {entry
-                    ? entry.betrieb && entry.schule
-                      ? "Betrieb und Berufsschule"
-                      : entry.betrieb
-                        ? "Betrieb"
-                        : entry.schule
-                          ? "Berufsschule"
-                          : "Noch unvollstaendig"
-                    : "Neuen Bericht anlegen"}
-                </small>
-              </div>
-            </button>
+              {isSelectable ? (
+                <div className="calendar-selection-bar">
+                  <label className="selection-check">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => onToggleEntrySelection(entry.id)}
+                    />
+                    <span>{isSelected ? "Ausgewählt" : "Auswählen"}</span>
+                  </label>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                className={`calendar-tile status-${status}${selectedDate === iso ? " selected" : ""}${date.getMonth() !== month.getMonth() ? " outside" : ""}`}
+                onClick={(event) => handleTileClick(iso, event)}
+                onDoubleClick={() => handleTileDoubleClick(iso)}
+              >
+                <div className="calendar-tile-top">
+                  <div className="calendar-tile-day-row">
+                    <span className="calendar-tile-day">{date.getDate()}</span>
+                  </div>
+                  {entry ? <StatusBadge status={status} /> : <span className="calendar-tile-empty-label">Leer</span>}
+                </div>
+                <div className="calendar-tile-body">
+                  <strong>{entry?.weekLabel || "Kein Bericht"}</strong>
+                  <small>
+                    {entry
+                      ? entry.betrieb && entry.schule
+                        ? "Betrieb und Berufsschule"
+                        : entry.betrieb
+                          ? "Betrieb"
+                          : entry.schule
+                            ? "Berufsschule"
+                            : "Noch unvollständig"
+                      : "Neuen Bericht anlegen"}
+                  </small>
+                </div>
+              </button>
+            </article>
           );
         })}
       </div>
