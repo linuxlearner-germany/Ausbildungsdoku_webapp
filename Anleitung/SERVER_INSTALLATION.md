@@ -75,7 +75,7 @@ Als App-Benutzer in das Zielverzeichnis wechseln und Repository klonen:
 ```bash
 sudo -u berichtsheft -H bash
 cd /opt/berichtsheft
-git clone <repo-url> app
+git clone https://github.com/linuxlearner-germany/Ausbildungsdoku_webapp app
 cd app
 ```
 
