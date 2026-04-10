@@ -38,6 +38,7 @@ function ProtectedApp() {
     createUser,
     assignTrainer,
     updateUser,
+    deleteUser,
     previewUserImport,
     importUsers,
     loadAuditLogs,
@@ -254,6 +255,11 @@ function ProtectedApp() {
                 onUpdateUser={async (userId, payload) => {
                   await updateUser(userId, payload);
                   setFlash({ type: "success", message: "Benutzer aktualisiert." });
+                }}
+                onDeleteUser={async (userId) => {
+                  const data = await deleteUser(userId);
+                  setFlash({ type: "success", message: `${data.deletedUser?.name || "Benutzer"} geloescht.` });
+                  return data;
                 }}
                 onCreateUser={async (payload) => {
                   await createUser(payload);

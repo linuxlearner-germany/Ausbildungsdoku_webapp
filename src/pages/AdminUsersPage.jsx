@@ -582,13 +582,15 @@ function AdminAuditLogPanel({ users, onLoadAuditLogs }) {
   );
 }
 
-export function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUpdateUser, onPreviewUserImport, onImportUsers, onLoadAuditLogs }) {
+export function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUpdateUser, onDeleteUser, onPreviewUserImport, onImportUsers, onLoadAuditLogs }) {
   const [form, setForm] = useState(buildUserForm());
   const [editingUserId, setEditingUserId] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [createError, setCreateError] = useState("");
   const [editError, setEditError] = useState("");
   const [assignError, setAssignError] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [csvError, setCsvError] = useState("");
   const [activeView, setActiveView] = useState("users");
   const editPanelRef = useRef(null);
 
@@ -644,12 +646,62 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
     }
   }
 
+  async function handleDeleteUser(user) {
+    const confirmed = window.confirm(`Benutzer "${user.name}" wirklich loeschen?\n\nDabei werden auch zugehoerige Berichte, Noten und Zuordnungen entfernt.`);
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleteError("");
+    try {
+      await onDeleteUser(user.id);
+      if (editingUserId === user.id) {
+        stopEditing();
+      }
+    } catch (error) {
+      setDeleteError(error.message);
+    }
+  }
+
+  async function handleExportCsv() {
+    setCsvError("");
+
+    try {
+      const response = await fetch("/api/admin/users/export.csv", {
+        method: "GET",
+        credentials: "same-origin"
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        const data = contentType.includes("application/json") ? await response.json() : null;
+        throw new Error(data?.error || "CSV-Export konnte nicht gestartet werden.");
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const disposition = response.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename="([^"]+)"/i);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = match?.[1] || "verwaltung-benutzer.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      setCsvError(error.message || "CSV-Export konnte nicht gestartet werden.");
+    }
+  }
+
   return (
     <div className="page-stack admin-users-page">
       <PageHeader
         kicker="Verwaltung"
         title="Benutzerverwaltung"
+        actions={<PrimaryButton onClick={handleExportCsv}>CSV exportieren</PrimaryButton>}
       />
+      {csvError ? <div className="field-message error">{csvError}</div> : null}
       <div className="admin-section-tabs">
         <button type="button" className={`admin-section-tab${activeView === "users" ? " active" : ""}`} onClick={() => setActiveView("users")}>
           Benutzerverwaltung
@@ -698,6 +750,7 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
 
             <article className="panel-card admin-overview-card">
               <PageHeader kicker="Übersicht" title="Benutzer" subtitle={`${users.length} Konten`} />
+              {deleteError ? <div className="field-message error">{deleteError}</div> : null}
               <div className="admin-user-grid">
                 {users.map((user) => (
                   <article key={user.id} className="admin-user-card">
@@ -725,6 +778,9 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
                     <div className="assignment-actions">
                       <PrimaryButton variant="secondary" onClick={() => startEditing(user)}>
                         Bearbeiten
+                      </PrimaryButton>
+                      <PrimaryButton variant="ghost" onClick={() => handleDeleteUser(user)}>
+                        Loeschen
                       </PrimaryButton>
                     </div>
                   </article>

@@ -717,6 +717,7 @@ function getTraineeIdsForTrainer(trainerId) {
 function listUsersWithRelations() {
   const users = db.prepare(`
     SELECT id, name, username, email, role, ausbildung, betrieb, berufsschule,
+           created_at AS createdAt,
            theme_preference AS themePreference
     FROM users
     ORDER BY CASE role WHEN 'admin' THEN 1 WHEN 'trainer' THEN 2 ELSE 3 END, name COLLATE NOCASE ASC
@@ -749,6 +750,144 @@ function listUsersWithRelations() {
   }
 
   return users.map((user) => userMap.get(user.id));
+}
+
+function formatAdminCsvDateTime(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function escapeCsvCell(value) {
+  const normalized = String(value ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  return `"${normalized.replace(/"/g, "\"\"")}"`;
+}
+
+function buildAdminUsersCsv(users) {
+  const headers = [
+    "User-ID",
+    "Name",
+    "Benutzername",
+    "E-Mail",
+    "Rolle",
+    "Ausbildung",
+    "Betrieb",
+    "Berufsschule",
+    "Zugeordnete Ausbilder",
+    "Erstellt am",
+    "Letzter Aenderungszeitpunkt"
+  ];
+
+  const rows = users.map((user) => [
+    user.id,
+    user.name || "",
+    user.username || "",
+    user.email || "",
+    user.role || "",
+    user.ausbildung || "",
+    user.betrieb || "",
+    user.berufsschule || "",
+    Array.isArray(user.assignedTrainers) ? user.assignedTrainers.map((trainer) => trainer.name).join(" | ") : "",
+    formatAdminCsvDateTime(user.createdAt),
+    ""
+  ]);
+
+  return `\uFEFF${[headers, ...rows].map((row) => row.map(escapeCsvCell).join(";")).join("\r\n")}\r\n`;
+}
+
+function countAdmins() {
+  return db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'").get().count;
+}
+
+function findUserForAdmin(userId) {
+  return db.prepare(`
+    SELECT id, name, username, email, role, ausbildung, betrieb, berufsschule, created_at AS createdAt
+    FROM users
+    WHERE id = ?
+  `).get(userId);
+}
+
+function deleteUserCascade(actor, userId) {
+  const targetUser = findUserForAdmin(userId);
+  if (!targetUser) {
+    return { error: "Benutzer nicht gefunden.", status: 404 };
+  }
+
+  if (actor?.id === userId) {
+    return { error: "Das aktuell eingeloggte Admin-Konto kann nicht geloescht werden.", status: 400 };
+  }
+
+  if (targetUser.role === "admin" && countAdmins() <= 1) {
+    return { error: "Der letzte verbleibende Admin kann nicht geloescht werden.", status: 400 };
+  }
+
+  const traineeTrainerAssignments = db.prepare("SELECT COUNT(*) AS count FROM trainee_trainers WHERE trainee_id = ? OR trainer_id = ?").get(userId, userId).count;
+  const reportCount = db.prepare("SELECT COUNT(*) AS count FROM entries WHERE trainee_id = ?").get(userId).count;
+  const gradeCount = db.prepare("SELECT COUNT(*) AS count FROM grades WHERE trainee_id = ?").get(userId).count;
+  const legacyAssignmentCount = db.prepare("SELECT COUNT(*) AS count FROM users WHERE trainer_id = ?").get(userId).count;
+
+  const transaction = db.transaction(() => {
+    db.prepare("UPDATE audit_logs SET actor_user_id = NULL WHERE actor_user_id = ?").run(userId);
+    db.prepare("UPDATE audit_logs SET target_user_id = NULL WHERE target_user_id = ?").run(userId);
+    db.prepare("DELETE FROM entries WHERE trainee_id = ?").run(userId);
+    db.prepare("DELETE FROM grades WHERE trainee_id = ?").run(userId);
+    db.prepare("DELETE FROM trainee_trainers WHERE trainee_id = ? OR trainer_id = ?").run(userId, userId);
+    db.prepare("UPDATE users SET trainer_id = NULL WHERE trainer_id = ?").run(userId);
+    db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+  });
+
+  transaction();
+
+  writeAuditLog({
+    actor,
+    actionType: "USER_DELETED",
+    entityType: "user",
+    entityId: String(targetUser.id),
+    summary: `${targetUser.name} wurde geloescht.`,
+    changes: {
+      deletedUser: {
+        before: {
+          id: targetUser.id,
+          name: targetUser.name,
+          username: targetUser.username,
+          email: targetUser.email,
+          role: targetUser.role
+        },
+        after: null
+      }
+    },
+    metadata: {
+      deletedUserId: targetUser.id,
+      deletedUsername: targetUser.username,
+      deletedRole: targetUser.role,
+      removedReports: reportCount,
+      removedGrades: gradeCount,
+      removedAssignments: traineeTrainerAssignments + legacyAssignmentCount
+    }
+  });
+
+  return {
+    ok: true,
+    deletedUser: targetUser,
+    cleanup: {
+      removedReports: reportCount,
+      removedGrades: gradeCount,
+      removedAssignments: traineeTrainerAssignments + legacyAssignmentCount
+    }
+  };
 }
 
 function listTraineesForTrainer(trainerId) {
@@ -2622,6 +2761,123 @@ function renderPdf(res, trainee, entries) {
   doc.end();
 }
 
+function formatCsvDate(value) {
+  if (!value) {
+    return "";
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    const [year, month, day] = String(value).split("-");
+    return `${day}.${month}.${year}`;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleDateString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+}
+
+function formatCsvDateTime(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+
+  return date.toLocaleString("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+function getIsoWeekLabel(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+  const week = Math.ceil((((utc - yearStart) / 86400000) + 1) / 7);
+  return `KW ${String(week).padStart(2, "0")}/${utc.getUTCFullYear()}`;
+}
+
+function mapEntryStatusLabel(status) {
+  if (status === "draft") return "Entwurf";
+  if (status === "submitted") return "Eingereicht";
+  if (status === "signed") return "Signiert";
+  if (status === "rejected") return "Nachbearbeitung";
+  return String(status || "");
+}
+
+function mapReleaseStatusLabel(entry) {
+  if (entry.status === "signed") return "Signiert";
+  if (entry.status === "submitted") return "Zur Freigabe eingereicht";
+  if (entry.status === "rejected") return "Zur Nachbearbeitung zurueckgegeben";
+  if (entry.status === "draft") return "Nicht eingereicht";
+  return "";
+}
+
+function escapeCsvCell(value) {
+  const normalized = String(value ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  return `"${normalized.replace(/"/g, "\"\"")}"`;
+}
+
+function buildEntriesCsv(entries) {
+  const headers = [
+    "Datum",
+    "Titel",
+    "Status",
+    "Betrieb",
+    "Berufsschule",
+    "Freigabestatus / Signaturstatus",
+    "Signiert von",
+    "Signiert am",
+    "Erstellt am",
+    "Aktualisiert am",
+    "Rueckgabegrund / Kommentar",
+    "Kalenderwoche"
+  ];
+
+  const rows = entries.map((entry) => [
+    formatCsvDate(entry.dateFrom),
+    entry.weekLabel || "",
+    mapEntryStatusLabel(entry.status),
+    entry.betrieb || "",
+    entry.schule || "",
+    mapReleaseStatusLabel(entry),
+    entry.signerName || "",
+    formatCsvDateTime(entry.signedAt),
+    formatCsvDateTime(entry.createdAt),
+    formatCsvDateTime(entry.updatedAt),
+    entry.rejectionReason || entry.trainerComment || "",
+    getIsoWeekLabel(entry.dateFrom)
+  ]);
+
+  return `\uFEFF${[headers, ...rows].map((row) => row.map(escapeCsvCell).join(";")).join("\r\n")}\r\n`;
+}
+
 function renderGradesPdf(res, trainee, grades) {
   const logoPath = path.join(__dirname, "Pictures", "WIWEB-waage-vektor_ohne_schrift.png");
   const sortedGrades = [...grades].sort((a, b) => {
@@ -3318,6 +3574,27 @@ app.post("/api/admin/users/:id", requireRole("admin"), (req, res) => {
   }
 });
 
+app.delete("/api/admin/users/:id", requireRole("admin"), (req, res) => {
+  const userId = Number(req.params.id);
+  if (!Number.isInteger(userId)) {
+    return res.status(400).json({ error: "Ungueltiger Benutzer." });
+  }
+
+  const result = deleteUserCascade(req.user, userId);
+  if (result?.error) {
+    return res.status(result.status || 400).json({ error: result.error });
+  }
+
+  res.json(result);
+});
+
+app.get("/api/admin/users/export.csv", requireRole("admin"), (req, res) => {
+  const csv = buildAdminUsersCsv(listUsersWithRelations());
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", 'attachment; filename="verwaltung-benutzer.csv"');
+  res.send(csv);
+});
+
 app.get("/api/admin/audit-logs", requireRole("admin"), (req, res) => {
   const userId = Number(req.query?.userId);
   const result = listAuditLogs({
@@ -3494,8 +3771,27 @@ function handlePdfRequest(req, res) {
   renderPdf(res, trainee, listEntriesForTrainee(trainee.id));
 }
 
+function handleOwnCsvExport(req, res) {
+  const trainee = findTraineeById(req.user.id);
+  if (!trainee) {
+    return res.status(404).json({ error: "Azubi nicht gefunden." });
+  }
+
+  const csv = buildEntriesCsv(listEntriesForTrainee(req.user.id));
+  const safeName = String(trainee.name || "azubi")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "azubi";
+
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="berichtsheft-${safeName}.csv"`);
+  res.send(csv);
+}
+
 app.get("/api/report/pdf", requireRole("trainee", "trainer", "admin"), handlePdfRequest);
 app.get("/api/report/pdf/:traineeId", requireRole("trainee", "trainer", "admin"), handlePdfRequest);
+app.get("/api/report/csv", requireRole("trainee"), handleOwnCsvExport);
 
 app.get(/^\/(?!api(?:\/|$)|Pictures(?:\/|$)).*/, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));

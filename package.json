@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "npm run build && node index.js",
-    "build": "esbuild src/main.jsx --bundle --format=esm --sourcemap --outfile=public/app.js && cp src/styles.css public/app.css",
+    "build": "node scripts/build.mjs",
     "start": "npm run build && node index.js",
     "check": "node --check index.js",
     "test": "node --test --test-concurrency=1 tests/*.test.mjs"

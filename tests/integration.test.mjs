@@ -693,6 +693,303 @@ await test("Admin kann Nutzer per CSV validieren und importieren", { concurrency
   });
 });
 
+await test("Admin kann Azubi mit Berichten, Noten und Zuordnungen loeschen", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    const trainerCreateResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "Delete Trainer",
+        username: "delete-trainer",
+        email: "delete-trainer@example.com",
+        password: "Trainerkonto123",
+        role: "trainer"
+      },
+      adminCookie
+    );
+    assert.equal(trainerCreateResponse.status, 200);
+
+    const traineeCreateResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "Delete Azubi",
+        username: "delete-azubi",
+        email: "delete-azubi@example.com",
+        password: "Azubikonto123",
+        role: "trainee",
+        ausbildung: "Fachinformatiker Systemintegration",
+        betrieb: "LoeSch GmbH",
+        berufsschule: "BBS Loesch",
+        trainerIds: []
+      },
+      adminCookie
+    );
+    assert.equal(traineeCreateResponse.status, 200);
+
+    const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const adminDashboard = await adminDashboardResponse.json();
+    const createdTrainer = adminDashboard.users.find((user) => user.username === "delete-trainer");
+    const createdTrainee = adminDashboard.users.find((user) => user.username === "delete-azubi");
+    assert.ok(createdTrainer);
+    assert.ok(createdTrainee);
+
+    const assignResponse = await postJson(
+      `${baseUrl}/api/admin/assign-trainer`,
+      {
+        traineeId: createdTrainee.id,
+        trainerIds: [createdTrainer.id]
+      },
+      adminCookie
+    );
+    assert.equal(assignResponse.status, 200);
+
+    const traineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "delete-azubi",
+      password: "Azubikonto123"
+    });
+    const traineeCookie = extractCookie(traineeLogin);
+
+    const draftResponse = await postJson(
+      `${baseUrl}/api/report/draft`,
+      {
+        dateFrom: "2026-04-11",
+        dateTo: "2026-04-11",
+        weekLabel: "Delete Bericht"
+      },
+      traineeCookie
+    );
+    const draftData = await draftResponse.json();
+    assert.equal(draftResponse.status, 200);
+
+    const updateDraftResponse = await postJson(
+      `${baseUrl}/api/report/entry/${draftData.entry.id}`,
+      {
+        weekLabel: "Delete Bericht",
+        dateFrom: "2026-04-11",
+        dateTo: "2026-04-11",
+        betrieb: "Soll verschwinden",
+        schule: ""
+      },
+      traineeCookie
+    );
+    assert.equal(updateDraftResponse.status, 200);
+
+    const gradeResponse = await postJson(
+      `${baseUrl}/api/grades`,
+      {
+        traineeId: createdTrainee.id,
+        fach: "Delete Fach",
+        typ: "Schulaufgabe",
+        bezeichnung: "Delete Note",
+        datum: "2026-04-11",
+        note: 2
+      },
+      adminCookie
+    );
+    assert.equal(gradeResponse.status, 200);
+
+    const deleteResponse = await fetch(`${baseUrl}/api/admin/users/${createdTrainee.id}`, {
+      method: "DELETE",
+      headers: { Cookie: adminCookie }
+    });
+    const deleteData = await deleteResponse.json();
+    assert.equal(deleteResponse.status, 200);
+    assert.equal(deleteData.deletedUser.username, "delete-azubi");
+    assert.equal(deleteData.cleanup.removedReports >= 1, true);
+    assert.equal(deleteData.cleanup.removedGrades >= 1, true);
+    assert.equal(deleteData.cleanup.removedAssignments >= 1, true);
+
+    const refreshedAdminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const refreshedAdminDashboard = await refreshedAdminDashboardResponse.json();
+    assert.equal(refreshedAdminDashboard.users.some((user) => user.username === "delete-azubi"), false);
+
+    const trainerLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "delete-trainer",
+      password: "Trainerkonto123"
+    });
+    const trainerCookie = extractCookie(trainerLogin);
+    const trainerDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: trainerCookie }
+    });
+    const trainerDashboard = await trainerDashboardResponse.json();
+    assert.equal(trainerDashboard.trainees.some((trainee) => trainee.username === "delete-azubi"), false);
+
+    const gradesAfterDeleteResponse = await fetch(`${baseUrl}/api/grades?traineeId=${createdTrainee.id}`, {
+      headers: { Cookie: adminCookie }
+    });
+    assert.equal(gradesAfterDeleteResponse.status, 404);
+  });
+});
+
+await test("Admin kann Ausbilder loeschen und Zuordnungen werden bereinigt", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    const trainerCreateResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "Delete Ausbilder",
+        username: "delete-ausbilder",
+        email: "delete-ausbilder@example.com",
+        password: "Trainerkonto123",
+        role: "trainer"
+      },
+      adminCookie
+    );
+    assert.equal(trainerCreateResponse.status, 200);
+
+    const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const adminDashboard = await adminDashboardResponse.json();
+    const deleteTrainer = adminDashboard.users.find((user) => user.username === "delete-ausbilder");
+    const trainee = adminDashboard.users.find((user) => user.username === "azubi");
+    assert.ok(deleteTrainer);
+    assert.ok(trainee);
+
+    const assignResponse = await postJson(
+      `${baseUrl}/api/admin/assign-trainer`,
+      {
+        traineeId: trainee.id,
+        trainerIds: [...new Set([...(trainee.trainerIds || []), deleteTrainer.id])]
+      },
+      adminCookie
+    );
+    assert.equal(assignResponse.status, 200);
+
+    const deleteResponse = await fetch(`${baseUrl}/api/admin/users/${deleteTrainer.id}`, {
+      method: "DELETE",
+      headers: { Cookie: adminCookie }
+    });
+    assert.equal(deleteResponse.status, 200);
+
+    const refreshedDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const refreshedDashboard = await refreshedDashboardResponse.json();
+    const refreshedTrainee = refreshedDashboard.users.find((user) => user.username === "azubi");
+    assert.equal(refreshedDashboard.users.some((user) => user.username === "delete-ausbilder"), false);
+    assert.equal(refreshedTrainee.trainerIds.includes(deleteTrainer.id), false);
+    assert.equal(refreshedTrainee.assignedTrainers.some((trainer) => trainer.id === deleteTrainer.id), false);
+  });
+});
+
+await test("Benutzer-Loeschen ist nur fuer Admins erlaubt", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const traineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+    const traineeCookie = extractCookie(traineeLogin);
+
+    const response = await fetch(`${baseUrl}/api/admin/users/1`, {
+      method: "DELETE",
+      headers: { Cookie: traineeCookie }
+    });
+
+    assert.equal(response.status, 403);
+  });
+});
+
+await test("Admin-CSV-Export enthaelt Verwaltungsdaten ohne sensible Felder", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    const createTrainerResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "CSV Trainer Extra",
+        username: "csv-trainer-extra",
+        email: "csv-trainer-extra@example.com",
+        password: "Trainerkonto123",
+        role: "trainer"
+      },
+      adminCookie
+    );
+    assert.equal(createTrainerResponse.status, 200);
+
+    const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const adminDashboard = await adminDashboardResponse.json();
+    const trainerIds = adminDashboard.users
+      .filter((user) => ["trainer", "csv-trainer-extra"].includes(user.username))
+      .map((user) => user.id);
+
+    const createTraineeResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "CSV Äzubi Export",
+        username: "csv-azubi-export",
+        email: "csv-azubi-export@example.com",
+        password: "Azubikonto123",
+        role: "trainee",
+        ausbildung: "Fachinformatiker Systemintegration",
+        betrieb: "Büro Export",
+        berufsschule: "BBS Köln",
+        trainerIds
+      },
+      adminCookie
+    );
+    assert.equal(createTraineeResponse.status, 200);
+
+    const exportResponse = await fetch(`${baseUrl}/api/admin/users/export.csv`, {
+      headers: { Cookie: adminCookie }
+    });
+    assert.equal(exportResponse.status, 200);
+    assert.match(exportResponse.headers.get("content-type") || "", /text\/csv;\s*charset=utf-8/i);
+    assert.match(exportResponse.headers.get("content-disposition") || "", /verwaltung-benutzer\.csv/i);
+
+    const csvBuffer = Buffer.from(await exportResponse.arrayBuffer());
+    assert.equal(csvBuffer[0], 0xEF);
+    assert.equal(csvBuffer[1], 0xBB);
+    assert.equal(csvBuffer[2], 0xBF);
+    const csvText = csvBuffer.toString("utf8");
+
+    assert.match(csvText, /"User-ID";"Name";"Benutzername";"E-Mail";"Rolle";"Ausbildung";"Betrieb";"Berufsschule";"Zugeordnete Ausbilder"/);
+    assert.match(csvText, /CSV Äzubi Export/);
+    assert.match(csvText, /Büro Export/);
+    assert.match(csvText, /BBS Köln/);
+    assert.match(csvText, /Herr Ausbilder \| CSV Trainer Extra/);
+    assert.doesNotMatch(csvText, /password_hash/i);
+    assert.doesNotMatch(csvText, /Passwort123/i);
+    assert.doesNotMatch(csvText, /berichtsheft\.sid/i);
+  });
+});
+
+await test("Admin-CSV-Export ist fuer Nicht-Admins gesperrt", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const trainerLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "trainer",
+      password: "trainer123"
+    });
+    const trainerCookie = extractCookie(trainerLogin);
+
+    const response = await fetch(`${baseUrl}/api/admin/users/export.csv`, {
+      headers: { Cookie: trainerCookie }
+    });
+
+    assert.equal(response.status, 403);
+  });
+});
+
 await test("Noten-API erzwingt Rollen und Azubi-Ausbilder-Zuordnung", { concurrency: false }, async () => {
   await withIsolatedServer(async () => {
   const adminLogin = await postJson(`${baseUrl}/api/login`, {
@@ -1226,5 +1523,122 @@ await test("Produktion startet nicht mit Demo-Daten", { concurrency: false }, as
 
   fs.rmSync(prodDir, { recursive: true, force: true });
   assert.match(stderr, /ENABLE_DEMO_DATA darf in Produktion nicht aktiviert sein/);
+  });
+});
+
+await test("Azubi kann nur eigene Berichte als CSV exportieren", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const traineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+    const traineeCookie = extractCookie(traineeLogin);
+
+    const createOwnDraftResponse = await postJson(
+      `${baseUrl}/api/report/draft`,
+      { dateFrom: "2026-04-09", dateTo: "2026-04-09", weekLabel: "CSV Eigenexport Test" },
+      traineeCookie
+    );
+    const createOwnDraftData = await createOwnDraftResponse.json();
+    assert.equal(createOwnDraftResponse.status, 200);
+
+    const updateOwnDraftResponse = await postJson(
+      `${baseUrl}/api/report/entry/${createOwnDraftData.entry.id}`,
+      {
+        weekLabel: "CSV Eigenexport Test",
+        dateFrom: "2026-04-09",
+        dateTo: "2026-04-09",
+        betrieb: "Büro\nPrüfung mit Umlauten: ä ö ü ß",
+        schule: ""
+      },
+      traineeCookie
+    );
+    assert.equal(updateOwnDraftResponse.status, 200);
+
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    const createOtherTraineeResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "CSV Fremd Azubi",
+        username: "csv-fremd-azubi",
+        email: "csv-fremd-azubi@example.com",
+        password: "Passwort123!",
+        role: "trainee",
+        ausbildung: "Fachinformatiker Systemintegration",
+        betrieb: "Fremdbetrieb",
+        berufsschule: "BBS Fremd"
+      },
+      adminCookie
+    );
+    assert.equal(createOtherTraineeResponse.status, 200);
+
+    const otherTraineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "csv-fremd-azubi",
+      password: "Passwort123!"
+    });
+    const otherTraineeCookie = extractCookie(otherTraineeLogin);
+
+    const createForeignDraftResponse = await postJson(
+      `${baseUrl}/api/report/draft`,
+      { dateFrom: "2026-04-10", dateTo: "2026-04-10", weekLabel: "CSV Fremder Bericht" },
+      otherTraineeCookie
+    );
+    const createForeignDraftData = await createForeignDraftResponse.json();
+    assert.equal(createForeignDraftResponse.status, 200);
+
+    const updateForeignDraftResponse = await postJson(
+      `${baseUrl}/api/report/entry/${createForeignDraftData.entry.id}`,
+      {
+        weekLabel: "CSV Fremder Bericht",
+        dateFrom: "2026-04-10",
+        dateTo: "2026-04-10",
+        betrieb: "Darf nicht exportiert werden",
+        schule: ""
+      },
+      otherTraineeCookie
+    );
+    assert.equal(updateForeignDraftResponse.status, 200);
+
+    const exportResponse = await fetch(`${baseUrl}/api/report/csv`, {
+      headers: { Cookie: traineeCookie }
+    });
+    assert.equal(exportResponse.status, 200);
+    assert.match(exportResponse.headers.get("content-type") || "", /text\/csv;\s*charset=utf-8/i);
+    assert.match(exportResponse.headers.get("content-disposition") || "", /attachment; filename="berichtsheft-/i);
+
+    const csvBuffer = Buffer.from(await exportResponse.arrayBuffer());
+    assert.equal(csvBuffer[0], 0xEF);
+    assert.equal(csvBuffer[1], 0xBB);
+    assert.equal(csvBuffer[2], 0xBF);
+    const csvText = csvBuffer.toString("utf8");
+    assert.match(csvText, /"Datum";"Titel";"Status";"Betrieb";"Berufsschule";"Freigabestatus \/ Signaturstatus"/);
+    assert.match(csvText, /CSV Eigenexport Test/);
+    assert.match(csvText, /Büro\nPrüfung mit Umlauten: ä ö ü ß/);
+    assert.match(csvText, /"Signiert"/);
+    assert.match(csvText, /"Nicht eingereicht"/);
+    assert.match(csvText, /""/);
+    assert.doesNotMatch(csvText, /CSV Fremder Bericht/);
+    assert.doesNotMatch(csvText, /Darf nicht exportiert werden/);
+  });
+});
+
+await test("CSV-Export ist fuer Ausbilder ueber die Azubi-Route gesperrt", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const trainerLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "trainer",
+      password: "trainer123"
+    });
+    const trainerCookie = extractCookie(trainerLogin);
+
+    const response = await fetch(`${baseUrl}/api/report/csv`, {
+      headers: { Cookie: trainerCookie }
+    });
+
+    assert.equal(response.status, 403);
   });
 });

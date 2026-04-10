@@ -324,6 +324,14 @@ export function AppProvider({ children }) {
     await refreshDashboard();
   }
 
+  async function deleteUser(userId) {
+    const data = await api(`/api/admin/users/${userId}`, {
+      method: "DELETE"
+    });
+    await refreshDashboard();
+    return data;
+  }
+
   async function previewUserImport(payload) {
     return api("/api/admin/users/import-preview", {
       method: "POST",
@@ -483,6 +491,7 @@ export function AppProvider({ children }) {
         createUser,
         assignTrainer,
         updateUser,
+        deleteUser,
         previewUserImport,
         importUsers,
         loadAuditLogs,

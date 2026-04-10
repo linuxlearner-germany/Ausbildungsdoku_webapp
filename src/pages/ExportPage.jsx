@@ -45,6 +45,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
   const [preview, setPreview] = useState(null);
   const [importPayload, setImportPayload] = useState(null);
   const [error, setError] = useState("");
+  const [csvError, setCsvError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const previewSummary = useMemo(() => preview?.summary || { totalRows: 0, validRows: 0, invalidRows: 0 }, [preview]);
@@ -98,15 +99,54 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
     }
   }
 
+  async function handleCsvExport() {
+    setBusy(true);
+    setCsvError("");
+
+    try {
+      const response = await fetch("/api/report/csv", {
+        method: "GET",
+        credentials: "same-origin"
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        const data = contentType.includes("application/json") ? await response.json() : null;
+        throw new Error(data?.error || "CSV-Export konnte nicht gestartet werden.");
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const disposition = response.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename="([^"]+)"/i);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = match?.[1] || "berichtsheft.csv";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (exportError) {
+      setCsvError(exportError.message || "CSV-Export konnte nicht gestartet werden.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="page-stack">
       <PageHeader
         kicker="Export"
         title="PDF-Export und Import"
         actions={
-          <a className="button button-primary" href="/api/report/pdf">
-            PDF herunterladen
-          </a>
+          <div className="page-actions">
+            <PrimaryButton onClick={handleCsvExport} disabled={busy}>
+              {busy ? "CSV wird erstellt..." : "CSV exportieren"}
+            </PrimaryButton>
+            <a className="button button-secondary" href="/api/report/pdf">
+              PDF herunterladen
+            </a>
+          </div>
         }
       />
       <section className="stats-grid">
@@ -119,14 +159,20 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
       <section className="reports-layout">
         <article className="panel-card">
           <PageHeader
-            kicker="PDF"
-            title="Berichtsheft als PDF"
+            kicker="Export"
+            title="Berichtsheft herunterladen"
           />
           {entries.length ? (
             <div className="export-panel">
-              <a className="button button-secondary" href="/api/report/pdf">
-                PDF herunterladen
-              </a>
+              <div className="page-actions">
+                <PrimaryButton onClick={handleCsvExport} disabled={busy}>
+                  {busy ? "CSV wird erstellt..." : "Berichtsheft als CSV herunterladen"}
+                </PrimaryButton>
+                <a className="button button-secondary" href="/api/report/pdf">
+                  PDF herunterladen
+                </a>
+              </div>
+              {csvError ? <div className="field-message error">{csvError}</div> : null}
             </div>
           ) : (
             <EmptyState title="Noch keine Berichte zum Export" />
