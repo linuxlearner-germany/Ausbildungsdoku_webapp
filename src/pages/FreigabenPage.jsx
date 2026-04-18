@@ -5,6 +5,8 @@ import { DataTable } from "../components/DataTable";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { EmptyState } from "../components/EmptyState";
 import { FilterBar } from "../components/FilterBar";
+import { downloadReportPdf } from "../lib/reportExport";
+import { apiUrl, isStaticDemo } from "../lib/runtime";
 
 function formatDate(value) {
   if (!value) return "-";
@@ -255,6 +257,28 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
     );
   }
 
+  function handlePdfExport() {
+    if (!selectedEntry) {
+      return;
+    }
+
+    const trainee = trainees.find((item) => item.id === selectedEntry.traineeId);
+    if (!trainee) {
+      return;
+    }
+
+    if (isStaticDemo()) {
+      downloadReportPdf({
+        entries: trainee.entries || [],
+        traineeName: trainee.name,
+        trainingTitle: trainee.ausbildung || ""
+      });
+      return;
+    }
+
+    window.location.href = apiUrl(`/api/report/pdf/${selectedEntry.traineeId}`);
+  }
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -421,9 +445,9 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
                 </div>
                 <div className="approval-detail-actions">
                   <StatusBadge status={selectedEntry.status} />
-                  <a className="button button-secondary" href={`/api/report/pdf/${selectedEntry.traineeId}`}>
+                  <button type="button" className="button button-secondary" onClick={handlePdfExport}>
                     PDF öffnen
-                  </a>
+                  </button>
                 </div>
               </div>
 

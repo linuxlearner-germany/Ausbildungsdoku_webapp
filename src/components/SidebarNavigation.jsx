@@ -1,5 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
+import { assetUrl } from "../lib/runtime";
 
 const items = [
   { to: "/dashboard", label: "Dashboard", roles: ["trainee", "trainer", "admin"] },
@@ -18,7 +19,7 @@ export function SidebarNavigation({ user, mobileNavOpen, onNavigate }) {
   return (
     <aside className={`sidebar${mobileNavOpen ? " is-open" : ""}`}>
       <div className="sidebar-brand">
-        <img src="/Pictures/wiweb-logo-kurz-blau_neu.png" alt="WIWEB Logo" className="sidebar-logo" />
+        <img src={assetUrl("/Pictures/wiweb-logo-kurz-blau_neu.png")} alt="WIWEB Logo" className="sidebar-logo" />
         <div>
           <p className="page-kicker">WIWEB</p>
           <strong>Berichtsheft Portal</strong>

@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { EmptyState } from "../components/EmptyState";
+import { downloadReportPdf } from "../lib/reportExport";
+import { apiUrl, isStaticDemo } from "../lib/runtime";
 
 function buildProfileForm(profile) {
   return {
@@ -207,6 +209,19 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
     setForm(buildProfileForm(selectedProfile));
   }, [selectedProfile]);
 
+  function handlePdfExport(profile, entries) {
+    if (isStaticDemo()) {
+      downloadReportPdf({
+        entries,
+        traineeName: profile?.name || "",
+        trainingTitle: profile?.ausbildung || ""
+      });
+      return;
+    }
+
+    window.location.href = profile?.id ? apiUrl(`/api/report/pdf/${profile.id}`) : apiUrl("/api/report/pdf");
+  }
+
   if (role === "trainee") {
     return (
       <div className="page-stack">
@@ -214,9 +229,9 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
           kicker="Profil"
           title="Persönliche und betriebliche Daten"
           actions={
-            <a className="button button-secondary" href="/api/report/pdf">
+            <button type="button" className="button button-secondary" onClick={() => handlePdfExport(report?.trainee, report?.entries || [])}>
               PDF exportieren
-            </a>
+            </button>
           }
         />
         <section className="panel-card">
@@ -240,9 +255,9 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
         title={role === "trainer" ? "Azubi-Stammdaten pflegen" : "Stammdaten verwalten"}
         actions={
           selectedProfile ? (
-            <a className="button button-secondary" href={`/api/report/pdf/${selectedProfile.id}`}>
+            <button type="button" className="button button-secondary" onClick={() => handlePdfExport(selectedProfile, trainees.find((target) => target.id === selectedProfile.id)?.entries || [])}>
               PDF für Auswahl
-            </a>
+            </button>
           ) : null
         }
       />

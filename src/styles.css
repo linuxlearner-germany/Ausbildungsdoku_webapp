@@ -213,7 +213,7 @@ button, input, textarea, select { font: inherit; }
   overflow: hidden;
   background:
     linear-gradient(180deg, var(--login-overlay-top), var(--login-overlay-bottom)),
-    url("/Pictures/background.png");
+    url("./Pictures/background.png");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

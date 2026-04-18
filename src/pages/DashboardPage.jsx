@@ -5,6 +5,8 @@ import { StatCard } from "../components/StatCard";
 import { EmptyState } from "../components/EmptyState";
 import { StatusBadge } from "../components/StatusBadge";
 import { calculateWeightedAverage, formatGrade } from "../lib/grades";
+import { downloadReportPdf } from "../lib/reportExport";
+import { apiUrl, isStaticDemo } from "../lib/runtime";
 
 function latestItems(entries) {
   return [...entries].sort((a, b) => String(b.dateFrom).localeCompare(String(a.dateFrom))).slice(0, 5);
@@ -21,6 +23,19 @@ function trainerSummary(trainee) {
 }
 
 export function DashboardPage({ role, report, trainees, users }) {
+  function openPdfForTrainee(trainee) {
+    if (isStaticDemo()) {
+      downloadReportPdf({
+        entries: trainee.entries || [],
+        traineeName: trainee.name,
+        trainingTitle: trainee.ausbildung || ""
+      });
+      return;
+    }
+
+    window.location.href = apiUrl(`/api/report/pdf/${trainee.id}`);
+  }
+
   if (role === "trainee") {
     const entries = report?.entries || [];
     const grades = report?.grades || [];
@@ -121,9 +136,9 @@ export function DashboardPage({ role, report, trainees, users }) {
               <Link className="quick-action-card" to="/freigaben">Freigaben bearbeiten</Link>
               <Link className="quick-action-card" to="/archiv">Archiv öffnen</Link>
               {trainees.slice(0, 2).map((trainee) => (
-                <a key={trainee.id} className="quick-action-card" href={`/api/report/pdf/${trainee.id}`}>
+                <button key={trainee.id} type="button" className="quick-action-card" onClick={() => openPdfForTrainee(trainee)}>
                   PDF: {trainee.name}
-                </a>
+                </button>
               ))}
             </div>
           </article>
@@ -141,9 +156,9 @@ export function DashboardPage({ role, report, trainees, users }) {
                         <strong>{trainee.name}</strong>
                         <p>{trainee.ausbildung || trainee.email}</p>
                       </div>
-                      <a className="button button-secondary trainer-pdf-button" href={`/api/report/pdf/${trainee.id}`}>
+                      <button type="button" className="button button-secondary trainer-pdf-button" onClick={() => openPdfForTrainee(trainee)}>
                         PDF
-                      </a>
+                      </button>
                     </div>
                     <div className="trainer-card-stats">
                       <span>Offen: {summary.submitted}</span>
