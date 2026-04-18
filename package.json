@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npm run build && node index.js",
     "build": "node scripts/build.mjs",
+    "build:github-pages": "node scripts/build-github-pages.mjs",
     "start": "npm run build && node index.js",
     "check": "node --check index.js",
     "test": "node --test --test-concurrency=1 tests/*.test.mjs"

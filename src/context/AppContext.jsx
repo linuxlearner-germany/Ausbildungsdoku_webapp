@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import { formatLocalDate, getTodayLocalDateString } from "../lib/date.mjs";
 import { applyThemeAttribute, getSystemPrefersDark, isThemePreference, readStoredThemePreference, resolveTheme, THEME_STORAGE_KEY } from "../lib/theme.mjs";
+import { StaticAppContext } from "./StaticAppContext";
 
 const AppContext = createContext(null);
 
@@ -510,5 +511,5 @@ export function AppProvider({ children }) {
 }
 
 export function useAppContext() {
-  return useContext(AppContext);
+  return useContext(AppContext) || useContext(StaticAppContext);
 }

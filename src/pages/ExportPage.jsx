@@ -4,6 +4,8 @@ import { StatCard } from "../components/StatCard";
 import { EmptyState } from "../components/EmptyState";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { StatusBadge } from "../components/StatusBadge";
+import { downloadEntriesCsv, downloadReportPdf } from "../lib/reportExport";
+import { apiUrl, assetUrl, isStaticDemo } from "../lib/runtime";
 
 function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
@@ -104,7 +106,12 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
     setCsvError("");
 
     try {
-      const response = await fetch("/api/report/csv", {
+      if (isStaticDemo()) {
+        downloadEntriesCsv(entries, report?.trainee?.name || "azubi");
+        return;
+      }
+
+      const response = await fetch(apiUrl("/api/report/csv"), {
         method: "GET",
         credentials: "same-origin"
       });
@@ -143,9 +150,24 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
             <PrimaryButton onClick={handleCsvExport} disabled={busy}>
               {busy ? "CSV wird erstellt..." : "CSV exportieren"}
             </PrimaryButton>
-            <a className="button button-secondary" href="/api/report/pdf">
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={() => {
+                if (isStaticDemo()) {
+                  downloadReportPdf({
+                    entries,
+                    traineeName: report?.trainee?.name || "",
+                    trainingTitle: report?.trainee?.ausbildung || ""
+                  });
+                  return;
+                }
+
+                window.location.href = apiUrl("/api/report/pdf");
+              }}
+            >
               PDF herunterladen
-            </a>
+            </button>
           </div>
         }
       />
@@ -168,9 +190,24 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
                 <PrimaryButton onClick={handleCsvExport} disabled={busy}>
                   {busy ? "CSV wird erstellt..." : "Berichtsheft als CSV herunterladen"}
                 </PrimaryButton>
-                <a className="button button-secondary" href="/api/report/pdf">
+                <button
+                  type="button"
+                  className="button button-secondary"
+                  onClick={() => {
+                    if (isStaticDemo()) {
+                      downloadReportPdf({
+                        entries,
+                        traineeName: report?.trainee?.name || "",
+                        trainingTitle: report?.trainee?.ausbildung || ""
+                      });
+                      return;
+                    }
+
+                    window.location.href = apiUrl("/api/report/pdf");
+                  }}
+                >
                   PDF herunterladen
-                </a>
+                </button>
               </div>
               {csvError ? <div className="field-message error">{csvError}</div> : null}
             </div>
@@ -199,7 +236,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
               />
             </label>
             <div className="page-actions">
-              <a className="button button-secondary" href="/report-import-template.csv" download>
+              <a className="button button-secondary" href={assetUrl("/report-import-template.csv")} download>
                 Vorlage herunterladen
               </a>
               <PrimaryButton onClick={handlePreview} disabled={busy}>

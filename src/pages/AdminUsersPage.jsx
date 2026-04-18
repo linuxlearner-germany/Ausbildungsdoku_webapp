@@ -3,6 +3,8 @@ import { PageHeader } from "../components/PageHeader";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { EmptyState } from "../components/EmptyState";
 import { StatusBadge } from "../components/StatusBadge";
+import { downloadUsersCsv } from "../lib/reportExport";
+import { apiUrl, assetUrl, isStaticDemo } from "../lib/runtime";
 
 function buildUserForm(user = null) {
   return {
@@ -282,7 +284,7 @@ function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
           />
         </label>
         <div className="page-actions">
-          <a className="button button-secondary" href="/benutzer_import_vorlage.csv" download>
+          <a className="button button-secondary" href={assetUrl("/benutzer_import_vorlage.csv")} download>
             Beispiel-CSV herunterladen
           </a>
           <PrimaryButton onClick={handlePreview} disabled={busy}>
@@ -667,7 +669,12 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
     setCsvError("");
 
     try {
-      const response = await fetch("/api/admin/users/export.csv", {
+      if (isStaticDemo()) {
+        downloadUsersCsv(users);
+        return;
+      }
+
+      const response = await fetch(apiUrl("/api/admin/users/export.csv"), {
         method: "GET",
         credentials: "same-origin"
       });

@@ -3,8 +3,23 @@ import { PageHeader } from "../components/PageHeader";
 import { DataTable } from "../components/DataTable";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
+import { downloadReportPdf } from "../lib/reportExport";
+import { apiUrl, isStaticDemo } from "../lib/runtime";
 
 export function ArchivPage({ role, report, trainees }) {
+  function exportPdf(trainee) {
+    if (isStaticDemo()) {
+      downloadReportPdf({
+        entries: trainee.entries || [],
+        traineeName: trainee.name,
+        trainingTitle: trainee.ausbildung || ""
+      });
+      return;
+    }
+
+    window.location.href = apiUrl(`/api/report/pdf/${trainee.id}`);
+  }
+
   const rows =
     role === "trainee"
       ? (report?.entries || []).filter((entry) => entry.status === "signed")
@@ -19,15 +34,26 @@ export function ArchivPage({ role, report, trainees }) {
         title="Freigegebene Berichte und PDF-Archiv"
         actions={
           role === "trainee" ? (
-            <a className="button button-primary" href="/api/report/pdf">
+            <button type="button" className="button button-primary" onClick={() => {
+              if (isStaticDemo()) {
+                downloadReportPdf({
+                  entries: report?.entries || [],
+                  traineeName: report?.trainee?.name || "",
+                  trainingTitle: report?.trainee?.ausbildung || ""
+                });
+                return;
+              }
+
+              window.location.href = apiUrl("/api/report/pdf");
+            }}>
               Gesamtes PDF laden
-            </a>
+            </button>
           ) : trainees.length ? (
             <div className="page-actions">
               {trainees.slice(0, 2).map((trainee) => (
-                <a key={trainee.id} className="button button-primary" href={`/api/report/pdf/${trainee.id}`}>
+                <button key={trainee.id} type="button" className="button button-primary" onClick={() => exportPdf(trainee)}>
                   PDF {trainee.name}
-                </a>
+                </button>
               ))}
             </div>
           ) : null
@@ -47,9 +73,13 @@ export function ArchivPage({ role, report, trainees }) {
                   <span>{row.dateFrom || "-"}</span>
                   <small>Freigabe durch: {row.signerName || "-"}</small>
                   {role === "trainee" ? null : (
-                    <a className="button button-secondary archive-pdf-button" href={`/api/report/pdf/${row.traineeId}`}>
+                    <button
+                      type="button"
+                      className="button button-secondary archive-pdf-button"
+                      onClick={() => exportPdf(trainees.find((trainee) => trainee.id === row.traineeId))}
+                    >
                       PDF öffnen
-                    </a>
+                    </button>
                   )}
                 </div>
               </article>
