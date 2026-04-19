@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { formatLocalDate, getTodayLocalDateString } from "../lib/date.mjs";
 import { applyThemeAttribute, getSystemPrefersDark, isThemePreference, readStoredThemePreference, resolveTheme, THEME_STORAGE_KEY } from "../lib/theme.mjs";
 import { createSeedStore } from "../lib/staticData";
+import { AdminContext, AuthContext, ReportContext } from "./sharedContexts";
 
 const STORAGE_KEY = "berichtsheft.github-pages.store.v1";
 export const StaticAppContext = createContext(null);
@@ -1043,6 +1044,48 @@ export function StaticAppProvider({ children }) {
     return saveThemePreference(nextPreference);
   }
 
+  const authValue = {
+    session: { user: sanitizeUser(currentUser), ready: true },
+    busy,
+    login,
+    logout,
+    changeOwnPassword
+  };
+
+  const reportValue = {
+    dashboard,
+    grades,
+    refreshDashboard,
+    refreshGrades,
+    getTraineeReport,
+    saveTraineeReport,
+    saveEntry,
+    deleteEntry,
+    submitEntry,
+    submitEntries,
+    previewReportImport,
+    importReports,
+    createOrFocusEntry,
+    signEntry,
+    rejectEntry,
+    processTrainerEntries,
+    saveTrainerComment,
+    saveGrade,
+    deleteGrade
+  };
+
+  const adminValue = {
+    dashboard,
+    createUser,
+    assignTrainer,
+    updateUser,
+    deleteUser,
+    previewUserImport,
+    importUsers,
+    loadAuditLogs,
+    updateManagedProfile
+  };
+
   return (
     <StaticAppContext.Provider
       value={{
@@ -1086,7 +1129,13 @@ export function StaticAppProvider({ children }) {
         toggleTheme
       }}
     >
-      {children}
+      <AuthContext.Provider value={authValue}>
+        <ReportContext.Provider value={reportValue}>
+          <AdminContext.Provider value={adminValue}>
+            {children}
+          </AdminContext.Provider>
+        </ReportContext.Provider>
+      </AuthContext.Provider>
     </StaticAppContext.Provider>
   );
 }

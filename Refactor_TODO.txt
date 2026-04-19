@@ -1,0 +1,248 @@
+# AUSBILDUNGSDOKU WEBAPP – FEHLERANALYSE & CODEX PROMPT
+
+## PROJEKTSTATUS
+
+Das Projekt ist funktional stark, aber strukturell gewachsen ("gevibecodet").
+Ziel: Stabilisierung, Strukturierung, Wartbarkeit erhöhen.
+
+---
+
+1. KRITISCHE ARCHITEKTUR-FEHLER
+
+---
+
+[1.1] MONOLITHISCHE BACKEND-DATEI
+
+* Problem: index.js enthält ALLES (Routing, Logik, DB, Security, Import/Export)
+* Risiko: schwer wartbar, kaum testbar, hohe Fehleranfälligkeit
+* Ziel:
+  -> Aufsplitten in:
+
+  * routes/
+  * services/
+  * repositories (db layer)
+  * middleware/
+  * utils/
+
+[1.2] KEINE SAUBERE LAYER-TRENNUNG
+
+* Problem: Business-Logik + HTTP + DB gemischt
+* Risiko: Änderungen brechen mehrere Bereiche gleichzeitig
+* Ziel:
+  -> Controller → Service → Repository Pattern
+
+[1.3] FEHLENDE MODULARISIERUNG
+
+* Problem: Features nicht gekapselt (Reports, Users, Auth, Grades)
+* Ziel:
+  -> Feature-basierte Struktur (z. B. modules/report, modules/user)
+
+---
+
+2. BACKEND-PROBLEME
+
+---
+
+[2.1] SESSION HANDLING (SKALIERUNG)
+
+* express-session ohne externen Store
+* Risiko: nicht skalierbar (MemoryStore)
+* Fix:
+  -> Redis / SQLite Session Store
+
+[2.2] VALIDIERUNG FEHLT / IST VERTEILT
+
+* Input-Validation uneinheitlich
+* Risiko: inkonsistente Daten
+* Fix:
+  -> zentrale Validation (zod / joi)
+
+[2.3] ERROR HANDLING NICHT ZENTRAL
+
+* Errors werden verstreut geworfen
+* Fix:
+  -> global error middleware
+
+[2.4] KEINE SAUBERE API-SCHICHT
+
+* api.js Frontend ist minimalistisch
+* Kein Retry / kein Auth-Handling zentral
+* Fix:
+  -> API Client erweitern (Interceptor Pattern)
+
+---
+
+3. FRONTEND-PROBLEME
+
+---
+
+[3.1] APP CONTEXT ZU GROSS
+
+* AppContext enthält zu viele Verantwortlichkeiten
+* Risiko: schwer wartbar, Re-Renders
+* Fix:
+  -> mehrere Contexts:
+
+  * AuthContext
+  * ReportContext
+  * AdminContext
+
+[3.2] BUSINESS LOGIK IM FRONTEND
+
+* Logik teilweise im Context statt Backend
+* Ziel:
+  -> Backend als Single Source of Truth
+
+[3.3] KEIN STATE MANAGEMENT KONZEPT
+
+* Alles in Context
+* Skalierungsproblem
+* Optional:
+  -> Zustand / Redux Toolkit
+
+---
+
+4. TESTING / QUALITÄT
+
+---
+
+[4.1] TESTS UNKLAR / KAUM VORHANDEN
+
+* Risiko: Refactor gefährlich
+* Fix:
+  -> Unit Tests für:
+
+  * Auth
+  * Report Status
+  * Admin Actions
+
+[4.2] KEIN CI/CD
+
+* Fix:
+  -> GitHub Actions:
+
+  * lint
+  * test
+  * build
+
+---
+
+5. SICHERHEIT (TEILWEISE GUT, ABER ERWEITERBAR)
+
+---
+
+Bereits gut:
+
+* bcrypt
+* rate limiting
+* security headers
+
+Fehlt:
+
+* CSRF Schutz
+* Input Sanitization
+* Audit Logs erweitern
+
+---
+
+6. CODEX PROMPT (WICHTIG)
+
+---
+
+Use this EXACT prompt in Codex:
+
+---
+
+You are a senior fullstack engineer.
+
+Refactor the existing Node.js + Express + React application with the following goals:
+
+1. Split the backend monolith (index.js) into a clean architecture:
+
+   * routes/
+   * controllers/
+   * services/
+   * repositories/
+   * middleware/
+
+2. Introduce clear separation of concerns:
+
+   * Controllers: HTTP handling only
+   * Services: business logic
+   * Repositories: database access
+
+3. Do NOT change existing functionality.
+
+4. Improve:
+
+   * error handling (central middleware)
+   * input validation (use zod)
+   * session handling (prepare for external store)
+
+5. Refactor frontend:
+
+   * Split AppContext into smaller contexts
+   * Keep API contract unchanged
+
+6. Keep code simple and readable.
+
+7. Add comments where structure changes.
+
+Output:
+
+* New folder structure
+* Refactored example files (at least: auth, reports)
+* Migration steps
+
+---
+
+7. PRIORITÄTEN (REIHENFOLGE)
+
+---
+
+1. Backend aufteilen
+2. Error Handling zentralisieren
+3. Validation einbauen
+4. Frontend Context splitten
+5. Tests hinzufügen
+
+---
+
+8. DEPLOYMENT / LOGIN PROBLEM (WICHTIG)
+
+---
+
+[8.1] LOGIN FUNKTIONIERT NICHT AUF GITHUB PAGES
+
+* Problem:
+  -> Die GitHub Pages Version ist nur ein statisches Frontend
+  -> Es gibt KEIN Backend (Node.js Server)
+  -> API Calls (z. B. /api/login) laufen ins Leere
+
+* Symptom:
+  -> Login immer "Anmeldung fehlgeschlagen"
+  -> auch mit Demo-Usern (admin, trainer, azubi)
+
+* Ursache:
+  -> Backend fehlt komplett (kein Express Server aktiv)
+  -> GitHub Pages unterstützt kein Node.js Backend
+
+* Fix (Optionen):
+
+  OPTION 1 (empfohlen):
+  -> Backend deployen (z. B. Render, Railway, VPS)
+  -> Frontend auf diese API zeigen lassen
+
+  OPTION 2:
+  -> Mock API für Demo bauen (nur UI Demo)
+
+  OPTION 3:
+  -> Fullstack Deployment:
+     - Frontend: GitHub Pages / Vercel
+     - Backend: Render / Railway
+     - DB: SQLite / PostgreSQL
+
+* Zusätzlich nötig:
+  -> API Base URL konfigurierbar machen (env)
+
+## ENDE

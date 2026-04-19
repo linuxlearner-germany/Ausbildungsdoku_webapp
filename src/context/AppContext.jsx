@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import { formatLocalDate, getTodayLocalDateString } from "../lib/date.mjs";
 import { applyThemeAttribute, getSystemPrefersDark, isThemePreference, readStoredThemePreference, resolveTheme, THEME_STORAGE_KEY } from "../lib/theme.mjs";
 import { StaticAppContext } from "./StaticAppContext";
+import { AdminContext, AuthContext, ReportContext } from "./sharedContexts";
 
 const AppContext = createContext(null);
 
@@ -462,6 +463,48 @@ export function AppProvider({ children }) {
     return saveThemePreference(nextPreference);
   }
 
+  const authValue = {
+    session,
+    busy,
+    login,
+    logout,
+    changeOwnPassword
+  };
+
+  const reportValue = {
+    dashboard,
+    grades,
+    refreshDashboard,
+    refreshGrades,
+    getTraineeReport,
+    saveTraineeReport,
+    saveEntry,
+    deleteEntry,
+    submitEntry,
+    submitEntries,
+    previewReportImport,
+    importReports,
+    createOrFocusEntry,
+    signEntry,
+    rejectEntry,
+    processTrainerEntries,
+    saveTrainerComment,
+    saveGrade,
+    deleteGrade
+  };
+
+  const adminValue = {
+    dashboard,
+    createUser,
+    assignTrainer,
+    updateUser,
+    deleteUser,
+    previewUserImport,
+    importUsers,
+    loadAuditLogs,
+    updateManagedProfile
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -505,11 +548,29 @@ export function AppProvider({ children }) {
         toggleTheme
       }}
     >
-      {children}
+      <AuthContext.Provider value={authValue}>
+        <ReportContext.Provider value={reportValue}>
+          <AdminContext.Provider value={adminValue}>
+            {children}
+          </AdminContext.Provider>
+        </ReportContext.Provider>
+      </AuthContext.Provider>
     </AppContext.Provider>
   );
 }
 
 export function useAppContext() {
   return useContext(AppContext) || useContext(StaticAppContext);
+}
+
+export function useAuthContext() {
+  return useContext(AuthContext) || useContext(StaticAppContext);
+}
+
+export function useReportContext() {
+  return useContext(ReportContext) || useContext(StaticAppContext);
+}
+
+export function useAdminContext() {
+  return useContext(AdminContext) || useContext(StaticAppContext);
 }
