@@ -8,6 +8,18 @@ const Database = require("better-sqlite3");
 const PDFDocument = require("pdfkit");
 const XLSX = require("xlsx");
 const crypto = require("crypto");
+const { createAuthMiddleware } = require("./middleware/auth");
+const { createErrorHandler } = require("./middleware/error-handler");
+const authSchemas = require("./validation/auth");
+const reportSchemas = require("./validation/report");
+const { createAuthRepository } = require("./repositories/auth-repository");
+const { createReportRepository } = require("./repositories/report-repository");
+const { createAuthService } = require("./services/auth-service");
+const { createReportService } = require("./services/report-service");
+const { createAuthController } = require("./controllers/auth-controller");
+const { createReportController } = require("./controllers/report-controller");
+const { createAuthRoutes } = require("./routes/auth-routes");
+const { createReportRoutes } = require("./routes/report-routes");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -1213,28 +1225,30 @@ function getCurrentUser(req) {
   return user;
 }
 
-function requireAuth(req, res, next) {
-  const user = getCurrentUser(req);
+function getCurrentUserById(userId) {
+  const user = db.prepare(`
+    SELECT id, name, username, email, role, ausbildung, betrieb, berufsschule,
+           theme_preference AS themePreference
+    FROM users
+    WHERE id = ?
+  `).get(userId);
+
   if (!user) {
-    return res.status(401).json({ error: "Nicht eingeloggt." });
+    return null;
   }
-  req.user = user;
-  next();
+
+  if (user.role === "trainee") {
+    user.trainerIds = getTrainerIdsForTrainee(user.id);
+  }
+
+  if (user.role === "trainer") {
+    user.traineeIds = getTraineeIdsForTrainer(user.id);
+  }
+
+  return user;
 }
 
-function requireRole(...roles) {
-  return (req, res, next) => {
-    const user = getCurrentUser(req);
-    if (!user) {
-      return res.status(401).json({ error: "Nicht eingeloggt." });
-    }
-    if (!roles.includes(user.role)) {
-      return res.status(403).json({ error: "Keine Berechtigung." });
-    }
-    req.user = user;
-    next();
-  };
-}
+const { requireAuth, requireRole } = createAuthMiddleware({ getCurrentUser });
 
 function listEntriesForTrainee(traineeId) {
   return db.prepare(`
@@ -2963,45 +2977,69 @@ function renderGradesPdf(res, trainee, grades) {
   doc.end();
 }
 
-app.get("/api/session", (req, res) => {
-  const user = getCurrentUser(req);
-  res.json({ user });
+const authRepository = createAuthRepository({
+  db,
+  getCurrentUser,
+  normalizeThemePreference
 });
+
+const reportRepository = createReportRepository({
+  db,
+  listEntriesForTrainee,
+  findEntryById,
+  findEntryWithOwnerById,
+  findTraineeById
+});
+
+const authService = createAuthService({
+  authRepository,
+  helpers: {
+    isLoginRateLimited,
+    recordLoginFailure,
+    clearLoginFailures,
+    clearLoginFailuresForKey,
+    normalizeThemePreference,
+    hashPassword,
+    getClientIp
+  }
+});
+
+const reportService = createReportService({
+  reportRepository,
+  helpers: {
+    getFreshUser: getCurrentUserById,
+    getTraineeDashboard,
+    upsertTraineeEntries,
+    createDraftEntry,
+    updateTraineeEntry,
+    buildImportPreview,
+    submitReportEntryForTrainee,
+    signReportEntryForActor,
+    rejectReportEntryForActor,
+    buildBatchResult,
+    isTrainerAssignedToTrainee,
+    writeAuditLog,
+    renderPdf,
+    buildEntriesCsv
+  }
+});
+
+const authController = createAuthController({
+  authService,
+  schemas: authSchemas
+});
+
+const reportController = createReportController({
+  reportService,
+  schemas: reportSchemas
+});
+
+// Auth and report are the first modules extracted from the legacy monolith.
+app.use("/api", createAuthRoutes({ authController, requireAuth }));
+app.use("/api", createReportRoutes({ reportController, requireRole }));
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, status: "healthy" });
-});
-
-app.post("/api/login", (req, res) => {
-  if (isLoginRateLimited(req)) {
-    return res.status(429).json({ error: "Zu viele Login-Versuche. Bitte spaeter erneut versuchen." });
-  }
-
-  const identifier = String(req.body?.identifier || req.body?.email || "").trim().toLowerCase();
-  const password = String(req.body?.password || "");
-  const user = db.prepare("SELECT * FROM users WHERE email = ? OR username = ?").get(identifier, identifier);
-
-  if (!user || !bcrypt.compareSync(password, user.password_hash)) {
-    recordLoginFailure(req);
-    return res.status(401).json({ error: "E-Mail oder Passwort ist falsch." });
-  }
-
-  clearLoginFailures(req);
-  req.session.userId = user.id;
-  const { theme_preference, ...safeUser } = user;
-  res.json({
-    ok: true,
-    user: withoutPassword({
-      ...safeUser,
-      themePreference: normalizeThemePreference(theme_preference)
-    })
-  });
-});
-
-app.post("/api/logout", (req, res) => {
-  req.session.destroy(() => {
-    res.json({ ok: true });
-  });
 });
 
 app.get("/api/dashboard", requireAuth, (req, res) => {
@@ -3016,102 +3054,6 @@ app.get("/api/dashboard", requireAuth, (req, res) => {
   res.json({ role: "admin", users: listUsersWithRelations(), educations: listEducations() });
 });
 
-app.post("/api/preferences/theme", requireAuth, (req, res) => {
-  const result = validateThemePreferencePayload(req.body || {});
-  db.prepare("UPDATE users SET theme_preference = ? WHERE id = ?").run(result.data.themePreference, req.user.id);
-  res.json({ ok: true, themePreference: result.data.themePreference });
-});
-
-app.post("/api/profile/password", requireAuth, handleOwnPasswordChange);
-app.post("/api/profile/:userId/password", requireAuth, handleOwnPasswordChange);
-
-app.post("/api/report", requireRole("trainee"), (req, res) => {
-  const result = upsertTraineeEntries(req.user, req.body || {});
-  if (result?.error) {
-    return res.status(result.status || 400).json({ error: result.error, code: result.code || "REPORT_UPDATE_FAILED" });
-  }
-  res.json({ ok: true, data: getTraineeDashboard(getCurrentUser(req)) });
-});
-
-app.post("/api/report/draft", requireRole("trainee"), (req, res) => {
-  const result = createDraftEntry(req.user, req.body || {});
-  if (result?.error) {
-    return res.status(result.status || 400).json({ error: result.error, code: result.code || "REPORT_CREATE_FAILED" });
-  }
-  res.json({
-    ok: true,
-    created: Boolean(result.created),
-    entry: result.entry,
-    data: getTraineeDashboard(getCurrentUser(req))
-  });
-});
-
-app.post("/api/report/entry/:entryId", requireRole("trainee"), (req, res) => {
-  const entryId = String(req.params.entryId || "");
-  const result = updateTraineeEntry(req.user, entryId, req.body || {});
-  if (result?.error) {
-    return res.status(result.status || 400).json({ error: result.error, code: result.code || "REPORT_ENTRY_UPDATE_FAILED" });
-  }
-  res.json({
-    ok: true,
-    entry: result.entry,
-    data: getTraineeDashboard(getCurrentUser(req))
-  });
-});
-
-app.post("/api/report/import-preview", requireRole("trainee"), (req, res) => {
-  const preview = buildImportPreview(req.user, req.body || {});
-  if (preview.error) {
-    return res.status(400).json({ error: preview.error });
-  }
-  res.json(preview);
-});
-
-app.post("/api/report/import", requireRole("trainee"), (req, res) => {
-  const preview = buildImportPreview(req.user, req.body || {});
-  if (preview.error) {
-    return res.status(400).json({ error: preview.error });
-  }
-
-  const rowsToImport = preview.rows.filter((row) => row.canImport);
-  if (!rowsToImport.length) {
-    return res.status(400).json({ error: "Keine gueltigen Zeilen zum Import vorhanden." });
-  }
-
-  const insertEntry = db.prepare(`
-    INSERT INTO entries (
-      id, trainee_id, weekLabel, dateFrom, dateTo, betrieb, schule, themen, reflection,
-      status, signedAt, signerName, trainerComment, rejectionReason, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', 'submitted', NULL, '', '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-  `);
-
-  const transaction = db.transaction(() => {
-    for (const row of rowsToImport) {
-      insertEntry.run(
-        `import-${Date.now()}-${Math.random()}`,
-        req.user.id,
-        row.weekLabel,
-        row.dateFrom,
-        row.dateFrom,
-        row.betrieb,
-        row.schule
-      );
-    }
-  });
-
-  try {
-    transaction();
-  } catch (error) {
-    return res.status(400).json({ error: "Import konnte nicht gespeichert werden. Bitte Vorschau erneut laden und doppelte Tage pruefen." });
-  }
-
-  res.json({
-    ok: true,
-    importedCount: rowsToImport.length,
-    skippedCount: preview.rows.length - rowsToImport.length,
-    entries: listEntriesForTrainee(req.user.id)
-  });
-});
 
 app.post("/api/profile/:userId", requireRole("trainer", "admin"), (req, res) => {
   const userId = Number(req.params.userId);
@@ -3181,159 +3123,6 @@ app.post("/api/profile/:userId", requireRole("trainer", "admin"), (req, res) => 
   }
 
   res.json({ ok: true });
-});
-
-app.delete("/api/report/:entryId", requireRole("trainee"), (req, res) => {
-  const entryId = String(req.params.entryId || "");
-  const existing = db.prepare(`
-    SELECT id, status
-    FROM entries
-    WHERE id = ? AND trainee_id = ?
-  `).get(entryId, req.user.id);
-
-  if (!existing) {
-    return res.status(404).json({ error: "Eintrag nicht gefunden." });
-  }
-
-  if (existing.status !== "draft") {
-    return res.status(400).json({ error: "Nur Entwuerfe koennen geloescht werden." });
-  }
-
-  db.prepare("DELETE FROM entries WHERE id = ? AND trainee_id = ? AND status = 'draft'").run(entryId, req.user.id);
-  res.json({ ok: true, entries: listEntriesForTrainee(req.user.id) });
-});
-
-app.post("/api/report/submit", requireRole("trainee"), (req, res) => {
-  const entryId = String(req.body?.entryId || "");
-  const result = submitReportEntryForTrainee(req.user, entryId);
-  if (result?.error) {
-    return res.status(result.error === "Eintrag nicht gefunden." ? 404 : 400).json({ error: result.error });
-  }
-
-  res.json({ ok: true, entries: listEntriesForTrainee(req.user.id) });
-});
-
-app.post("/api/report/submit-batch", requireRole("trainee"), (req, res) => {
-  const entryIds = normalizeEntryIdList(req.body?.entryIds);
-  if (!entryIds.length) {
-    return res.status(400).json({ error: "Keine Einträge ausgewählt." });
-  }
-
-  const batch = buildBatchResult(entryIds, (entryId) => submitReportEntryForTrainee(req.user, entryId));
-  if (!batch.processedCount) {
-    return res.status(400).json({
-      error: batch.failed[0]?.error || "Keine Einträge konnten eingereicht werden.",
-      failed: batch.failed
-    });
-  }
-
-  res.json({
-    ok: batch.failed.length === 0,
-    processedCount: batch.processedCount,
-    failed: batch.failed,
-    entries: listEntriesForTrainee(req.user.id)
-  });
-});
-
-app.post("/api/trainer/sign", requireRole("trainer", "admin"), (req, res) => {
-  const entryId = String(req.body?.entryId || "");
-  const trainerComment = String(req.body?.trainerComment || "").trim();
-  const result = signReportEntryForActor(req.user, entryId, trainerComment);
-  if (result?.error) {
-    return res.status(result.error === "Eintrag nicht gefunden." ? 404 : result.error.includes("gehört nicht zu dir") ? 403 : 400).json({ error: result.error });
-  }
-
-  res.json({ ok: true });
-});
-
-app.post("/api/trainer/comment", requireRole("trainer", "admin"), (req, res) => {
-  const entryId = String(req.body?.entryId || "");
-  const comment = String(req.body?.comment || "").trim();
-  if (!comment) {
-    return res.status(400).json({ error: "Kommentar fehlt." });
-  }
-
-  const entry = db.prepare(`
-    SELECT entries.id, entries.status, entries.trainee_id
-    FROM entries
-    WHERE entries.id = ?
-  `).get(entryId);
-
-  if (!entry) {
-    return res.status(404).json({ error: "Eintrag nicht gefunden." });
-  }
-
-  if (req.user.role === "trainer" && !isTrainerAssignedToTrainee(req.user.id, entry.trainee_id)) {
-    return res.status(403).json({ error: "Eintrag gehoert nicht zu dir." });
-  }
-
-  if (entry.status === "signed") {
-    return res.status(400).json({ error: "Signierte Eintraege koennen nicht kommentiert werden." });
-  }
-
-  db.prepare(`
-    UPDATE entries
-    SET status = 'rejected', trainerComment = ?, rejectionReason = ?, signedAt = NULL, signerName = '', updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND status != 'signed'
-  `).run(comment, comment, entryId);
-
-  writeAuditLog({
-    actor: req.user,
-    actionType: "REPORT_RETURNED",
-    entityType: "report_entry",
-    entityId: entryId,
-    targetUserId: entry.trainee_id,
-    summary: `Bericht wurde mit Kommentar zurueckgegeben.`,
-    metadata: {
-      reason: comment
-    }
-  });
-
-  res.json({ ok: true });
-});
-
-app.post("/api/trainer/reject", requireRole("trainer", "admin"), (req, res) => {
-  const entryId = String(req.body?.entryId || "");
-  const reason = String(req.body?.reason || "").trim();
-  const result = rejectReportEntryForActor(req.user, entryId, reason);
-  if (result?.error) {
-    return res.status(result.error === "Eintrag nicht gefunden." ? 404 : result.error.includes("gehört nicht zu dir") ? 403 : 400).json({ error: result.error });
-  }
-
-  res.json({ ok: true });
-});
-
-app.post("/api/trainer/batch", requireRole("trainer", "admin"), (req, res) => {
-  const action = String(req.body?.action || "").trim();
-  const entryIds = normalizeEntryIdList(req.body?.entryIds);
-  const trainerComment = String(req.body?.trainerComment || "").trim();
-  const reason = String(req.body?.reason || "").trim();
-
-  if (!entryIds.length) {
-    return res.status(400).json({ error: "Keine Einträge ausgewählt." });
-  }
-
-  let batch;
-  if (action === "sign") {
-    batch = buildBatchResult(entryIds, (entryId) => signReportEntryForActor(req.user, entryId, trainerComment));
-  } else if (action === "reject") {
-    batch = buildBatchResult(entryIds, (entryId) => rejectReportEntryForActor(req.user, entryId, reason));
-  } else {
-    return res.status(400).json({ error: "Ungültige Sammelaktion." });
-  }
-
-  if (!batch.processedCount) {
-    return res.status(400).json({
-      error: batch.failed[0]?.error || "Keine Einträge konnten verarbeitet werden.",
-      failed: batch.failed
-    });
-  }
-
-  res.json({
-    ok: batch.failed.length === 0,
-    processedCount: batch.processedCount,
-    failed: batch.failed
-  });
 });
 
 app.post("/api/admin/users", requireRole("admin"), (req, res) => {
@@ -3746,56 +3535,11 @@ app.get("/api/grades/pdf", requireRole("trainee", "trainer", "admin"), (req, res
   renderGradesPdf(res, access.trainee, listGradesForTrainee(access.trainee.id));
 });
 
-function handlePdfRequest(req, res) {
-  const requestedId = req.params.traineeId ? Number(req.params.traineeId) : req.user.id;
-  let traineeId = requestedId;
-
-  if (req.user.role === "trainee") {
-    traineeId = req.user.id;
-  }
-
-  const trainee = db.prepare(`
-    SELECT id, name, username, email, ausbildung, betrieb, berufsschule
-    FROM users
-    WHERE id = ? AND role = 'trainee'
-  `).get(traineeId);
-
-  if (!trainee) {
-    return res.status(404).json({ error: "Azubi nicht gefunden." });
-  }
-
-  if (req.user.role === "trainer" && !isTrainerAssignedToTrainee(req.user.id, trainee.id)) {
-    return res.status(403).json({ error: "Keine Berechtigung fuer dieses Berichtsheft." });
-  }
-
-  renderPdf(res, trainee, listEntriesForTrainee(trainee.id));
-}
-
-function handleOwnCsvExport(req, res) {
-  const trainee = findTraineeById(req.user.id);
-  if (!trainee) {
-    return res.status(404).json({ error: "Azubi nicht gefunden." });
-  }
-
-  const csv = buildEntriesCsv(listEntriesForTrainee(req.user.id));
-  const safeName = String(trainee.name || "azubi")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "") || "azubi";
-
-  res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="berichtsheft-${safeName}.csv"`);
-  res.send(csv);
-}
-
-app.get("/api/report/pdf", requireRole("trainee", "trainer", "admin"), handlePdfRequest);
-app.get("/api/report/pdf/:traineeId", requireRole("trainee", "trainer", "admin"), handlePdfRequest);
-app.get("/api/report/csv", requireRole("trainee"), handleOwnCsvExport);
-
 app.get(/^\/(?!api(?:\/|$)|Pictures(?:\/|$)).*/, (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
+
+app.use(createErrorHandler());
 
 if (require.main === module) {
   app.listen(port, () => {

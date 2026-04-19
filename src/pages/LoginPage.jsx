@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { useAppContext } from "../context/AppContext";
+import { useAuthContext } from "../context/AppContext";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { assetUrl, isStaticDemo } from "../lib/runtime";
 
 export function LoginPage() {
-  const { login, busy } = useAppContext();
+  const { login, busy } = useAuthContext();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
