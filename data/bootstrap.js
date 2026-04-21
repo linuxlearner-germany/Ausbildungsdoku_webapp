@@ -5,6 +5,10 @@ function createBootstrap({
   legacyFile,
   db,
   enableDemoData,
+  isProduction,
+  initialAdminUsername,
+  initialAdminEmail,
+  initialAdminPassword,
   hashPassword,
   normalizeUsername,
   normalizeEntry,
@@ -279,6 +283,37 @@ function createBootstrap({
     );
   }
 
+  function ensureInitialAdmin() {
+    const userCount = db.prepare("SELECT COUNT(*) AS count FROM users").get().count;
+    if (userCount > 0) {
+      return null;
+    }
+
+    if (isProduction && !initialAdminPassword) {
+      throw new Error("Leere Datenbank ohne INITIAL_ADMIN_PASSWORD ist in Produktion nicht erlaubt.");
+    }
+
+    const username = normalizeUsername(initialAdminUsername) || "admin";
+    const email = String(initialAdminEmail || "admin@example.com").trim().toLowerCase() || "admin@example.com";
+    const password = String(initialAdminPassword || "admin123");
+
+    db.prepare(`
+      INSERT INTO users (name, username, email, password_hash, role, ausbildung, betrieb, berufsschule, trainer_id)
+      VALUES (?, ?, ?, ?, 'admin', '', '', '', NULL)
+    `).run(
+      "Administrator",
+      username,
+      email,
+      hashPassword(password)
+    );
+
+    return {
+      username,
+      email,
+      password
+    };
+  }
+
   function migrateLegacyJson() {
     if (!fs.existsSync(legacyFile)) {
       return;
@@ -410,11 +445,16 @@ function createBootstrap({
     ensureDemoData();
     syncEducationsFromUsers();
     migrateTrainerAssignments();
+    const initialAdmin = ensureInitialAdmin();
 
     const defaultTrainee = db.prepare("SELECT id FROM users WHERE role = 'trainee' ORDER BY id ASC LIMIT 1").get();
     if (defaultTrainee) {
       db.prepare("UPDATE entries SET trainee_id = ? WHERE trainee_id IS NULL").run(defaultTrainee.id);
     }
+
+    return {
+      initialAdmin
+    };
   }
 
   return {

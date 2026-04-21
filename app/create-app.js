@@ -13,11 +13,15 @@ function createApp({ config, db, dependencies }) {
     legacyFile: config.legacyFile,
     db,
     enableDemoData: config.enableDemoData,
+    isProduction: config.isProduction,
+    initialAdminUsername: config.initialAdminUsername,
+    initialAdminEmail: config.initialAdminEmail,
+    initialAdminPassword: config.initialAdminPassword,
     ...dependencies.bootstrapHelpers
   });
 
   bootstrap.ensureStorage();
-  bootstrap.run();
+  const bootstrapResult = bootstrap.run();
 
   registerCoreMiddleware(app, {
     config,
@@ -49,6 +53,7 @@ function createApp({ config, db, dependencies }) {
   });
 
   app.use(createErrorHandler());
+  app.locals.bootstrap = bootstrapResult;
   return app;
 }
 

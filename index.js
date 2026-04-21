@@ -50,6 +50,11 @@ if (require.main === module) {
     if (config.enableDemoData) {
       console.log("Demo-Logins: azubi@example.com / azubi123 | trainer@example.com / trainer123 | admin@example.com / admin123");
     }
+    if (app.locals.bootstrap?.initialAdmin) {
+      console.log(
+        `Initialer Admin angelegt: ${app.locals.bootstrap.initialAdmin.username} / ${app.locals.bootstrap.initialAdmin.password}`
+      );
+    }
   })().catch((error) => {
     console.error(error);
     process.exit(1);
