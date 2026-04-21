@@ -14,27 +14,27 @@ function parseSchema(schema, payload) {
 
 function createGradesController({ gradesService, schemas }) {
   return {
-    listGrades(req, res) {
+    async listGrades(req, res) {
       const query = parseSchema(schemas.gradesQuerySchema, req.query || {});
-      res.json(gradesService.listGrades(req.user, query));
+      res.json(await gradesService.listGrades(req.user, query));
     },
 
-    saveGrade(req, res) {
+    async saveGrade(req, res) {
       const payload = parseSchema(schemas.gradePayloadSchema, req.body || {});
-      res.json(gradesService.saveGrade(req.user, payload));
+      res.json(await gradesService.saveGrade(req.user, payload));
     },
 
-    deleteGrade(req, res) {
+    async deleteGrade(req, res) {
       const gradeId = Number(req.params.id);
       if (!Number.isInteger(gradeId)) {
         throw new HttpError(400, "Ungueltige Note.");
       }
-      res.json(gradesService.deleteGrade(req.user, gradeId));
+      res.json(await gradesService.deleteGrade(req.user, gradeId));
     },
 
-    exportPdf(req, res) {
+    async exportPdf(req, res) {
       const query = parseSchema(schemas.gradesQuerySchema, req.query || {});
-      gradesService.exportPdf(req.user, query, res);
+      await gradesService.exportPdf(req.user, query, res);
     }
   };
 }

@@ -14,78 +14,78 @@ function parseSchema(schema, payload) {
 
 function createReportController({ reportService, schemas }) {
   return {
-    upsertReport(req, res) {
+    async upsertReport(req, res) {
       const payload = parseSchema(schemas.reportUpsertSchema, req.body || {});
-      res.json(reportService.upsertReport(req.user, payload));
+      res.json(await reportService.upsertReport(req.user, payload));
     },
 
-    createDraft(req, res) {
+    async createDraft(req, res) {
       const payload = parseSchema(schemas.entryPayloadSchema, req.body || {});
-      res.json(reportService.createDraft(req.user, payload));
+      res.json(await reportService.createDraft(req.user, payload));
     },
 
-    updateEntry(req, res) {
+    async updateEntry(req, res) {
       const payload = parseSchema(schemas.entryPayloadSchema, req.body || {});
-      res.json(reportService.updateEntry(req.user, String(req.params.entryId || ""), payload));
+      res.json(await reportService.updateEntry(req.user, String(req.params.entryId || ""), payload));
     },
 
-    previewImport(req, res) {
+    async previewImport(req, res) {
       const payload = parseSchema(schemas.importPayloadSchema, req.body || {});
-      res.json(reportService.previewImport(req.user, payload));
+      res.json(await reportService.previewImport(req.user, payload));
     },
 
-    importReports(req, res) {
+    async importReports(req, res) {
       const payload = parseSchema(schemas.importPayloadSchema, req.body || {});
-      res.json(reportService.importReports(req.user, payload));
+      res.json(await reportService.importReports(req.user, payload));
     },
 
-    deleteDraft(req, res) {
-      res.json(reportService.deleteDraftEntry(req.user, String(req.params.entryId || "")));
+    async deleteDraft(req, res) {
+      res.json(await reportService.deleteDraftEntry(req.user, String(req.params.entryId || "")));
     },
 
-    submitEntry(req, res) {
+    async submitEntry(req, res) {
       const payload = parseSchema(schemas.submitReportSchema, req.body || {});
-      res.json(reportService.submitEntry(req.user, payload.entryId));
+      res.json(await reportService.submitEntry(req.user, payload.entryId));
     },
 
-    submitEntries(req, res) {
+    async submitEntries(req, res) {
       const payload = parseSchema(schemas.batchSubmitSchema, {
         entryIds: Array.isArray(req.body?.entryIds) ? req.body.entryIds.map((value) => String(value || "").trim()).filter(Boolean) : []
       });
-      res.json(reportService.submitEntries(req.user, payload.entryIds));
+      res.json(await reportService.submitEntries(req.user, payload.entryIds));
     },
 
-    signEntry(req, res) {
+    async signEntry(req, res) {
       const payload = parseSchema(schemas.trainerSignSchema, req.body || {});
-      res.json(reportService.signEntry(req.user, payload.entryId, String(payload.trainerComment || "").trim()));
+      res.json(await reportService.signEntry(req.user, payload.entryId, String(payload.trainerComment || "").trim()));
     },
 
-    rejectEntry(req, res) {
+    async rejectEntry(req, res) {
       const payload = parseSchema(schemas.trainerRejectSchema, req.body || {});
-      res.json(reportService.rejectEntry(req.user, payload.entryId, payload.reason));
+      res.json(await reportService.rejectEntry(req.user, payload.entryId, payload.reason));
     },
 
-    commentEntry(req, res) {
+    async commentEntry(req, res) {
       const payload = parseSchema(schemas.trainerCommentSchema, req.body || {});
-      res.json(reportService.commentEntry(req.user, payload.entryId, payload.comment));
+      res.json(await reportService.commentEntry(req.user, payload.entryId, payload.comment));
     },
 
-    batchTrainerAction(req, res) {
+    async batchTrainerAction(req, res) {
       const payload = parseSchema(schemas.trainerBatchSchema, {
         action: req.body?.action,
         entryIds: Array.isArray(req.body?.entryIds) ? req.body.entryIds.map((value) => String(value || "").trim()).filter(Boolean) : [],
         trainerComment: req.body?.trainerComment || "",
         reason: req.body?.reason || ""
       });
-      res.json(reportService.batchTrainerAction(req.user, payload));
+      res.json(await reportService.batchTrainerAction(req.user, payload));
     },
 
-    exportPdf(req, res) {
-      reportService.exportPdf(req, res);
+    async exportPdf(req, res) {
+      await reportService.exportPdf(req, res);
     },
 
-    exportOwnCsv(req, res) {
-      reportService.exportOwnCsv(req, res);
+    async exportOwnCsv(req, res) {
+      await reportService.exportOwnCsv(req, res);
     }
   };
 }

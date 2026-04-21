@@ -1,0 +1,92 @@
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ausbildungsdoku-mssql
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD:-YourStrong(!)Password}
+    ports:
+      - "${LOCAL_MSSQL_PORT_MAPPING:-1433:1433}"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P $$MSSQL_SA_PASSWORD -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  mssql-init:
+    image: mcr.microsoft.com/mssql-tools
+    depends_on:
+      mssql:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - /bin/bash
+      - -lc
+      - |
+        /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${MSSQL_PASSWORD:-YourStrong(!)Password}" -Q "IF DB_ID(N'${MSSQL_DATABASE:-berichtsheft}') IS NULL CREATE DATABASE [${MSSQL_DATABASE:-berichtsheft}]; IF DB_ID(N'${MSSQL_TEST_DATABASE:-berichtsheft_test}') IS NULL CREATE DATABASE [${MSSQL_TEST_DATABASE:-berichtsheft_test}];"
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: ausbildungsdoku-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${LOCAL_REDIS_PORT_MAPPING:-6379:6379}"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  app:
+    depends_on:
+      mssql:
+        condition: service_healthy
+      mssql-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      HOST: 0.0.0.0
+      PORT: 3010
+      APP_BASE_URL: ${APP_BASE_URL:-}
+      APP_BASE_PATH: ${APP_BASE_PATH:-}
+      API_BASE_URL: ${API_BASE_URL:-}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      SESSION_SECRET: ${SESSION_SECRET:-compose-dev-session-secret}
+      SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-berichtsheft.sid}
+      SESSION_SECURE: ${SESSION_SECURE:-false}
+      SESSION_SAME_SITE: ${SESSION_SAME_SITE:-lax}
+      SESSION_MAX_AGE_MS: ${SESSION_MAX_AGE_MS:-28800000}
+      USE_REDIS_SESSIONS: ${USE_REDIS_SESSIONS:-true}
+      REDIS_URL: redis://redis:6379
+      REDIS_KEY_PREFIX: ${REDIS_KEY_PREFIX:-berichtsheft:}
+      MSSQL_HOST: mssql
+      MSSQL_PORT: 1433
+      MSSQL_DATABASE: ${MSSQL_DATABASE:-berichtsheft}
+      MSSQL_USER: ${MSSQL_USER:-sa}
+      MSSQL_PASSWORD: ${MSSQL_PASSWORD:-YourStrong(!)Password}
+      MSSQL_ENCRYPT: ${MSSQL_ENCRYPT:-true}
+      MSSQL_TRUST_SERVER_CERTIFICATE: ${MSSQL_TRUST_SERVER_CERTIFICATE:-true}
+      MSSQL_POOL_MIN: ${MSSQL_POOL_MIN:-0}
+      MSSQL_POOL_MAX: ${MSSQL_POOL_MAX:-10}
+      MSSQL_CONNECTION_TIMEOUT_MS: ${MSSQL_CONNECTION_TIMEOUT_MS:-15000}
+      MSSQL_REQUEST_TIMEOUT_MS: ${MSSQL_REQUEST_TIMEOUT_MS:-15000}
+      APPLY_MIGRATIONS_ON_START: ${APPLY_MIGRATIONS_ON_START:-true}
+      BOOTSTRAP_DATABASE_ON_START: ${BOOTSTRAP_DATABASE_ON_START:-true}
+      RESET_DATABASE_ON_START: ${RESET_DATABASE_ON_START:-false}
+      ENABLE_DEMO_DATA: ${ENABLE_DEMO_DATA:-true}
+      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@example.com}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-AdminInit123!}
+
+volumes:
+  mssql-data:
+  redis-data:

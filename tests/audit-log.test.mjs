@@ -1,72 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { spawn } from "node:child_process";
+import { extractCookie, postJson, startServer } from "./helpers/test-server.mjs";
 
-const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "berichtsheft-audit-test-"));
 const port = 3211;
 const baseUrl = `http://127.0.0.1:${port}`;
-
-function startServer() {
-  const child = spawn("node", ["index.js"], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      PORT: String(port),
-      NODE_ENV: "development",
-      SESSION_SECRET: "test-secret",
-      ENABLE_DEMO_DATA: "true",
-      DATA_DIR: tmpDir,
-      DB_FILE: path.join(tmpDir, "berichtsheft.db"),
-      LEGACY_FILE: path.join(tmpDir, "berichtsheft.json")
-    },
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error("Serverstart Timeout"));
-    }, 10000);
-
-    child.stdout.on("data", (data) => {
-      if (String(data).includes(`http://localhost:${port}`)) {
-        clearTimeout(timeout);
-        resolve(child);
-      }
-    });
-
-    child.stderr.on("data", (data) => {
-      const message = String(data);
-      if (message.trim()) {
-        clearTimeout(timeout);
-        reject(new Error(message));
-      }
-    });
-  });
-}
-
-function extractCookie(response) {
-  return response.headers.get("set-cookie")?.split(";")[0] || "";
-}
-
-async function postJson(url, body, cookie = "") {
-  return fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(cookie ? { Cookie: cookie } : {})
-    },
-    body: JSON.stringify(body)
-  });
-}
 
 let server = null;
 
 test.beforeEach(async () => {
-  server = await startServer();
+  server = await startServer(port);
 });
 
 test.afterEach(() => {
@@ -74,10 +16,6 @@ test.afterEach(() => {
     server.kill("SIGTERM");
     server = null;
   }
-});
-
-test.after(() => {
-  fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
 await test("Admin-Audit-Log erfasst Benutzeranlage und CSV-Import", async () => {

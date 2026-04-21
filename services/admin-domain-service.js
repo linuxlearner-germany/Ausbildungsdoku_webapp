@@ -42,19 +42,15 @@ function createAdminDomainService({
     if (!name || !username || !email || !["trainee", "trainer", "admin"].includes(role)) {
       return { error: "Ungueltige Nutzerdaten." };
     }
-
     if (!isValidEmail(email)) {
       return { error: "E-Mail-Adresse ist ungueltig." };
     }
-
     if (requirePassword && !password) {
       return { error: "Passwort fehlt." };
     }
-
     if (password && password.length < 10) {
       return { error: "Passwort muss mindestens 10 Zeichen lang sein." };
     }
-
     if (role === "trainee" && !ausbildung) {
       return { error: "Azubis benoetigen eine Ausbildung." };
     }
@@ -74,7 +70,7 @@ function createAdminDomainService({
     };
   }
 
-  function buildUserImportPreview(payload) {
+  async function buildUserImportPreview(payload) {
     const parsed = parseImportRows(payload?.filename, payload?.contentBase64);
     if (parsed.error) {
       return parsed;
@@ -88,10 +84,7 @@ function createAdminDomainService({
       return { error: `Die CSV braucht mindestens diese Spalten: ${missingColumns.join(", ")}.` };
     }
 
-    const existingUsers = db.prepare(`
-      SELECT id, username, email, role
-      FROM users
-    `).all();
+    const existingUsers = await db("users").select("id", "username", "email", "role");
     const existingByUsername = new Map(existingUsers.map((user) => [normalizeUsername(user.username), user]));
     const existingByEmail = new Map(existingUsers.map((user) => [String(user.email || "").trim().toLowerCase(), user]));
 
@@ -142,7 +135,6 @@ function createAdminDomainService({
       if (username && existingByUsername.has(username)) {
         errors.push("Benutzername existiert bereits");
       }
-
       if (email && existingByEmail.has(email)) {
         errors.push("E-Mail existiert bereits");
       }
@@ -170,10 +162,10 @@ function createAdminDomainService({
     const trainerCandidates = new Map();
     existingUsers
       .filter((user) => user.role === "trainer")
-      .forEach((user) => trainerCandidates.set(normalizeUsername(user.username), { source: "existing", role: user.role, rowNumber: null }));
+      .forEach((user) => trainerCandidates.set(normalizeUsername(user.username), { role: user.role }));
     fileRows
       .filter((row) => row.role === "trainer")
-      .forEach((row) => trainerCandidates.set(row.username, { source: "file", role: row.role, rowNumber: row.rowNumber }));
+      .forEach((row) => trainerCandidates.set(row.username, { role: row.role }));
 
     fileRows.forEach((row) => {
       if (row.role !== "trainee") {
@@ -207,78 +199,91 @@ function createAdminDomainService({
     };
   }
 
-  function importUsersFromPreview(preview, actor = null) {
+  async function importUsersFromPreview(preview, actor = null) {
     const validRows = (preview?.rows || []).filter((row) => row.canImport);
     if (!validRows.length) {
       return { error: "Keine gueltigen Nutzer zum Import vorhanden." };
     }
 
     const createdCredentials = [];
-    const transaction = db.transaction(() => {
-      const createdUserIds = new Map();
 
-      validRows.forEach((row) => {
-        const password = row.password || generateImportPassword();
-        const insertResult = db.prepare(`
-          INSERT INTO users (name, username, email, password_hash, role, trainer_id, ausbildung, betrieb, berufsschule)
-          VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
-        `).run(row.name, row.username, row.email, hashPassword(password), row.role, row.ausbildung, row.betrieb, row.berufsschule);
-        const createdUserId = insertResult.lastInsertRowid;
+    try {
+      await db.transaction(async (trx) => {
+        const createdUserIds = new Map();
 
-        createdUserIds.set(row.username, createdUserId);
-        createdCredentials.push({
-          rowNumber: row.rowNumber,
-          username: row.username,
-          email: row.email,
-          generatedPassword: row.password ? "" : password
-        });
-        sharedRepository.saveEducation(row.ausbildung);
-
-        writeAuditLog({
-          actor,
-          actionType: "USER_CREATED",
-          entityType: "user",
-          entityId: String(createdUserId),
-          targetUserId: createdUserId,
-          summary: `${row.name} wurde per CSV als ${row.role} angelegt.`,
-          metadata: {
-            source: "csv_import",
+        for (const row of validRows) {
+          const password = row.password || generateImportPassword();
+          const [created] = await trx("users").insert({
+            name: row.name,
             username: row.username,
             email: row.email,
+            password_hash: hashPassword(password),
             role: row.role,
-            ausbildung: row.ausbildung || ""
-          }
-        });
-      });
+            ausbildung: row.ausbildung,
+            betrieb: row.betrieb,
+            berufsschule: row.berufsschule,
+            theme_preference: "system"
+          }, ["id"]);
 
-      validRows
-        .filter((row) => row.role === "trainee")
-        .forEach((row) => {
+          const createdUserId = created.id;
+          createdUserIds.set(row.username, createdUserId);
+          createdCredentials.push({
+            rowNumber: row.rowNumber,
+            username: row.username,
+            email: row.email,
+            generatedPassword: row.password ? "" : password
+          });
+
+          await sharedRepository.saveEducation(row.ausbildung, trx);
+          await writeAuditLog({
+            actor,
+            actionType: "USER_CREATED",
+            entityType: "user",
+            entityId: String(createdUserId),
+            targetUserId: createdUserId,
+            summary: `${row.name} wurde per CSV als ${row.role} angelegt.`,
+            metadata: {
+              source: "csv_import",
+              username: row.username,
+              email: row.email,
+              role: row.role,
+              ausbildung: row.ausbildung || ""
+            },
+            trx
+          });
+        }
+
+        for (const row of validRows.filter((candidate) => candidate.role === "trainee")) {
           const traineeId = createdUserIds.get(row.username);
-          const trainerIds = row.trainerUsernames
-            .map((trainerUsername) => {
-              const createdId = createdUserIds.get(trainerUsername);
-              if (createdId) {
-                return createdId;
-              }
-              const existing = db.prepare("SELECT id FROM users WHERE username = ? AND role = 'trainer'").get(trainerUsername);
-              return existing?.id || null;
-            })
-            .filter((value) => Number.isInteger(value));
+          const trainerIds = [];
 
-          adminRepository.syncTraineeTrainerAssignments(traineeId, trainerIds);
-          logTrainerAssignmentChanges({
+          for (const trainerUsername of row.trainerUsernames) {
+            const createdId = createdUserIds.get(trainerUsername);
+            if (createdId) {
+              trainerIds.push(createdId);
+              continue;
+            }
+
+            const existing = await trx("users")
+              .select("id")
+              .where({ username: trainerUsername, role: "trainer" })
+              .first();
+            if (existing?.id) {
+              trainerIds.push(existing.id);
+            }
+          }
+
+          await adminRepository.syncTraineeTrainerAssignments(traineeId, trainerIds, trx);
+          await logTrainerAssignmentChanges({
             actor,
             traineeId,
             traineeName: row.name,
             beforeTrainerIds: [],
-            afterTrainerIds: trainerIds
+            afterTrainerIds: trainerIds,
+            trx
           });
-        });
-    });
-
-    try {
-      transaction();
+        }
+      });
     } catch (_error) {
       return { error: "Import konnte nicht abgeschlossen werden. Benutzername oder E-Mail existiert bereits." };
     }

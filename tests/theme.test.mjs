@@ -41,20 +41,20 @@ test("Gespeicherte Theme-Praeferenz faellt sauber auf system zurueck", () => {
 });
 
 test("Dark-Mode-CSS definiert alle zentralen Flaechenvariablen", () => {
-  const css = fs.readFileSync(path.join(process.cwd(), "src", "styles.css"), "utf8");
+  const css = fs.readFileSync(path.join(process.cwd(), "src", "styles", "theme.css"), "utf8");
   const darkThemeBlock = css.match(/:root\[data-theme="dark"\]\s*\{([\s\S]*?)\n\}/);
 
-  assert.ok(darkThemeBlock, "Dark-Theme-Block fehlt in styles.css");
+  assert.ok(darkThemeBlock, "Dark-Theme-Block fehlt in theme.css");
 
   const block = darkThemeBlock[1];
   for (const variableName of [
-    "--bg",
-    "--surface",
-    "--sidebar-bg",
-    "--topbar-bg",
-    "--card-bg",
-    "--text",
-    "--field-bg"
+    "--app-bg",
+    "--app-surface",
+    "--app-surface-muted",
+    "--app-border",
+    "--app-text",
+    "--app-muted",
+    "--app-primary"
   ]) {
     assert.match(block, new RegExp(`${variableName}:\\s*[^;]+;`), `${variableName} fehlt im Dark-Theme-Block`);
   }

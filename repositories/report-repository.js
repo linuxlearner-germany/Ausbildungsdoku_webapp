@@ -1,3 +1,5 @@
+const crypto = require("crypto");
+
 function createReportRepository({ db, listEntriesForTrainee, findEntryById, findEntryWithOwnerById, findTraineeById }) {
   return {
     listEntriesForTrainee,
@@ -5,49 +7,177 @@ function createReportRepository({ db, listEntriesForTrainee, findEntryById, find
     findEntryWithOwnerById,
     findTraineeById,
 
-    findOwnedEntryStatus(traineeId, entryId) {
-      return db.prepare(`
-        SELECT id, status
-        FROM entries
-        WHERE id = ? AND trainee_id = ?
-      `).get(entryId, traineeId);
+    async findOwnedEntryStatus(traineeId, entryId) {
+      return db("entries")
+        .select("id", "status")
+        .where({ id: entryId, trainee_id: traineeId })
+        .first();
     },
 
-    deleteDraftEntry(traineeId, entryId) {
-      return db.prepare("DELETE FROM entries WHERE id = ? AND trainee_id = ? AND status = 'draft'").run(entryId, traineeId);
+    async deleteDraftEntry(traineeId, entryId) {
+      return db("entries")
+        .where({ id: entryId, trainee_id: traineeId, status: "draft" })
+        .del();
     },
 
-    insertImportedSubmittedEntries(traineeId, rows) {
-      const insertEntry = db.prepare(`
-        INSERT INTO entries (
-          id, trainee_id, weekLabel, dateFrom, dateTo, betrieb, schule, themen, reflection,
-          status, signedAt, signerName, trainerComment, rejectionReason, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', 'submitted', NULL, '', '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `);
-
-      const transaction = db.transaction(() => {
+    async insertImportedSubmittedEntries(traineeId, rows) {
+      await db.transaction(async (trx) => {
         for (const row of rows) {
-          insertEntry.run(
-            `import-${Date.now()}-${Math.random()}`,
-            traineeId,
-            row.weekLabel,
-            row.dateFrom,
-            row.dateFrom,
-            row.betrieb,
-            row.schule
-          );
+          await trx("entries").insert({
+            id: crypto.randomUUID(),
+            trainee_id: traineeId,
+            weekLabel: row.weekLabel,
+            dateFrom: row.dateFrom,
+            dateTo: row.dateFrom,
+            betrieb: row.betrieb,
+            schule: row.schule,
+            themen: "",
+            reflection: "",
+            status: "submitted",
+            signedAt: null,
+            signerName: "",
+            trainerComment: "",
+            rejectionReason: ""
+          });
         }
       });
-
-      transaction();
     },
 
-    rejectEntryWithComment(entryId, comment) {
-      db.prepare(`
-        UPDATE entries
-        SET status = 'rejected', trainerComment = ?, rejectionReason = ?, signedAt = NULL, signerName = '', updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND status != 'signed'
-      `).run(comment, comment, entryId);
+    async rejectEntryWithComment(entryId, comment) {
+      return db("entries")
+        .where({ id: entryId })
+        .whereNot({ status: "signed" })
+        .update({
+          status: "rejected",
+          trainerComment: comment,
+          rejectionReason: comment,
+          signedAt: null,
+          signerName: "",
+          updated_at: db.fn.now()
+        });
+    },
+
+    async findEntryForSubmission(traineeId, entryId) {
+      return db("entries")
+        .select("id", "weekLabel", "dateFrom", "dateTo", "betrieb", "schule", "status")
+        .where({ id: entryId, trainee_id: traineeId })
+        .first();
+    },
+
+    async submitEntry(traineeId, entryId) {
+      return db("entries")
+        .where({ id: entryId, trainee_id: traineeId })
+        .whereNot({ status: "signed" })
+        .update({
+          status: "submitted",
+          rejectionReason: "",
+          updated_at: db.fn.now()
+        });
+    },
+
+    async signEntry(entryId, signerName, trainerComment, signedAt) {
+      return db("entries")
+        .where({ id: entryId, status: "submitted" })
+        .update({
+          status: "signed",
+          signedAt,
+          signerName,
+          trainerComment,
+          rejectionReason: "",
+          updated_at: db.fn.now()
+        });
+    },
+
+    async rejectSubmittedEntry(entryId, reason) {
+      return db("entries")
+        .where({ id: entryId, status: "submitted" })
+        .update({
+          status: "rejected",
+          signedAt: null,
+          signerName: "",
+          trainerComment: reason,
+          rejectionReason: reason,
+          updated_at: db.fn.now()
+        });
+    },
+
+    async createDraftEntry(traineeId, entry) {
+      await db("entries").insert({
+        id: entry.id,
+        trainee_id: traineeId,
+        weekLabel: entry.weekLabel,
+        dateFrom: entry.dateFrom,
+        dateTo: entry.dateTo,
+        betrieb: entry.betrieb,
+        schule: entry.schule,
+        themen: "",
+        reflection: "",
+        status: entry.status,
+        signedAt: entry.signedAt,
+        signerName: entry.signerName,
+        trainerComment: entry.trainerComment,
+        rejectionReason: entry.rejectionReason
+      });
+    },
+
+    async updateEntry(traineeId, entry) {
+      return db("entries")
+        .where({ id: entry.id, trainee_id: traineeId })
+        .update({
+          weekLabel: entry.weekLabel,
+          dateFrom: entry.dateFrom,
+          dateTo: entry.dateTo,
+          betrieb: entry.betrieb,
+          schule: entry.schule,
+          status: entry.status,
+          signedAt: entry.signedAt,
+          signerName: entry.signerName,
+          trainerComment: entry.trainerComment,
+          rejectionReason: entry.rejectionReason,
+          updated_at: db.fn.now()
+        });
+    },
+
+    async upsertEntries(traineeId, entries) {
+      await db.transaction(async (trx) => {
+        for (const entry of entries) {
+          const existing = await trx("entries").where({ id: entry.id, trainee_id: traineeId }).first("id");
+          if (existing) {
+            await trx("entries")
+              .where({ id: entry.id, trainee_id: traineeId })
+              .update({
+                weekLabel: entry.weekLabel,
+                dateFrom: entry.dateFrom,
+                dateTo: entry.dateTo,
+                betrieb: entry.betrieb,
+                schule: entry.schule,
+                status: entry.status,
+                signedAt: entry.signedAt,
+                signerName: entry.signerName,
+                trainerComment: entry.trainerComment,
+                rejectionReason: entry.rejectionReason,
+                updated_at: trx.fn.now()
+              });
+          } else {
+            await trx("entries").insert({
+              id: entry.id,
+              trainee_id: traineeId,
+              weekLabel: entry.weekLabel,
+              dateFrom: entry.dateFrom,
+              dateTo: entry.dateTo,
+              betrieb: entry.betrieb,
+              schule: entry.schule,
+              themen: "",
+              reflection: "",
+              status: entry.status,
+              signedAt: entry.signedAt,
+              signerName: entry.signerName,
+              trainerComment: entry.trainerComment,
+              rejectionReason: entry.rejectionReason
+            });
+          }
+        }
+      });
     }
   };
 }

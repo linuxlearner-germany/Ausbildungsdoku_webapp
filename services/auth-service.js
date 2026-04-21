@@ -2,22 +2,37 @@ const bcrypt = require("bcryptjs");
 const { HttpError } = require("../utils/http-error");
 
 function createAuthService({ authRepository, helpers }) {
-  function login(payload, req) {
+  function saveSession(req) {
+    return new Promise((resolve, reject) => {
+      req.session.save((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  }
+
+  async function login(payload, req) {
     if (helpers.isLoginRateLimited(req)) {
       throw new HttpError(429, "Zu viele Login-Versuche. Bitte spaeter erneut versuchen.");
     }
 
     const identifier = String(payload.identifier || "").trim().toLowerCase();
     const password = String(payload.password || "");
-    const user = authRepository.findUserByIdentifier(identifier);
+    const user = await authRepository.findUserByIdentifier(identifier);
+    const passwordMatches = user ? bcrypt.compareSync(password, user.password_hash) : false;
 
-    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    if (!user || !passwordMatches) {
       helpers.recordLoginFailure(req);
       throw new HttpError(401, "E-Mail oder Passwort ist falsch.");
     }
 
     helpers.clearLoginFailures(req);
     req.session.userId = user.id;
+    await saveSession(req);
 
     const { theme_preference, password_hash, ...safeUser } = user;
     return {
@@ -29,9 +44,9 @@ function createAuthService({ authRepository, helpers }) {
     };
   }
 
-  function restoreSession(req) {
+  async function restoreSession(req) {
     return {
-      user: authRepository.getSessionUser(req)
+      user: await authRepository.getSessionUser(req)
     };
   }
 
@@ -43,19 +58,16 @@ function createAuthService({ authRepository, helpers }) {
     });
   }
 
-  function updateThemePreference(userId, payload) {
+  async function updateThemePreference(userId, payload) {
     return {
       ok: true,
-      themePreference: authRepository.updateThemePreference(userId, payload.themePreference)
+      themePreference: await authRepository.updateThemePreference(userId, payload.themePreference)
     };
   }
 
   function resolveOwnPasswordTarget(req) {
-    const requestedIds = [
-      req.params?.userId,
-      req.body?.userId,
-      req.body?.targetUserId
-    ].filter((value) => value !== undefined && value !== null && String(value).trim() !== "");
+    const requestedIds = [req.params?.userId, req.body?.userId, req.body?.targetUserId]
+      .filter((value) => value !== undefined && value !== null && String(value).trim() !== "");
 
     for (const requestedId of requestedIds) {
       const normalizedId = Number(requestedId);
@@ -67,9 +79,9 @@ function createAuthService({ authRepository, helpers }) {
     return req.user.id;
   }
 
-  function changeOwnPassword(req, payload) {
+  async function changeOwnPassword(req, payload) {
     const userId = resolveOwnPasswordTarget(req);
-    const currentUser = authRepository.findPasswordUserById(userId);
+    const currentUser = await authRepository.findPasswordUserById(userId);
     if (!currentUser) {
       throw new HttpError(404, "Benutzer nicht gefunden.");
     }
@@ -78,7 +90,7 @@ function createAuthService({ authRepository, helpers }) {
       throw new HttpError(400, "Aktuelles Passwort ist nicht korrekt.");
     }
 
-    authRepository.updatePasswordHash(currentUser.id, helpers.hashPassword(payload.newPassword));
+    await authRepository.updatePasswordHash(currentUser.id, helpers.hashPassword(payload.newPassword));
     helpers.clearLoginFailuresForKey(helpers.getClientIp(req), currentUser.username);
     return { ok: true };
   }

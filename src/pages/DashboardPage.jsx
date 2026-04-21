@@ -47,7 +47,7 @@ export function DashboardPage({ role, report, trainees, users }) {
         <PageHeader
           kicker="Dashboard"
           title="Mein Überblick"
-          actions={<Link className="button button-primary" to="/berichte?view=write">Tagesbericht erstellen</Link>}
+          actions={<Link className="btn btn-primary app-btn" to="/berichte?view=write">Tagesbericht erstellen</Link>}
         />
         <section className="stats-grid">
           <StatCard label="Tagesberichte" value={entries.length} note="Gesamtzahl deiner Einträge" />
@@ -100,7 +100,7 @@ export function DashboardPage({ role, report, trainees, users }) {
         <PageHeader
           kicker="Dashboard"
           title="Freigabeübersicht"
-          actions={<Link className="button button-primary" to="/freigaben">Freigaben öffnen</Link>}
+          actions={<Link className="btn btn-primary app-btn" to="/freigaben">Freigaben öffnen</Link>}
         />
         <section className="stats-grid">
           <StatCard label="Azubis" value={trainees.length} note="Dir zugeordnete Personen" />
@@ -156,7 +156,7 @@ export function DashboardPage({ role, report, trainees, users }) {
                         <strong>{trainee.name}</strong>
                         <p>{trainee.ausbildung || trainee.email}</p>
                       </div>
-                      <button type="button" className="button button-secondary trainer-pdf-button" onClick={() => openPdfForTrainee(trainee)}>
+                      <button type="button" className="btn btn-outline-secondary trainer-pdf-button" onClick={() => openPdfForTrainee(trainee)}>
                         PDF
                       </button>
                     </div>

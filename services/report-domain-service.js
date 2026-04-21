@@ -1,5 +1,4 @@
 function createReportDomainService({
-  db,
   reportRepository,
   sharedRepository,
   normalizeEntry,
@@ -18,7 +17,7 @@ function createReportDomainService({
     return missing;
   }
 
-  function buildImportPreview(user, payload) {
+  async function buildImportPreview(user, payload) {
     const parsed = parseImportRows(payload?.filename, payload?.contentBase64);
     if (parsed.error) {
       return parsed;
@@ -30,7 +29,7 @@ function createReportDomainService({
       return { error: "Die Importdatei braucht mindestens die Spalten 'Datum' und 'Titel'." };
     }
 
-    const existingByDate = new Map(sharedRepository.listEntriesForTrainee(user.id).map((entry) => [entry.dateFrom, entry]));
+    const existingByDate = new Map((await sharedRepository.listEntriesForTrainee(user.id)).map((entry) => [entry.dateFrom, entry]));
     const seenDates = new Map();
     const previewRows = [];
 
@@ -75,28 +74,20 @@ function createReportDomainService({
       });
     }
 
-    const validRows = previewRows.filter((row) => row.canImport);
-    const invalidRows = previewRows.filter((row) => !row.canImport);
-
     return {
       ok: true,
       mapping,
       summary: {
         totalRows: previewRows.length,
-        validRows: validRows.length,
-        invalidRows: invalidRows.length
+        validRows: previewRows.filter((row) => row.canImport).length,
+        invalidRows: previewRows.filter((row) => !row.canImport).length
       },
       rows: previewRows
     };
   }
 
-  function submitReportEntryForTrainee(user, entryId) {
-    const entry = db.prepare(`
-      SELECT id, weekLabel, dateFrom, dateTo, betrieb, schule, status
-      FROM entries
-      WHERE id = ? AND trainee_id = ?
-    `).get(entryId, user.id);
-
+  async function submitReportEntryForTrainee(user, entryId) {
+    const entry = await reportRepository.findEntryForSubmission(user.id, entryId);
     if (!entry) {
       return { error: "Eintrag nicht gefunden." };
     }
@@ -105,26 +96,19 @@ function createReportDomainService({
     if (missing.length) {
       return { error: `Pflichtfelder fehlen: ${missing.join(", ")}` };
     }
-
     if (entry.status === "submitted") {
       return { error: "Eintrag ist bereits eingereicht." };
     }
-
     if (entry.status === "signed") {
       return { error: "Signierte Einträge koennen nicht erneut eingereicht werden." };
     }
 
-    const result = db.prepare(`
-      UPDATE entries
-      SET status = 'submitted', rejectionReason = '', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND trainee_id = ? AND status != 'signed'
-    `).run(entryId, user.id);
-
-    if (!result.changes) {
+    const changes = await reportRepository.submitEntry(user.id, entryId);
+    if (!changes) {
       return { error: "Eintrag nicht gefunden oder bereits signiert." };
     }
 
-    writeAuditLog({
+    await writeAuditLog({
       actor: user,
       actionType: "REPORT_SUBMITTED",
       entityType: "report_entry",
@@ -141,14 +125,13 @@ function createReportDomainService({
     return { ok: true, entry };
   }
 
-  function signReportEntryForActor(user, entryId, trainerComment = "") {
-    const entry = sharedRepository.findEntryWithOwnerById(entryId);
-
+  async function signReportEntryForActor(user, entryId, trainerComment = "") {
+    const entry = await sharedRepository.findEntryWithOwnerById(entryId);
     if (!entry) {
       return { error: "Eintrag nicht gefunden." };
     }
 
-    if (user.role === "trainer" && !sharedRepository.isTrainerAssignedToTrainee(user.id, entry.trainee_id)) {
+    if (user.role === "trainer" && !await sharedRepository.isTrainerAssignedToTrainee(user.id, entry.trainee_id)) {
       return { error: "Eintrag gehört nicht zu dir." };
     }
 
@@ -156,22 +139,15 @@ function createReportDomainService({
     if (missing.length) {
       return { error: `Eintrag ist unvollstaendig: ${missing.join(", ")}` };
     }
-
     if (entry.status === "signed") {
       return { error: "Eintrag ist bereits signiert." };
     }
-
     if (entry.status !== "submitted") {
       return { error: "Nur eingereichte Eintraege koennen signiert werden." };
     }
 
-    db.prepare(`
-      UPDATE entries
-      SET status = 'signed', signedAt = ?, signerName = ?, trainerComment = ?, rejectionReason = '', updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND status = 'submitted'
-    `).run(new Date().toISOString(), user.name, trainerComment, entryId);
-
-    writeAuditLog({
+    await reportRepository.signEntry(entryId, user.name, trainerComment, new Date().toISOString());
+    await writeAuditLog({
       actor: user,
       actionType: "REPORT_APPROVED",
       entityType: "report_entry",
@@ -184,7 +160,7 @@ function createReportDomainService({
         trainerComment
       }
     });
-    writeAuditLog({
+    await writeAuditLog({
       actor: user,
       actionType: "REPORT_SIGNED",
       entityType: "report_entry",
@@ -200,36 +176,29 @@ function createReportDomainService({
     return { ok: true, entry };
   }
 
-  function rejectReportEntryForActor(user, entryId, reason) {
+  async function rejectReportEntryForActor(user, entryId, reason) {
     const trimmedReason = String(reason || "").trim();
     if (!trimmedReason) {
       return { error: "Ablehnungsgrund fehlt." };
     }
 
-    const entry = sharedRepository.findEntryWithOwnerById(entryId);
+    const entry = await sharedRepository.findEntryWithOwnerById(entryId);
     if (!entry) {
       return { error: "Eintrag nicht gefunden." };
     }
 
-    if (user.role === "trainer" && !sharedRepository.isTrainerAssignedToTrainee(user.id, entry.trainee_id)) {
+    if (user.role === "trainer" && !await sharedRepository.isTrainerAssignedToTrainee(user.id, entry.trainee_id)) {
       return { error: "Eintrag gehört nicht zu dir." };
     }
-
     if (entry.status === "signed") {
       return { error: "Signierte Eintraege koennen nicht abgelehnt werden." };
     }
-
     if (entry.status !== "submitted") {
       return { error: "Nur eingereichte Eintraege koennen zurueckgegeben werden." };
     }
 
-    db.prepare(`
-      UPDATE entries
-      SET status = 'rejected', signedAt = NULL, signerName = '', trainerComment = ?, rejectionReason = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND status = 'submitted'
-    `).run(trimmedReason, trimmedReason, entryId);
-
-    writeAuditLog({
+    await reportRepository.rejectSubmittedEntry(entryId, trimmedReason);
+    await writeAuditLog({
       actor: user,
       actionType: "REPORT_RETURNED",
       entityType: "report_entry",
@@ -244,12 +213,12 @@ function createReportDomainService({
     return { ok: true, entry };
   }
 
-  function buildBatchResult(entryIds, handler) {
+  async function buildBatchResult(entryIds, handler) {
     const successIds = [];
     const failed = [];
 
     for (const entryId of entryIds) {
-      const result = handler(entryId);
+      const result = await handler(entryId);
       if (result?.error) {
         failed.push({ entryId, error: result.error });
         continue;
@@ -264,44 +233,39 @@ function createReportDomainService({
     };
   }
 
-  function createDraftEntry(user, payload) {
+  async function createDraftEntry(user, payload) {
     const entry = normalizeEntry(payload || {});
     if (!entry.dateFrom) {
       return { error: "Tag fehlt.", status: 400, code: "ENTRY_DATE_REQUIRED" };
     }
 
-    const existing = sharedRepository.findEntryByDate(user.id, entry.dateFrom);
+    const existing = await sharedRepository.findEntryByDate(user.id, entry.dateFrom);
     if (existing) {
       return { ok: true, entry: existing, created: false };
     }
 
-    const insertEntry = db.prepare(`
-      INSERT INTO entries (
-        id, trainee_id, weekLabel, dateFrom, dateTo, betrieb, schule, themen, reflection,
-        status, signedAt, signerName, trainerComment, rejectionReason, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, '', '', 'draft', NULL, '', '', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `);
-
-    const entryId = entry.id || `entry-${Date.now()}-${Math.random()}`;
-    insertEntry.run(
-      entryId,
-      user.id,
-      entry.weekLabel || `Bericht ${entry.dateFrom}`,
-      entry.dateFrom,
-      entry.dateTo || entry.dateFrom,
-      "",
-      ""
-    );
+    await reportRepository.createDraftEntry(user.id, {
+      ...entry,
+      weekLabel: entry.weekLabel || `Bericht ${entry.dateFrom}`,
+      dateTo: entry.dateTo || entry.dateFrom,
+      betrieb: "",
+      schule: "",
+      status: "draft",
+      signedAt: null,
+      signerName: "",
+      trainerComment: "",
+      rejectionReason: ""
+    });
 
     return {
       ok: true,
       created: true,
-      entry: sharedRepository.findEntryById(user.id, entryId)
+      entry: await sharedRepository.findEntryById(user.id, entry.id)
     };
   }
 
-  function updateTraineeEntry(user, entryId, payload) {
-    const existing = sharedRepository.findEntryById(user.id, entryId);
+  async function updateTraineeEntry(user, entryId, payload) {
+    const existing = await sharedRepository.findEntryById(user.id, entryId);
     if (!existing) {
       return { error: "Eintrag nicht gefunden.", status: 404, code: "ENTRY_NOT_FOUND" };
     }
@@ -317,22 +281,12 @@ function createReportDomainService({
     if (existing.status === "signed" && contentChanged) {
       return { error: "Signierte Eintraege koennen nicht bearbeitet oder geloescht werden.", status: 400, code: "ENTRY_SIGNED_LOCKED" };
     }
-
     if (existing.status === "submitted" && contentChanged) {
-      return {
-        error: "Eingereichte Eintraege sind schreibgeschuetzt, bis sie zur Nachbearbeitung zurueckgegeben werden.",
-        status: 400,
-        code: "ENTRY_SUBMITTED_LOCKED"
-      };
+      return { error: "Eingereichte Eintraege sind schreibgeschuetzt, bis sie zur Nachbearbeitung zurueckgegeben werden.", status: 400, code: "ENTRY_SUBMITTED_LOCKED" };
     }
 
-    const conflictingEntry = db.prepare(`
-      SELECT id
-      FROM entries
-      WHERE trainee_id = ? AND dateFrom = ? AND id != ?
-      LIMIT 1
-    `).get(user.id, entry.dateFrom, entryId);
-    if (conflictingEntry) {
+    const conflictingEntry = await sharedRepository.findEntryByDate(user.id, entry.dateFrom);
+    if (conflictingEntry && conflictingEntry.id !== entryId) {
       return { error: `Fuer ${entry.dateFrom} existiert bereits ein Tagesbericht.`, status: 400, code: "ENTRY_DATE_CONFLICT" };
     }
 
@@ -350,29 +304,20 @@ function createReportDomainService({
       nextRejectionReason = "";
     }
 
-    db.prepare(`
-      UPDATE entries
-      SET weekLabel = ?, dateFrom = ?, dateTo = ?, betrieb = ?, schule = ?, status = ?, signedAt = ?, signerName = ?, trainerComment = ?, rejectionReason = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND trainee_id = ?
-    `).run(
-      entry.weekLabel,
-      entry.dateFrom,
-      entry.dateTo || entry.dateFrom,
-      entry.betrieb,
-      entry.schule,
-      nextStatus,
-      nextSignedAt,
-      nextSignerName,
-      nextTrainerComment,
-      nextRejectionReason,
-      entryId,
-      user.id
-    );
+    await reportRepository.updateEntry(user.id, {
+      ...entry,
+      dateTo: entry.dateTo || entry.dateFrom,
+      status: nextStatus,
+      signedAt: nextSignedAt,
+      signerName: nextSignerName,
+      trainerComment: nextTrainerComment,
+      rejectionReason: nextRejectionReason
+    });
 
-    return { ok: true, entry: sharedRepository.findEntryById(user.id, entryId) };
+    return { ok: true, entry: await sharedRepository.findEntryById(user.id, entryId) };
   }
 
-  function getTraineeDashboard(user) {
+  async function getTraineeDashboard(user) {
     return {
       userId: user.id,
       trainee: {
@@ -381,120 +326,81 @@ function createReportDomainService({
         betrieb: user.betrieb,
         berufsschule: user.berufsschule
       },
-      entries: sharedRepository.listEntriesForTrainee(user.id),
-      grades: sharedRepository.listGradesForTrainee(user.id)
+      entries: await sharedRepository.listEntriesForTrainee(user.id),
+      grades: await sharedRepository.listGradesForTrainee(user.id)
     };
   }
 
-  function getTrainerDashboard(user) {
-    const trainees = sharedRepository.listTraineesForTrainer(user.id);
+  async function getTrainerDashboard(user) {
+    const trainees = await sharedRepository.listTraineesForTrainer(user.id);
+    const dashboard = [];
 
-    return trainees.map((trainee) => ({
-      ...trainee,
-      trainerIds: sharedRepository.getTrainerIdsForTrainee(trainee.id),
-      entries: sharedRepository.listEntriesForTrainee(trainee.id)
-    }));
+    for (const trainee of trainees) {
+      dashboard.push({
+        ...trainee,
+        trainerIds: await sharedRepository.getTrainerIdsForTrainee(trainee.id),
+        entries: await sharedRepository.listEntriesForTrainee(trainee.id)
+      });
+    }
+
+    return dashboard;
   }
 
-  function upsertTraineeEntries(user, payload) {
+  async function upsertTraineeEntries(user, payload) {
     const entries = Array.isArray(payload.entries) ? payload.entries.map(normalizeEntry) : [];
-    const existingEntries = sharedRepository.getExistingEntriesMap(user.id);
-    const duplicateDateError = sharedRepository.ensureUniqueEntryDates(user.id, entries);
+    const existingEntries = await sharedRepository.getExistingEntriesMap(user.id);
+    const duplicateDateError = await sharedRepository.ensureUniqueEntryDates(user.id, entries);
     if (duplicateDateError) {
       return duplicateDateError;
     }
 
     for (const entry of entries) {
       const existing = existingEntries.get(entry.id);
-      if (existing) {
-        const contentChanged =
-          entry.weekLabel !== existing.weekLabel ||
-          entry.dateFrom !== existing.dateFrom ||
-          entry.dateTo !== existing.dateTo ||
-          entry.betrieb !== existing.betrieb ||
-          entry.schule !== existing.schule;
+      if (!existing) {
+        continue;
+      }
 
-        entry.status = existing.status;
-        entry.signedAt = existing.signedAt;
-        entry.signerName = existing.signerName;
-        entry.trainerComment = existing.trainerComment;
-        entry.rejectionReason = existing.rejectionReason;
+      const contentChanged =
+        entry.weekLabel !== existing.weekLabel ||
+        entry.dateFrom !== existing.dateFrom ||
+        entry.dateTo !== existing.dateTo ||
+        entry.betrieb !== existing.betrieb ||
+        entry.schule !== existing.schule;
 
-        if (existing.status === "signed" && contentChanged) {
-          return { error: "Signierte Eintraege koennen nicht bearbeitet oder geloescht werden.", code: "ENTRY_SIGNED_LOCKED", status: 400 };
-        }
+      entry.status = existing.status;
+      entry.signedAt = existing.signedAt;
+      entry.signerName = existing.signerName;
+      entry.trainerComment = existing.trainerComment;
+      entry.rejectionReason = existing.rejectionReason;
 
-        if (existing.status === "submitted" && contentChanged) {
-          return { error: "Eingereichte Eintraege sind schreibgeschuetzt, bis sie zur Nachbearbeitung zurueckgegeben werden.", code: "ENTRY_SUBMITTED_LOCKED", status: 400 };
-        }
-
-        if (contentChanged && existing.status === "rejected") {
-          entry.status = "draft";
-          entry.signedAt = null;
-          entry.signerName = "";
-          entry.trainerComment = "";
-          entry.rejectionReason = "";
-        }
+      if (existing.status === "signed" && contentChanged) {
+        return { error: "Signierte Eintraege koennen nicht bearbeitet oder geloescht werden.", code: "ENTRY_SIGNED_LOCKED", status: 400 };
+      }
+      if (existing.status === "submitted" && contentChanged) {
+        return { error: "Eingereichte Eintraege sind schreibgeschuetzt, bis sie zur Nachbearbeitung zurueckgegeben werden.", code: "ENTRY_SUBMITTED_LOCKED", status: 400 };
+      }
+      if (contentChanged && existing.status === "rejected") {
+        entry.status = "draft";
+        entry.signedAt = null;
+        entry.signerName = "";
+        entry.trainerComment = "";
+        entry.rejectionReason = "";
       }
     }
 
-    const transaction = db.transaction(() => {
-      const updateEntry = db.prepare(`
-        UPDATE entries
-        SET weekLabel = ?, dateFrom = ?, dateTo = ?, betrieb = ?, schule = ?, status = ?, signedAt = ?, signerName = ?, trainerComment = ?, rejectionReason = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND trainee_id = ? AND status != 'signed'
-      `);
-      const insertEntry = db.prepare(`
-        INSERT INTO entries (
-          id, trainee_id, weekLabel, dateFrom, dateTo, betrieb, schule, themen, reflection,
-          status, signedAt, signerName, trainerComment, rejectionReason, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `);
-
-      for (const entry of entries) {
-        const existing = existingEntries.get(entry.id);
-        if (existing) {
-          updateEntry.run(
-            entry.weekLabel,
-            entry.dateFrom,
-            entry.dateTo,
-            entry.betrieb,
-            entry.schule,
-            entry.status,
-            entry.signedAt,
-            entry.signerName,
-            entry.trainerComment,
-            entry.rejectionReason,
-            entry.id,
-            user.id
-          );
-          continue;
-        }
-
-        insertEntry.run(
-          entry.id,
-          user.id,
-          entry.weekLabel,
-          entry.dateFrom,
-          entry.dateTo,
-          entry.betrieb,
-          entry.schule,
-          "",
-          "",
-          "draft",
-          null,
-          "",
-          "",
-          ""
-        );
-      }
-    });
-
     try {
-      transaction();
+      await reportRepository.upsertEntries(user.id, entries.map((entry) => ({
+        ...entry,
+        dateTo: entry.dateTo || entry.dateFrom,
+        status: entry.status || "draft",
+        signedAt: entry.signedAt || null,
+        signerName: entry.signerName || "",
+        trainerComment: entry.trainerComment || "",
+        rejectionReason: entry.rejectionReason || ""
+      })));
       return { ok: true };
     } catch (error) {
-      if (String(error.message || "").includes("idx_entries_trainee_date") || String(error.message || "").includes("UNIQUE constraint failed")) {
+      if (String(error.message || "").toLowerCase().includes("idx_entries_trainee_date") || String(error.message || "").toLowerCase().includes("duplicate")) {
         return { error: "Pro Tag ist nur ein Tagesbericht erlaubt." };
       }
       throw error;

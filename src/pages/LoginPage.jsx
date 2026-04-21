@@ -31,13 +31,13 @@ export function LoginPage() {
           </div>
         </div>
         <form className="login-form" onSubmit={handleSubmit}>
-          <label>
+          <label className="form-label">
             E-Mail oder Benutzername
-            <input value={identifier} onChange={(event) => setIdentifier(event.target.value)} type="text" required />
+            <input className="form-control" value={identifier} onChange={(event) => setIdentifier(event.target.value)} type="text" required />
           </label>
-          <label>
+          <label className="form-label">
             Passwort
-            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" required />
+            <input className="form-control" value={password} onChange={(event) => setPassword(event.target.value)} type="password" required />
           </label>
           {error ? <div className="field-message error">{error}</div> : null}
           <PrimaryButton disabled={busy} type="submit">

@@ -17,24 +17,24 @@ function createAdminService({ adminRepository, helpers }) {
     return result.data;
   }
 
-  function createUser(actor, payload) {
+  async function createUser(actor, payload) {
     const data = validateAdminUserPayload(payload, { requirePassword: true });
-    const matchingTrainerCount = adminRepository.countMatchingTrainers(data.trainerIds);
+    const matchingTrainerCount = await adminRepository.countMatchingTrainers(data.trainerIds);
     if (matchingTrainerCount !== data.trainerIds.length) {
       throw new HttpError(400, "Mindestens ein ausgewaehlter Ausbilder wurde nicht gefunden.");
     }
 
     try {
-      const insertResult = adminRepository.insertUser({
+      const insertResult = await adminRepository.insertUser({
         ...data,
         passwordHash: helpers.hashPassword(data.password)
       });
-      const createdUserId = insertResult.lastInsertRowid;
-      adminRepository.saveEducation(data.ausbildung);
+      const createdUserId = insertResult.id;
+      await adminRepository.saveEducation(data.ausbildung);
 
       if (data.role === "trainee") {
-        adminRepository.syncTraineeTrainerAssignments(createdUserId, data.trainerIds);
-        helpers.logTrainerAssignmentChanges({
+        await adminRepository.syncTraineeTrainerAssignments(createdUserId, data.trainerIds);
+        await helpers.logTrainerAssignmentChanges({
           actor,
           traineeId: createdUserId,
           traineeName: data.name,
@@ -43,7 +43,7 @@ function createAdminService({ adminRepository, helpers }) {
         });
       }
 
-      helpers.writeAuditLog({
+      await helpers.writeAuditLog({
         actor,
         actionType: "USER_CREATED",
         entityType: "user",
@@ -64,21 +64,21 @@ function createAdminService({ adminRepository, helpers }) {
     }
   }
 
-  function assignTrainer(actor, payload) {
-    const trainee = adminRepository.findTraineeById(payload.traineeId);
+  async function assignTrainer(actor, payload) {
+    const trainee = await adminRepository.findTraineeById(payload.traineeId);
     if (!trainee || trainee.role !== "trainee") {
       throw new HttpError(404, "Azubi nicht gefunden.");
     }
 
     const trainerIds = adminRepository.parseTrainerIds(payload.trainerIds);
-    const matchingTrainerCount = adminRepository.countMatchingTrainers(trainerIds);
+    const matchingTrainerCount = await adminRepository.countMatchingTrainers(trainerIds);
     if (matchingTrainerCount !== trainerIds.length) {
       throw new HttpError(400, "Mindestens ein ausgewaehlter Ausbilder wurde nicht gefunden.");
     }
 
-    const previousTrainerIds = adminRepository.getTrainerIdsForTrainee(payload.traineeId);
-    adminRepository.syncTraineeTrainerAssignments(payload.traineeId, trainerIds);
-    helpers.logTrainerAssignmentChanges({
+    const previousTrainerIds = await adminRepository.getTrainerIdsForTrainee(payload.traineeId);
+    await adminRepository.syncTraineeTrainerAssignments(payload.traineeId, trainerIds);
+    await helpers.logTrainerAssignmentChanges({
       actor,
       traineeId: payload.traineeId,
       traineeName: trainee?.name || "Azubi",
@@ -89,22 +89,22 @@ function createAdminService({ adminRepository, helpers }) {
     return { ok: true };
   }
 
-  function previewImport(payload) {
-    const preview = helpers.buildUserImportPreview(payload);
+  async function previewImport(payload) {
+    const preview = await helpers.buildUserImportPreview(payload);
     if (preview.error) {
       throw new HttpError(400, preview.error);
     }
     return preview;
   }
 
-  function importUsers(actor, payload) {
-    const preview = previewImport(payload);
-    const result = helpers.importUsersFromPreview(preview, actor);
+  async function importUsers(actor, payload) {
+    const preview = await previewImport(payload);
+    const result = await helpers.importUsersFromPreview(preview, actor);
     if (result.error) {
       throw new HttpError(400, result.error);
     }
 
-    helpers.writeAuditLog({
+    await helpers.writeAuditLog({
       actor,
       actionType: "CSV_IMPORT_EXECUTED",
       entityType: "user_import",
@@ -120,15 +120,15 @@ function createAdminService({ adminRepository, helpers }) {
     return result;
   }
 
-  function updateUser(actor, userId, payload) {
+  async function updateUser(actor, userId, payload) {
     const data = validateAdminUserPayload(payload, { requirePassword: false });
-    const existingUser = adminRepository.findUserForUpdate(userId);
+    const existingUser = await adminRepository.findUserForUpdate(userId);
     if (!existingUser) {
       throw new HttpError(404, "Benutzer nicht gefunden.");
     }
 
     const validTrainerIds = data.trainerIds.filter((trainerId) => trainerId !== userId);
-    const matchingTrainerCount = adminRepository.countMatchingTrainers(validTrainerIds);
+    const matchingTrainerCount = await adminRepository.countMatchingTrainers(validTrainerIds);
     if (matchingTrainerCount !== validTrainerIds.length) {
       throw new HttpError(400, "Mindestens ein ausgewaehlter Ausbilder wurde nicht gefunden.");
     }
@@ -138,24 +138,23 @@ function createAdminService({ adminRepository, helpers }) {
 
     try {
       const previousTrainerIds = existingUser.role === "trainee"
-        ? adminRepository.getTrainerIdsForTrainee(userId)
+        ? await adminRepository.getTrainerIdsForTrainee(userId)
         : [];
 
-      adminRepository.updateUser(userId, {
+      await adminRepository.updateUser(userId, {
         ...data,
         passwordHash: data.password ? helpers.hashPassword(data.password) : null
       });
-
-      adminRepository.saveEducation(data.ausbildung);
+      await adminRepository.saveEducation(data.ausbildung);
 
       if (data.role === "trainee") {
-        adminRepository.syncTraineeTrainerAssignments(userId, validTrainerIds);
+        await adminRepository.syncTraineeTrainerAssignments(userId, validTrainerIds);
       } else {
-        adminRepository.deleteAssignmentsForTrainee(userId);
+        await adminRepository.deleteAssignmentsForTrainee(userId);
       }
 
       if (data.role !== "trainer") {
-        adminRepository.deleteAssignmentsForTrainer(userId);
+        await adminRepository.deleteAssignmentsForTrainer(userId);
       }
 
       const updatedUser = {
@@ -170,7 +169,7 @@ function createAdminService({ adminRepository, helpers }) {
       };
 
       const changes = helpers.computeChangedFields(existingUser, updatedUser, ["name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule"]);
-      helpers.writeAuditLog({
+      await helpers.writeAuditLog({
         actor,
         actionType: "USER_UPDATED",
         entityType: "user",
@@ -189,7 +188,7 @@ function createAdminService({ adminRepository, helpers }) {
       });
 
       if (existingUser.role !== data.role) {
-        helpers.writeAuditLog({
+        await helpers.writeAuditLog({
           actor,
           actionType: "ROLE_CHANGED",
           entityType: "user",
@@ -205,7 +204,7 @@ function createAdminService({ adminRepository, helpers }) {
         });
       }
 
-      helpers.logTrainerAssignmentChanges({
+      await helpers.logTrainerAssignmentChanges({
         actor,
         traineeId: userId,
         traineeName: data.name,
@@ -222,22 +221,22 @@ function createAdminService({ adminRepository, helpers }) {
     }
   }
 
-  function deleteUser(actor, userId) {
-    const result = adminRepository.deleteUserCascade(actor, userId);
+  async function deleteUser(actor, userId) {
+    const result = await adminRepository.deleteUserCascade(actor, userId);
     if (result?.error) {
       throw new HttpError(result.status || 400, result.error);
     }
     return result;
   }
 
-  function exportUsersCsv(res) {
-    const csv = helpers.buildAdminUsersCsv(adminRepository.listUsersWithRelations());
+  async function exportUsersCsv(res) {
+    const csv = helpers.buildAdminUsersCsv(await adminRepository.listUsersWithRelations());
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", 'attachment; filename="verwaltung-benutzer.csv"');
     res.send(csv);
   }
 
-  function listAuditLogs(query) {
+  async function listAuditLogs(query) {
     const userId = Number(query.userId);
     return adminRepository.listAuditLogs({
       page: query.page,
@@ -250,25 +249,25 @@ function createAdminService({ adminRepository, helpers }) {
     });
   }
 
-  function updateProfile(actor, userId, payload) {
-    const trainee = adminRepository.findTraineeById(userId);
+  async function updateProfile(actor, userId, payload) {
+    const trainee = await adminRepository.findTraineeById(userId);
     if (!trainee || trainee.role !== "trainee") {
       throw new HttpError(404, "Azubi nicht gefunden.");
     }
 
-    if (actor.role === "trainer" && !adminRepository.isTrainerAssignedToTrainee(actor.id, trainee.id)) {
+    if (actor.role === "trainer" && !await adminRepository.isTrainerAssignedToTrainee(actor.id, trainee.id)) {
       throw new HttpError(403, "Profil gehoert nicht zu dir.");
     }
 
     const profile = validateProfilePayload(payload);
-    const beforeProfile = adminRepository.findTraineeProfile(userId);
-    adminRepository.updateProfile(userId, profile);
-    adminRepository.saveEducation(profile.ausbildung);
+    const beforeProfile = await adminRepository.findTraineeProfile(userId);
+    await adminRepository.updateProfile(userId, profile);
+    await adminRepository.saveEducation(profile.ausbildung);
 
     if (actor.role === "admin") {
       const afterProfile = { ...beforeProfile, ...profile };
       const changes = helpers.computeChangedFields(beforeProfile, afterProfile, ["name", "ausbildung", "betrieb", "berufsschule"]);
-      helpers.writeAuditLog({
+      await helpers.writeAuditLog({
         actor,
         actionType: "PROFILE_UPDATED_BY_ADMIN",
         entityType: "user",
@@ -291,11 +290,11 @@ function createAdminService({ adminRepository, helpers }) {
     return { ok: true };
   }
 
-  function getAdminDashboard() {
+  async function getAdminDashboard() {
     return {
       role: "admin",
-      users: adminRepository.listUsersWithRelations(),
-      educations: adminRepository.listEducations()
+      users: await adminRepository.listUsersWithRelations(),
+      educations: await adminRepository.listEducations()
     };
   }
 

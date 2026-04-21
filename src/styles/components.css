@@ -1,0 +1,95 @@
+.page-stack {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.page-header {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--app-border);
+}
+
+.page-kicker {
+  margin: 0;
+  color: var(--app-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.page-subtitle,
+.topbar-theme-label {
+  color: var(--app-muted);
+}
+
+.panel-card,
+.stat-card,
+.empty-state,
+.empty-table,
+.table-shell {
+  background: var(--app-surface);
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+}
+
+.panel-card,
+.stat-card,
+.empty-state,
+.empty-table {
+  padding: 1.25rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+}
+
+.stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.status-badge {
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.status-draft {
+  background: #e9eef4;
+  color: #5d6975;
+}
+
+.status-submitted {
+  background: #fef0c7;
+  color: #9a6700;
+}
+
+.status-signed {
+  background: #dff4eb;
+  color: #146c43;
+}
+
+.status-rejected {
+  background: #f8d7da;
+  color: #a52834;
+}
+
+.data-table th {
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  color: var(--app-muted);
+  background: var(--app-surface-muted);
+}
+
+.data-table td,
+.data-table th {
+  padding: 0.9rem 1rem;
+}
+
+.app-btn {
+  border-radius: 0.5rem;
+  font-weight: 600;
+}

@@ -17,95 +17,119 @@ function createAdminRepository({
     listAuditLogs,
     isTrainerAssignedToTrainee,
 
-    findTraineeById(traineeId) {
-      return db.prepare("SELECT id, name, role FROM users WHERE id = ?").get(traineeId);
+    async findTraineeById(traineeId) {
+      return db("users").select("id", "name", "role").where({ id: traineeId }).first();
     },
 
-    countMatchingTrainers(trainerIds) {
+    async countMatchingTrainers(trainerIds) {
       if (!trainerIds.length) {
         return 0;
       }
 
-      return db.prepare(`SELECT COUNT(*) AS count FROM users WHERE role = 'trainer' AND id IN (${trainerIds.map(() => "?").join(", ")})`).get(...trainerIds).count;
+      const row = await db("users")
+        .where({ role: "trainer" })
+        .whereIn("id", trainerIds)
+        .count("* as count")
+        .first();
+      return Number(row?.count || 0);
     },
 
-    getTrainerIdsForTrainee(traineeId) {
-      return db.prepare("SELECT trainer_id FROM trainee_trainers WHERE trainee_id = ?").all(traineeId).map((row) => row.trainer_id);
+    async getTrainerIdsForTrainee(traineeId, trx = null) {
+      const runner = trx || db;
+      const rows = await runner("trainee_trainers").select("trainer_id").where({ trainee_id: traineeId });
+      return rows.map((row) => row.trainer_id);
     },
 
-    syncTraineeTrainerAssignments(traineeId, trainerIds) {
+    async syncTraineeTrainerAssignments(traineeId, trainerIds, trx = null) {
       const uniqueTrainerIds = [...new Set(trainerIds)];
-      const existingIds = new Set(this.getTrainerIdsForTrainee(traineeId));
-      const insertAssignment = db.prepare("INSERT OR IGNORE INTO trainee_trainers (trainee_id, trainer_id) VALUES (?, ?)");
-      const deleteAssignment = db.prepare("DELETE FROM trainee_trainers WHERE trainee_id = ? AND trainer_id = ?");
+      const existingIds = new Set(await this.getTrainerIdsForTrainee(traineeId, trx));
 
-      for (const trainerId of uniqueTrainerIds) {
-        if (!existingIds.has(trainerId)) {
-          insertAssignment.run(traineeId, trainerId);
+      const persistAssignments = async (runner) => {
+        for (const trainerId of uniqueTrainerIds) {
+          if (!existingIds.has(trainerId)) {
+            await runner("trainee_trainers").insert({ trainee_id: traineeId, trainer_id: trainerId });
+          }
         }
-      }
 
-      for (const trainerId of existingIds) {
-        if (!uniqueTrainerIds.includes(trainerId)) {
-          deleteAssignment.run(traineeId, trainerId);
+        for (const trainerId of existingIds) {
+          if (!uniqueTrainerIds.includes(trainerId)) {
+            await runner("trainee_trainers").where({ trainee_id: traineeId, trainer_id: trainerId }).del();
+          }
         }
-      }
-    },
+      };
 
-    insertUser(user) {
-      return db.prepare(`
-        INSERT INTO users (name, username, email, password_hash, role, trainer_id, ausbildung, betrieb, berufsschule)
-        VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?)
-      `).run(user.name, user.username, user.email, user.passwordHash, user.role, user.ausbildung, user.betrieb, user.berufsschule);
-    },
-
-    findUserForUpdate(userId) {
-      return db.prepare(`
-        SELECT id, name, username, email, role, ausbildung, betrieb, berufsschule
-        FROM users
-        WHERE id = ?
-      `).get(userId);
-    },
-
-    updateUser(userId, user) {
-      if (user.passwordHash) {
-        db.prepare(`
-          UPDATE users
-          SET name = ?, username = ?, email = ?, role = ?, ausbildung = ?, betrieb = ?, berufsschule = ?, trainer_id = NULL, password_hash = ?
-          WHERE id = ?
-        `).run(user.name, user.username, user.email, user.role, user.ausbildung, user.betrieb, user.berufsschule, user.passwordHash, userId);
+      if (trx) {
+        await persistAssignments(trx);
         return;
       }
 
-      db.prepare(`
-        UPDATE users
-        SET name = ?, username = ?, email = ?, role = ?, ausbildung = ?, betrieb = ?, berufsschule = ?, trainer_id = NULL
-        WHERE id = ?
-      `).run(user.name, user.username, user.email, user.role, user.ausbildung, user.betrieb, user.berufsschule, userId);
+      await db.transaction(async (transaction) => {
+        await persistAssignments(transaction);
+      });
     },
 
-    deleteAssignmentsForTrainee(traineeId) {
-      db.prepare("DELETE FROM trainee_trainers WHERE trainee_id = ?").run(traineeId);
+    async insertUser(user) {
+      const [created] = await db("users").insert({
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        password_hash: user.passwordHash,
+        role: user.role,
+        ausbildung: user.ausbildung,
+        betrieb: user.betrieb,
+        berufsschule: user.berufsschule,
+        theme_preference: "system"
+      }, ["id"]);
+      return created;
     },
 
-    deleteAssignmentsForTrainer(trainerId) {
-      db.prepare("DELETE FROM trainee_trainers WHERE trainer_id = ?").run(trainerId);
+    async findUserForUpdate(userId) {
+      return db("users")
+        .select("id", "name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule")
+        .where({ id: userId })
+        .first();
     },
 
-    findTraineeProfile(userId) {
-      return db.prepare(`
-        SELECT id, name, username, email, role, ausbildung, betrieb, berufsschule
-        FROM users
-        WHERE id = ?
-      `).get(userId);
+    async updateUser(userId, user) {
+      const payload = {
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        ausbildung: user.ausbildung,
+        betrieb: user.betrieb,
+        berufsschule: user.berufsschule
+      };
+
+      if (user.passwordHash) {
+        payload.password_hash = user.passwordHash;
+      }
+
+      await db("users").where({ id: userId }).update(payload);
     },
 
-    updateProfile(userId, profile) {
-      db.prepare(`
-        UPDATE users
-        SET name = ?, ausbildung = ?, betrieb = ?, berufsschule = ?
-        WHERE id = ?
-      `).run(profile.name, profile.ausbildung, profile.betrieb, profile.berufsschule, userId);
+    async deleteAssignmentsForTrainee(traineeId) {
+      await db("trainee_trainers").where({ trainee_id: traineeId }).del();
+    },
+
+    async deleteAssignmentsForTrainer(trainerId) {
+      await db("trainee_trainers").where({ trainer_id: trainerId }).del();
+    },
+
+    async findTraineeProfile(userId) {
+      return db("users")
+        .select("id", "name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule")
+        .where({ id: userId })
+        .first();
+    },
+
+    async updateProfile(userId, profile) {
+      await db("users").where({ id: userId }).update({
+        name: profile.name,
+        ausbildung: profile.ausbildung,
+        betrieb: profile.betrieb,
+        berufsschule: profile.berufsschule
+      });
     }
   };
 }

@@ -1,0 +1,53 @@
+:root {
+  --app-bg: #eef2f6;
+  --app-surface: #ffffff;
+  --app-surface-muted: #f7f9fb;
+  --app-border: #d6dde5;
+  --app-border-strong: #bfc9d4;
+  --app-text: #15202b;
+  --app-muted: #5d6975;
+  --app-primary: #0f5b78;
+  --app-primary-strong: #0b4156;
+}
+
+:root[data-theme="dark"] {
+  --app-bg: #14191f;
+  --app-surface: #1b232d;
+  --app-surface-muted: #202a35;
+  --app-border: #304050;
+  --app-border-strong: #43576a;
+  --app-text: #eef3f7;
+  --app-muted: #aab7c4;
+  --app-primary: #76bdd7;
+  --app-primary-strong: #4a93af;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(circle at top right, rgba(15, 91, 120, 0.08), transparent 24%),
+    linear-gradient(180deg, #f7f9fb 0%, var(--app-bg) 100%);
+  color: var(--app-text);
+}
+
+.btn-primary {
+  --bs-btn-bg: var(--app-primary);
+  --bs-btn-border-color: var(--app-primary);
+  --bs-btn-hover-bg: var(--app-primary-strong);
+  --bs-btn-hover-border-color: var(--app-primary-strong);
+  --bs-btn-active-bg: var(--app-primary-strong);
+  --bs-btn-active-border-color: var(--app-primary-strong);
+}
+
+.btn-outline-secondary {
+  --bs-btn-color: var(--app-text);
+  --bs-btn-border-color: var(--app-border-strong);
+  --bs-btn-hover-bg: var(--app-surface-muted);
+  --bs-btn-hover-color: var(--app-text);
+  --bs-btn-hover-border-color: var(--app-border-strong);
+}

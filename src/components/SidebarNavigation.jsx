@@ -18,7 +18,7 @@ export function SidebarNavigation({ user, mobileNavOpen, onNavigate }) {
 
   return (
     <aside className={`sidebar${mobileNavOpen ? " is-open" : ""}`}>
-      <div className="sidebar-brand">
+      <div className="sidebar-brand border-bottom">
         <img src={assetUrl("/Pictures/wiweb-logo-kurz-blau_neu.png")} alt="WIWEB Logo" className="sidebar-logo" />
         <div>
           <p className="page-kicker">WIWEB</p>
@@ -31,7 +31,7 @@ export function SidebarNavigation({ user, mobileNavOpen, onNavigate }) {
             key={item.to}
             to={item.to}
             onClick={onNavigate}
-            className={({ isActive }) => `sidebar-link${isActive ? " active" : ""}`}
+            className={({ isActive }) => `sidebar-link nav-link${isActive ? " active" : ""}`}
           >
             {item.label}
           </NavLink>

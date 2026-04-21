@@ -4,11 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Berichtsheft Portal</title>
-    <link rel="icon" type="image/png" href="/Pictures/WIWEB-waage-vektor_ohne_schrift.png" />
-    <link rel="stylesheet" href="/app.css" />
+    <link rel="icon" type="image/png" href="%%APP_BASE_PATH%%/Pictures/WIWEB-waage-vektor_ohne_schrift.png" />
+    <link rel="stylesheet" href="%%APP_BASE_PATH%%/app.css" />
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/app.js"></script>
+    <script>
+      window.__APP_BASE_PATH__ = %%APP_BASE_PATH_JSON%%;
+      window.__APP_API_BASE_URL__ = %%APP_API_BASE_URL_JSON%%;
+    </script>
+    <script type="module" src="%%APP_BASE_PATH%%/app.js"></script>
   </body>
   </html>
