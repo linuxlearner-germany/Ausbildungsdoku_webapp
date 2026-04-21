@@ -4,11 +4,14 @@
   "description": "Berichtsheft Portal mit Rollen fuer Azubi, Ausbilder und Verwaltung",
   "main": "index.js",
   "scripts": {
-    "dev": "npm run build && node index.js",
+    "prestart": "npm run build",
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "node --watch index.js",
+    "dev:client": "node scripts/build.mjs --watch",
     "build": "node scripts/build.mjs",
     "build:github-pages": "node scripts/build-github-pages.mjs",
-    "start": "npm run build && node index.js",
-    "check": "node --check index.js",
+    "start": "node index.js",
+    "check": "node --check index.js && node --check app/config.js && node --check app/create-app.js && node --check app/create-db.js && node --check app/create-dependencies.js",
     "test": "node --test --test-concurrency=1 tests/*.test.mjs"
   },
   "keywords": [
