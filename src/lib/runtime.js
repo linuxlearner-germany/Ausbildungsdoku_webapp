@@ -35,5 +35,18 @@ export function assetUrl(path) {
 }
 
 export function apiUrl(path) {
+  if (typeof window !== "undefined" && window.__APP_API_BASE_URL__) {
+    const base = String(window.__APP_API_BASE_URL__).replace(/\/$/, "");
+    const cleanPath = String(path || "").trim();
+    if (!cleanPath || cleanPath === "/") {
+      return base || "/";
+    }
+    if (/^(?:[a-z]+:)?\/\//i.test(cleanPath)) {
+      return cleanPath;
+    }
+
+    return `${base}${cleanPath.startsWith("/") ? cleanPath : `/${cleanPath}`}`;
+  }
+
   return withBasePath(path);
 }

@@ -1,4 +1,5 @@
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 
 function hashPassword(password) {
   return bcrypt.hashSync(password, 10);
@@ -20,7 +21,7 @@ function normalizeUsername(username) {
 function normalizeEntry(input) {
   const dateFrom = String(input.dateFrom || "").trim();
   return {
-    id: String(input.id || `entry-${Date.now()}-${Math.random()}`),
+    id: String(input.id || crypto.randomUUID()),
     weekLabel: String(input.weekLabel || "").trim(),
     dateFrom,
     dateTo: String(input.dateTo || dateFrom).trim(),

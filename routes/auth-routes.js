@@ -4,7 +4,7 @@ const { asyncHandler } = require("../middleware/async-handler");
 function createAuthRoutes({ authController, requireAuth }) {
   const router = express.Router();
 
-  router.get("/session", authController.getSession);
+  router.get("/session", asyncHandler(authController.getSession));
   router.post("/login", asyncHandler(authController.login));
   router.post("/logout", asyncHandler(authController.logout));
   router.post("/preferences/theme", requireAuth, asyncHandler(authController.updateThemePreference));

@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -15,11 +15,14 @@ await build({
   bundle: true,
   format: "esm",
   sourcemap: true,
-  outfile: path.join(outputDir, "app.js")
+  outfile: path.join(outputDir, "app.js"),
+  loader: {
+    ".png": "file",
+    ".jpg": "file",
+    ".jpeg": "file",
+    ".svg": "file"
+  }
 });
-
-const css = await readFile(path.join(projectRoot, "src", "styles.css"), "utf8");
-await writeFile(path.join(outputDir, "app.css"), css.replaceAll('url("/Pictures/', 'url("./Pictures/'));
 
 const html = `<!DOCTYPE html>
 <html lang="de">
@@ -35,6 +38,7 @@ const html = `<!DOCTYPE html>
     <script>
       window.__APP_STATIC_DEMO__ = true;
       window.__APP_BASE_PATH__ = "";
+      window.__APP_API_BASE_URL__ = "";
     </script>
     <script type="module" src="./app.js"></script>
   </body>

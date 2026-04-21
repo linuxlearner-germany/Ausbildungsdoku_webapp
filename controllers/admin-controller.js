@@ -14,57 +14,57 @@ function parseSchema(schema, payload) {
 
 function createAdminController({ adminService, schemas }) {
   return {
-    createUser(req, res) {
+    async createUser(req, res) {
       const payload = parseSchema(schemas.adminUserPayloadSchema, req.body || {});
-      res.json(adminService.createUser(req.user, payload));
+      res.json(await adminService.createUser(req.user, payload));
     },
 
-    assignTrainer(req, res) {
+    async assignTrainer(req, res) {
       const payload = parseSchema(schemas.assignTrainerSchema, req.body || {});
-      res.json(adminService.assignTrainer(req.user, payload));
+      res.json(await adminService.assignTrainer(req.user, payload));
     },
 
-    previewImport(req, res) {
-      res.json(adminService.previewImport(req.body || {}));
+    async previewImport(req, res) {
+      res.json(await adminService.previewImport(req.body || {}));
     },
 
-    importUsers(req, res) {
-      res.json(adminService.importUsers(req.user, req.body || {}));
+    async importUsers(req, res) {
+      res.json(await adminService.importUsers(req.user, req.body || {}));
     },
 
-    updateUser(req, res) {
+    async updateUser(req, res) {
       const payload = parseSchema(schemas.adminUserPayloadSchema, req.body || {});
       const userId = Number(req.params.id);
       if (!Number.isInteger(userId)) {
         throw new HttpError(400, "Ungueltige Nutzerdaten.");
       }
-      res.json(adminService.updateUser(req.user, userId, payload));
+      res.json(await adminService.updateUser(req.user, userId, payload));
     },
 
-    deleteUser(req, res) {
+    async deleteUser(req, res) {
       const userId = Number(req.params.id);
       if (!Number.isInteger(userId)) {
         throw new HttpError(400, "Ungueltiger Benutzer.");
       }
-      res.json(adminService.deleteUser(req.user, userId));
+      res.json(await adminService.deleteUser(req.user, userId));
     },
 
-    exportUsersCsv(_req, res) {
-      adminService.exportUsersCsv(res);
+    async exportUsersCsv(_req, res) {
+      await adminService.exportUsersCsv(res);
     },
 
-    listAuditLogs(req, res) {
+    async listAuditLogs(req, res) {
       const query = parseSchema(schemas.auditLogQuerySchema, req.query || {});
-      res.json(adminService.listAuditLogs(query));
+      res.json(await adminService.listAuditLogs(query));
     },
 
-    updateProfile(req, res) {
+    async updateProfile(req, res) {
       const payload = parseSchema(schemas.profilePayloadSchema, req.body || {});
       const userId = Number(req.params.userId);
       if (!Number.isInteger(userId)) {
         throw new HttpError(400, "Ungueltiger Nutzer.");
       }
-      res.json(adminService.updateProfile(req.user, userId, payload));
+      res.json(await adminService.updateProfile(req.user, userId, payload));
     }
   };
 }

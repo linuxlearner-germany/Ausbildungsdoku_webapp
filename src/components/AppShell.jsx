@@ -18,8 +18,8 @@ export function AppShell({ user, theme, themePreference, onLogout, onToggleTheme
           mobileNavOpen={mobileNavOpen}
           onToggleNavigation={() => setMobileNavOpen((current) => !current)}
         />
-        {flash ? <div className={`flash flash-${flash.type}`}>{flash.message}</div> : null}
-        <div className="page-content">{children}</div>
+        {flash ? <div className={`flash alert ${flash.type === "error" ? "alert-danger" : "alert-success"}`}>{flash.message}</div> : null}
+        <main className="page-content container-fluid">{children}</main>
       </div>
     </div>
   );

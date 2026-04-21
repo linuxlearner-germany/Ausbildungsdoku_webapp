@@ -1,25 +1,30 @@
 const session = require("express-session");
+const { RedisStore } = require("connect-redis");
 
-function createSessionMiddleware({ config, store = null }) {
-  const middlewareConfig = {
-    name: config.sessionCookieName,
-    secret: config.sessionSecret || "berichtsheft-dev-secret",
+function createSessionMiddleware({ config, redisClient }) {
+  const sessionConfig = {
+    name: config.session.cookieName,
+    secret: config.session.secret,
     resave: false,
     saveUninitialized: false,
-    proxy: config.trustProxy,
+    proxy: Boolean(config.server.trustProxy),
+    rolling: true,
     cookie: {
       httpOnly: true,
-      sameSite: "lax",
-      secure: config.isProduction,
-      maxAge: 1000 * 60 * 60 * 8
+      sameSite: config.session.sameSite,
+      secure: config.session.secure,
+      maxAge: config.session.maxAgeMs
     }
   };
 
-  if (store) {
-    middlewareConfig.store = store;
+  if (config.session.useRedisSessions) {
+    sessionConfig.store = new RedisStore({
+      client: redisClient,
+      prefix: `${config.redis.keyPrefix}sess:`
+    });
   }
 
-  return session(middlewareConfig);
+  return session(sessionConfig);
 }
 
 module.exports = {

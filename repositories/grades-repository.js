@@ -9,51 +9,66 @@ function createGradesRepository({
     findTraineeById,
     isTrainerAssignedToTrainee,
 
-    findGradeOwner(gradeId) {
-      return db.prepare(`
-        SELECT users.id, users.name, users.username, users.email, users.ausbildung, users.betrieb, users.berufsschule
-        FROM grades
-        JOIN users ON users.id = grades.trainee_id
-        WHERE grades.id = ? AND users.role = 'trainee'
-        LIMIT 1
-      `).get(gradeId);
+    async findGradeOwner(gradeId) {
+      return db("grades")
+        .join("users", "users.id", "grades.trainee_id")
+        .select("users.id", "users.name", "users.username", "users.email", "users.ausbildung", "users.betrieb", "users.berufsschule")
+        .where("grades.id", gradeId)
+        .andWhere("users.role", "trainee")
+        .first();
     },
 
-    findGrade(gradeId, traineeId) {
-      return db.prepare(`
-        SELECT id, fach, typ, bezeichnung, datum, note, gewicht, trainee_id
-        FROM grades
-        WHERE id = ? AND trainee_id = ?
-      `).get(gradeId, traineeId);
+    async findGrade(gradeId, traineeId) {
+      return db("grades")
+        .select("id", "fach", "typ", "bezeichnung", "datum", "note", "gewicht", "trainee_id")
+        .where({ id: gradeId, trainee_id: traineeId })
+        .first();
     },
 
-    createGrade(traineeId, grade) {
-      db.prepare(`
-        INSERT INTO grades (trainee_id, fach, typ, bezeichnung, datum, note, gewicht)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(traineeId, grade.fach, grade.typ, grade.bezeichnung, grade.datum, grade.note, grade.gewicht);
+    async createGrade(traineeId, grade) {
+      const [created] = await db("grades").insert({
+        trainee_id: traineeId,
+        fach: grade.fach,
+        typ: grade.typ,
+        bezeichnung: grade.bezeichnung,
+        datum: grade.datum,
+        note: grade.note,
+        gewicht: grade.gewicht
+      }, ["id"]);
+      return created;
     },
 
-    updateGrade(traineeId, grade) {
-      db.prepare(`
-        UPDATE grades
-        SET fach = ?, typ = ?, bezeichnung = ?, datum = ?, note = ?, gewicht = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ? AND trainee_id = ?
-      `).run(grade.fach, grade.typ, grade.bezeichnung, grade.datum, grade.note, grade.gewicht, grade.id, traineeId);
+    async updateGrade(traineeId, grade) {
+      await db("grades")
+        .where({ id: grade.id, trainee_id: traineeId })
+        .update({
+          fach: grade.fach,
+          typ: grade.typ,
+          bezeichnung: grade.bezeichnung,
+          datum: grade.datum,
+          note: grade.note,
+          gewicht: grade.gewicht,
+          updated_at: db.fn.now()
+        });
     },
 
-    findLatestGradeForTrainee(traineeId) {
-      return db.prepare(`
-        SELECT id, fach, typ, bezeichnung, datum, note, gewicht, trainee_id
-        FROM grades
-        WHERE trainee_id = ?
-        ORDER BY id DESC
-        LIMIT 1
-      `).get(traineeId);
+    async findLatestGradeForTrainee(traineeId) {
+      return db("grades")
+        .select("id", "fach", "typ", "bezeichnung", "datum", "note", "gewicht", "trainee_id")
+        .where({ trainee_id: traineeId })
+        .orderBy("id", "desc")
+        .first();
     },
 
-    deleteGrade(gradeId, traineeId) {
-      return db.prepare("DELETE FROM grades WHERE id = ? AND trainee_id = ?").run(gradeId, traineeId);
+    async deleteGrade(gradeId, traineeId) {
+      return db("grades")
+        .where({ id: gradeId, trainee_id: traineeId })
+        .del();
+    },
+
+    async gradeExistsForTrainee(gradeId, traineeId) {
+      const existing = await db("grades").where({ id: gradeId, trainee_id: traineeId }).first("id");
+      return Boolean(existing);
     }
   };
 }

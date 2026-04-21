@@ -1,0 +1,48 @@
+services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: ausbildungsdoku-mssql-dev
+    network_mode: host
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: "Developer"
+      MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD:-YourStrong(!)Password}
+    volumes:
+      - mssql-dev-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P $$MSSQL_SA_PASSWORD -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  mssql-init:
+    image: mcr.microsoft.com/mssql-tools
+    container_name: ausbildungsdoku-mssql-dev-init
+    network_mode: host
+    depends_on:
+      mssql:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - /bin/bash
+      - -lc
+      - |
+        /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "${MSSQL_PASSWORD:-YourStrong(!)Password}" -Q "IF DB_ID(N'${MSSQL_DATABASE:-berichtsheft}') IS NULL CREATE DATABASE [${MSSQL_DATABASE:-berichtsheft}]; IF DB_ID(N'${MSSQL_TEST_DATABASE:-berichtsheft_test}') IS NULL CREATE DATABASE [${MSSQL_TEST_DATABASE:-berichtsheft_test}];"
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: ausbildungsdoku-redis-dev
+    network_mode: host
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-dev-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mssql-dev-data:
+  redis-dev-data:

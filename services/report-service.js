@@ -1,12 +1,12 @@
 const { HttpError } = require("../utils/http-error");
 
 function createReportService({ reportRepository, helpers }) {
-  function getReportDashboard(user) {
-    return helpers.getTraineeDashboard(helpers.getFreshUser(user.id));
+  async function getReportDashboard(user) {
+    return helpers.getTraineeDashboard(await helpers.getFreshUser(user.id));
   }
 
-  function upsertReport(user, payload) {
-    const result = helpers.upsertTraineeEntries(user, payload);
+  async function upsertReport(user, payload) {
+    const result = await helpers.upsertTraineeEntries(user, payload);
     if (result?.error) {
       throw new HttpError(result.status || 400, result.error, {
         code: result.code || "REPORT_UPDATE_FAILED"
@@ -15,12 +15,12 @@ function createReportService({ reportRepository, helpers }) {
 
     return {
       ok: true,
-      data: getReportDashboard(user)
+      data: await getReportDashboard(user)
     };
   }
 
-  function createDraft(user, payload) {
-    const result = helpers.createDraftEntry(user, payload);
+  async function createDraft(user, payload) {
+    const result = await helpers.createDraftEntry(user, payload);
     if (result?.error) {
       throw new HttpError(result.status || 400, result.error, {
         code: result.code || "REPORT_CREATE_FAILED"
@@ -31,12 +31,12 @@ function createReportService({ reportRepository, helpers }) {
       ok: true,
       created: Boolean(result.created),
       entry: result.entry,
-      data: getReportDashboard(user)
+      data: await getReportDashboard(user)
     };
   }
 
-  function updateEntry(user, entryId, payload) {
-    const result = helpers.updateTraineeEntry(user, entryId, payload);
+  async function updateEntry(user, entryId, payload) {
+    const result = await helpers.updateTraineeEntry(user, entryId, payload);
     if (result?.error) {
       throw new HttpError(result.status || 400, result.error, {
         code: result.code || "REPORT_ENTRY_UPDATE_FAILED"
@@ -46,27 +46,27 @@ function createReportService({ reportRepository, helpers }) {
     return {
       ok: true,
       entry: result.entry,
-      data: getReportDashboard(user)
+      data: await getReportDashboard(user)
     };
   }
 
-  function previewImport(user, payload) {
-    const preview = helpers.buildImportPreview(user, payload);
+  async function previewImport(user, payload) {
+    const preview = await helpers.buildImportPreview(user, payload);
     if (preview.error) {
       throw new HttpError(400, preview.error);
     }
     return preview;
   }
 
-  function importReports(user, payload) {
-    const preview = previewImport(user, payload);
+  async function importReports(user, payload) {
+    const preview = await previewImport(user, payload);
     const rowsToImport = preview.rows.filter((row) => row.canImport);
     if (!rowsToImport.length) {
       throw new HttpError(400, "Keine gueltigen Zeilen zum Import vorhanden.");
     }
 
     try {
-      reportRepository.insertImportedSubmittedEntries(user.id, rowsToImport);
+      await reportRepository.insertImportedSubmittedEntries(user.id, rowsToImport);
     } catch (_error) {
       throw new HttpError(400, "Import konnte nicht gespeichert werden. Bitte Vorschau erneut laden und doppelte Tage pruefen.");
     }
@@ -75,12 +75,12 @@ function createReportService({ reportRepository, helpers }) {
       ok: true,
       importedCount: rowsToImport.length,
       skippedCount: preview.rows.length - rowsToImport.length,
-      entries: reportRepository.listEntriesForTrainee(user.id)
+      entries: await reportRepository.listEntriesForTrainee(user.id)
     };
   }
 
-  function deleteDraftEntry(user, entryId) {
-    const existing = reportRepository.findOwnedEntryStatus(user.id, entryId);
+  async function deleteDraftEntry(user, entryId) {
+    const existing = await reportRepository.findOwnedEntryStatus(user.id, entryId);
     if (!existing) {
       throw new HttpError(404, "Eintrag nicht gefunden.");
     }
@@ -88,27 +88,27 @@ function createReportService({ reportRepository, helpers }) {
       throw new HttpError(400, "Nur Entwuerfe koennen geloescht werden.");
     }
 
-    reportRepository.deleteDraftEntry(user.id, entryId);
+    await reportRepository.deleteDraftEntry(user.id, entryId);
     return {
       ok: true,
-      entries: reportRepository.listEntriesForTrainee(user.id)
+      entries: await reportRepository.listEntriesForTrainee(user.id)
     };
   }
 
-  function submitEntry(user, entryId) {
-    const result = helpers.submitReportEntryForTrainee(user, entryId);
+  async function submitEntry(user, entryId) {
+    const result = await helpers.submitReportEntryForTrainee(user, entryId);
     if (result?.error) {
       throw new HttpError(result.error === "Eintrag nicht gefunden." ? 404 : 400, result.error);
     }
 
     return {
       ok: true,
-      entries: reportRepository.listEntriesForTrainee(user.id)
+      entries: await reportRepository.listEntriesForTrainee(user.id)
     };
   }
 
-  function submitEntries(user, entryIds) {
-    const batch = helpers.buildBatchResult(entryIds, (entryId) => helpers.submitReportEntryForTrainee(user, entryId));
+  async function submitEntries(user, entryIds) {
+    const batch = await helpers.buildBatchResult(entryIds, (entryId) => helpers.submitReportEntryForTrainee(user, entryId));
     if (!batch.processedCount) {
       throw new HttpError(400, batch.failed[0]?.error || "Keine Einträge konnten eingereicht werden.", {
         details: { failed: batch.failed }
@@ -119,12 +119,12 @@ function createReportService({ reportRepository, helpers }) {
       ok: batch.failed.length === 0,
       processedCount: batch.processedCount,
       failed: batch.failed,
-      entries: reportRepository.listEntriesForTrainee(user.id)
+      entries: await reportRepository.listEntriesForTrainee(user.id)
     };
   }
 
-  function signEntry(user, entryId, trainerComment) {
-    const result = helpers.signReportEntryForActor(user, entryId, trainerComment);
+  async function signEntry(user, entryId, trainerComment) {
+    const result = await helpers.signReportEntryForActor(user, entryId, trainerComment);
     if (result?.error) {
       const status = result.error === "Eintrag nicht gefunden." ? 404 : result.error.includes("gehört nicht zu dir") ? 403 : 400;
       throw new HttpError(status, result.error);
@@ -133,8 +133,8 @@ function createReportService({ reportRepository, helpers }) {
     return { ok: true };
   }
 
-  function rejectEntry(user, entryId, reason) {
-    const result = helpers.rejectReportEntryForActor(user, entryId, reason);
+  async function rejectEntry(user, entryId, reason) {
+    const result = await helpers.rejectReportEntryForActor(user, entryId, reason);
     if (result?.error) {
       const status = result.error === "Eintrag nicht gefunden." ? 404 : result.error.includes("gehört nicht zu dir") ? 403 : 400;
       throw new HttpError(status, result.error);
@@ -143,20 +143,20 @@ function createReportService({ reportRepository, helpers }) {
     return { ok: true };
   }
 
-  function commentEntry(user, entryId, comment) {
-    const entry = reportRepository.findEntryWithOwnerById(entryId);
+  async function commentEntry(user, entryId, comment) {
+    const entry = await reportRepository.findEntryWithOwnerById(entryId);
     if (!entry) {
       throw new HttpError(404, "Eintrag nicht gefunden.");
     }
-    if (user.role === "trainer" && !helpers.isTrainerAssignedToTrainee(user.id, entry.trainee_id)) {
+    if (user.role === "trainer" && !await helpers.isTrainerAssignedToTrainee(user.id, entry.trainee_id)) {
       throw new HttpError(403, "Eintrag gehoert nicht zu dir.");
     }
     if (entry.status === "signed") {
       throw new HttpError(400, "Signierte Eintraege koennen nicht kommentiert werden.");
     }
 
-    reportRepository.rejectEntryWithComment(entryId, comment);
-    helpers.writeAuditLog({
+    await reportRepository.rejectEntryWithComment(entryId, comment);
+    await helpers.writeAuditLog({
       actor: user,
       actionType: "REPORT_RETURNED",
       entityType: "report_entry",
@@ -169,13 +169,10 @@ function createReportService({ reportRepository, helpers }) {
     return { ok: true };
   }
 
-  function batchTrainerAction(user, payload) {
-    let batch;
-    if (payload.action === "sign") {
-      batch = helpers.buildBatchResult(payload.entryIds, (entryId) => helpers.signReportEntryForActor(user, entryId, payload.trainerComment));
-    } else {
-      batch = helpers.buildBatchResult(payload.entryIds, (entryId) => helpers.rejectReportEntryForActor(user, entryId, payload.reason));
-    }
+  async function batchTrainerAction(user, payload) {
+    const batch = payload.action === "sign"
+      ? await helpers.buildBatchResult(payload.entryIds, (entryId) => helpers.signReportEntryForActor(user, entryId, payload.trainerComment))
+      : await helpers.buildBatchResult(payload.entryIds, (entryId) => helpers.rejectReportEntryForActor(user, entryId, payload.reason));
 
     if (!batch.processedCount) {
       throw new HttpError(400, batch.failed[0]?.error || "Keine Einträge konnten verarbeitet werden.", {
@@ -190,32 +187,31 @@ function createReportService({ reportRepository, helpers }) {
     };
   }
 
-  function exportPdf(req, res) {
-    const requestedId = req.params.traineeId ? Number(req.params.traineeId) : req.user.id;
-    let traineeId = requestedId;
+  async function exportPdf(req, res) {
+    let traineeId = req.params.traineeId ? Number(req.params.traineeId) : req.user.id;
 
     if (req.user.role === "trainee") {
       traineeId = req.user.id;
     }
 
-    const trainee = reportRepository.findTraineeById(traineeId);
+    const trainee = await reportRepository.findTraineeById(traineeId);
     if (!trainee) {
       throw new HttpError(404, "Azubi nicht gefunden.");
     }
-    if (req.user.role === "trainer" && !helpers.isTrainerAssignedToTrainee(req.user.id, trainee.id)) {
+    if (req.user.role === "trainer" && !await helpers.isTrainerAssignedToTrainee(req.user.id, trainee.id)) {
       throw new HttpError(403, "Keine Berechtigung fuer dieses Berichtsheft.");
     }
 
-    helpers.renderPdf(res, trainee, reportRepository.listEntriesForTrainee(trainee.id));
+    helpers.renderPdf(res, trainee, await reportRepository.listEntriesForTrainee(trainee.id));
   }
 
-  function exportOwnCsv(req, res) {
-    const trainee = reportRepository.findTraineeById(req.user.id);
+  async function exportOwnCsv(req, res) {
+    const trainee = await reportRepository.findTraineeById(req.user.id);
     if (!trainee) {
       throw new HttpError(404, "Azubi nicht gefunden.");
     }
 
-    const csv = helpers.buildEntriesCsv(reportRepository.listEntriesForTrainee(req.user.id));
+    const csv = helpers.buildEntriesCsv(await reportRepository.listEntriesForTrainee(req.user.id));
     const safeName = String(trainee.name || "azubi")
       .trim()
       .toLowerCase()
@@ -223,7 +219,7 @@ function createReportService({ reportRepository, helpers }) {
       .replace(/^-+|-+$/g, "") || "azubi";
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="berichtsheft-${safeName}.csv"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${safeName}-berichte.csv"`);
     res.send(csv);
   }
 

@@ -1,74 +1,17 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
 import { spawn } from "node:child_process";
 import XLSX from "xlsx";
+import { extractCookie, postJson, startServer } from "./helpers/test-server.mjs";
 
 let nextPort = 3210;
 let baseUrl = "";
 
-function startServer(tmpDir, port) {
-  const child = spawn("node", ["index.js"], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      PORT: String(port),
-      NODE_ENV: "development",
-      SESSION_SECRET: "test-secret",
-      ENABLE_DEMO_DATA: "true",
-      DATA_DIR: tmpDir,
-      DB_FILE: path.join(tmpDir, "berichtsheft.db"),
-      LEGACY_FILE: path.join(tmpDir, "berichtsheft.json")
-    },
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error("Serverstart Timeout"));
-    }, 10000);
-
-    child.stdout.on("data", (data) => {
-      if (String(data).includes(`http://localhost:${port}`)) {
-        clearTimeout(timeout);
-        resolve(child);
-      }
-    });
-
-    child.stderr.on("data", (data) => {
-      const message = String(data);
-      if (message.trim()) {
-        clearTimeout(timeout);
-        reject(new Error(message));
-      }
-    });
-  });
-}
-
-function extractCookie(response) {
-  return response.headers.get("set-cookie")?.split(";")[0] || "";
-}
-
-async function postJson(url, body, cookie = "") {
-  return fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(cookie ? { Cookie: cookie } : {})
-    },
-    body: JSON.stringify(body)
-  });
-}
-
 async function withIsolatedServer(run) {
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "berichtsheft-test-"));
   const port = nextPort;
   nextPort += 1;
   baseUrl = `http://127.0.0.1:${port}`;
-  const server = await startServer(tmpDir, port);
+  const server = await startServer(port);
 
   try {
     await run();
@@ -79,7 +22,6 @@ async function withIsolatedServer(run) {
         server.kill("SIGTERM");
       });
     }
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }
 
@@ -1497,32 +1439,38 @@ await test("Import legt Berichte als submitted an", { concurrency: false }, asyn
 
 await test("Produktion startet nicht mit Demo-Daten", { concurrency: false }, async () => {
   await withIsolatedServer(async () => {
-  const prodDir = fs.mkdtempSync(path.join(os.tmpdir(), "berichtsheft-prod-test-"));
-  const child = spawn("node", ["index.js"], {
-    cwd: process.cwd(),
-    env: {
-      ...process.env,
-      PORT: "3211",
-      NODE_ENV: "production",
-      SESSION_SECRET: "test-secret-production",
-      ENABLE_DEMO_DATA: "true",
-      DATA_DIR: prodDir,
-      DB_FILE: path.join(prodDir, "berichtsheft.db"),
-      LEGACY_FILE: path.join(prodDir, "berichtsheft.json")
-    },
-    stdio: ["ignore", "pipe", "pipe"]
-  });
-
-  const stderr = await new Promise((resolve) => {
-    let errorOutput = "";
-    child.stderr.on("data", (chunk) => {
-      errorOutput += String(chunk);
+    const child = spawn("node", ["index.js"], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        HOST: "127.0.0.1",
+        PORT: "3211",
+        NODE_ENV: "production",
+        SESSION_SECRET: "test-secret-production",
+        INITIAL_ADMIN_PASSWORD: "AdminInit123!",
+        ENABLE_DEMO_DATA: "true",
+        APPLY_MIGRATIONS_ON_START: "true",
+        BOOTSTRAP_DATABASE_ON_START: "true",
+        MSSQL_HOST: process.env.MSSQL_HOST || "127.0.0.1",
+        MSSQL_PORT: process.env.MSSQL_PORT || "1433",
+        MSSQL_DATABASE: process.env.MSSQL_DATABASE || "berichtsheft_test",
+        MSSQL_USER: process.env.MSSQL_USER || "sa",
+        MSSQL_PASSWORD: process.env.MSSQL_PASSWORD || "YourStrong(!)Password",
+        MSSQL_TRUST_SERVER_CERTIFICATE: process.env.MSSQL_TRUST_SERVER_CERTIFICATE || "true",
+        REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379"
+      },
+      stdio: ["ignore", "pipe", "pipe"]
     });
-    child.on("exit", () => resolve(errorOutput));
-  });
 
-  fs.rmSync(prodDir, { recursive: true, force: true });
-  assert.match(stderr, /ENABLE_DEMO_DATA darf in Produktion nicht aktiviert sein/);
+    const stderr = await new Promise((resolve) => {
+      let errorOutput = "";
+      child.stderr.on("data", (chunk) => {
+        errorOutput += String(chunk);
+      });
+      child.on("exit", () => resolve(errorOutput));
+    });
+
+    assert.match(stderr, /ENABLE_DEMO_DATA darf in Produktion nicht aktiviert sein/);
   });
 });
 

@@ -1,4 +1,4 @@
-function createGradesDomainService({ db, gradesRepository, sharedRepository }) {
+function createGradesDomainService({ gradesRepository, sharedRepository }) {
   function weightForGradeType(type) {
     return type === "Schulaufgabe" ? 2 : 1;
   }
@@ -8,9 +8,9 @@ function createGradesDomainService({ db, gradesRepository, sharedRepository }) {
     return Number.isInteger(traineeId) ? traineeId : null;
   }
 
-  function resolveReadableGradesTrainee(user, requestedTraineeId) {
+  async function resolveReadableGradesTrainee(user, requestedTraineeId) {
     if (user.role === "trainee") {
-      return { trainee: sharedRepository.findTraineeById(user.id) };
+      return { trainee: await sharedRepository.findTraineeById(user.id) };
     }
 
     if (requestedTraineeId == null || requestedTraineeId === "") {
@@ -22,12 +22,12 @@ function createGradesDomainService({ db, gradesRepository, sharedRepository }) {
       return { error: "Ungueltige Azubi-ID.", status: 400 };
     }
 
-    const trainee = sharedRepository.findTraineeById(traineeId);
+    const trainee = await sharedRepository.findTraineeById(traineeId);
     if (!trainee) {
       return { error: "Azubi nicht gefunden.", status: 404 };
     }
 
-    if (user.role === "trainer" && !sharedRepository.isTrainerAssignedToTrainee(user.id, traineeId)) {
+    if (user.role === "trainer" && !await sharedRepository.isTrainerAssignedToTrainee(user.id, traineeId)) {
       return { error: "Keine Berechtigung.", status: 403 };
     }
 
@@ -38,16 +38,13 @@ function createGradesDomainService({ db, gradesRepository, sharedRepository }) {
     return { trainee };
   }
 
-  function resolveWritableGradesTrainee(user, requestedTraineeId, gradeId = null) {
+  async function resolveWritableGradesTrainee(user, requestedTraineeId, gradeId = null) {
     if (user.role === "trainee") {
-      if (gradeId) {
-        const existing = db.prepare("SELECT id FROM grades WHERE id = ? AND trainee_id = ?").get(gradeId, user.id);
-        if (!existing) {
-          return { error: "Note nicht gefunden.", status: 404 };
-        }
+      if (gradeId && !await gradesRepository.gradeExistsForTrainee(gradeId, user.id)) {
+        return { error: "Note nicht gefunden.", status: 404 };
       }
 
-      return { trainee: sharedRepository.findTraineeById(user.id) };
+      return { trainee: await sharedRepository.findTraineeById(user.id) };
     }
 
     if (user.role !== "admin") {
@@ -55,7 +52,7 @@ function createGradesDomainService({ db, gradesRepository, sharedRepository }) {
     }
 
     if (gradeId) {
-      const gradeOwner = gradesRepository.findGradeOwner(gradeId);
+      const gradeOwner = await gradesRepository.findGradeOwner(gradeId);
       if (!gradeOwner) {
         return { error: "Note nicht gefunden.", status: 404 };
       }
@@ -68,7 +65,7 @@ function createGradesDomainService({ db, gradesRepository, sharedRepository }) {
       return { error: "Azubi-ID fehlt.", status: 400 };
     }
 
-    const trainee = sharedRepository.findTraineeById(traineeId);
+    const trainee = await sharedRepository.findTraineeById(traineeId);
     if (!trainee) {
       return { error: "Azubi nicht gefunden.", status: 404 };
     }

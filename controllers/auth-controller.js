@@ -14,30 +14,30 @@ function parseSchema(schema, payload) {
 
 function createAuthController({ authService, schemas }) {
   return {
-    getSession(req, res) {
-      res.json(authService.restoreSession(req));
+    async getSession(req, res) {
+      res.json(await authService.restoreSession(req));
     },
 
-    login(req, res) {
+    async login(req, res) {
       const payload = parseSchema(schemas.loginSchema, {
         identifier: req.body?.identifier || req.body?.email || "",
         password: req.body?.password || ""
       });
-      res.json(authService.login(payload, req));
+      res.json(await authService.login(payload, req));
     },
 
     async logout(req, res) {
       res.json(await authService.logout(req));
     },
 
-    updateThemePreference(req, res) {
+    async updateThemePreference(req, res) {
       const payload = parseSchema(schemas.themePreferenceSchema, req.body || {});
-      res.json(authService.updateThemePreference(req.user.id, payload));
+      res.json(await authService.updateThemePreference(req.user.id, payload));
     },
 
-    changeOwnPassword(req, res) {
+    async changeOwnPassword(req, res) {
       const payload = parseSchema(schemas.passwordChangeSchema, req.body || {});
-      res.json(authService.changeOwnPassword(req, payload));
+      res.json(await authService.changeOwnPassword(req, payload));
     }
   };
 }

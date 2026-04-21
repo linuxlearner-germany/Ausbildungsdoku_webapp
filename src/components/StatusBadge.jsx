@@ -10,5 +10,5 @@ const labels = {
 };
 
 export function StatusBadge({ status }) {
-  return <span className={`status-badge status-${status}`}>{labels[status] || status}</span>;
+  return <span className={`status-badge badge rounded-pill text-uppercase status-${status}`}>{labels[status] || status}</span>;
 }

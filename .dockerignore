@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log
+.git
+.idea
+github-pages
+public/app.js
+public/app.css
+public/app.js.map
+.env

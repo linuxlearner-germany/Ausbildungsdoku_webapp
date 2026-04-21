@@ -80,19 +80,19 @@ function createDependencies({ config, db }) {
   });
 
   const dashboardService = {
-    getDashboard(user) {
+    async getDashboard(user) {
       if (user.role === "trainee") {
-        return { role: "trainee", report: reportModule.domainService.getTraineeDashboard(user) };
+        return { role: "trainee", report: await reportModule.domainService.getTraineeDashboard(user) };
       }
 
       if (user.role === "trainer") {
-        return { role: "trainer", trainees: reportModule.domainService.getTrainerDashboard(user) };
+        return { role: "trainer", trainees: await reportModule.domainService.getTrainerDashboard(user) };
       }
 
       return {
         role: "admin",
-        users: sharedRepository.listUsersWithRelations(),
-        educations: sharedRepository.listEducations()
+        users: await sharedRepository.listUsersWithRelations(),
+        educations: await sharedRepository.listEducations()
       };
     }
   };
@@ -110,11 +110,7 @@ function createDependencies({ config, db }) {
     },
     dashboardService,
     bootstrapHelpers: {
-      hashPassword,
-      normalizeUsername,
-      normalizeEntry,
-      parseImportedDate,
-      toIsoDateParts
+      hashPassword
     }
   };
 }
