@@ -12,7 +12,7 @@ function parseSchema(schema, payload) {
   }
 }
 
-function createGradesController({ gradesService, schemas }) {
+function createGradesController({ gradesService, schemas, helpers }) {
   return {
     async listGrades(req, res) {
       const query = parseSchema(schemas.gradesQuerySchema, req.query || {});
@@ -34,7 +34,8 @@ function createGradesController({ gradesService, schemas }) {
 
     async exportPdf(req, res) {
       const query = parseSchema(schemas.gradesQuerySchema, req.query || {});
-      await gradesService.exportPdf(req.user, query, res);
+      const pdfExport = await gradesService.getPdfExport(req.user, query);
+      helpers.renderGradesPdf(res, pdfExport.trainee, pdfExport.grades);
     }
   };
 }

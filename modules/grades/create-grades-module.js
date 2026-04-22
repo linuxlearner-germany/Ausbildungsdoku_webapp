@@ -29,14 +29,16 @@ function createGradesModule({ db, sharedRepository, auditHelpers, picturesDir })
       resolveWritableGradesTrainee: gradesDomainService.resolveWritableGradesTrainee,
       validateGrade: gradesDomainService.validateGrade,
       writeAuditLog: auditHelpers.writeAuditLog,
-      computeChangedFields,
-      renderGradesPdf: (res, trainee, grades) => renderGradesPdf(res, trainee, grades, path.resolve(picturesDir))
+      computeChangedFields
     }
   });
 
   const gradesController = createGradesController({
     gradesService,
-    schemas: gradesSchemas
+    schemas: gradesSchemas,
+    helpers: {
+      renderGradesPdf: (res, trainee, grades) => renderGradesPdf(res, trainee, grades, path.resolve(picturesDir))
+    }
   });
 
   return {

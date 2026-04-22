@@ -1,5 +1,5 @@
 const path = require("path");
-require("dotenv").config();
+require("dotenv").config({ quiet: true });
 
 function readStringEnv(value, defaultValue = "") {
   const normalized = String(value ?? defaultValue).trim();
@@ -51,8 +51,8 @@ function normalizeSameSite(value, defaultValue = "lax") {
   return ["lax", "strict", "none"].includes(normalized) ? normalized : defaultValue;
 }
 
-function requireEnv(name, value, { allowInTest = false } = {}) {
-  if (value || (allowInTest && process.env.NODE_ENV === "test")) {
+function requireEnv(name, value) {
+  if (value) {
     return value;
   }
 
@@ -93,13 +93,9 @@ function createConfig() {
   const appBasePath = normalizeBasePath(process.env.APP_BASE_PATH);
   const appBaseUrl = assertAbsoluteUrl("APP_BASE_URL", readStringEnv(process.env.APP_BASE_URL, ""));
   const apiBaseUrl = assertAbsoluteUrl("API_BASE_URL", readStringEnv(process.env.API_BASE_URL, ""));
-  const useRedisSessions = readBooleanEnv(process.env.USE_REDIS_SESSIONS, true);
   const redisHost = readStringEnv(process.env.REDIS_HOST, "127.0.0.1");
   const redisPort = readNumberEnv(process.env.REDIS_PORT, 6379);
   const redisPassword = readStringEnv(process.env.REDIS_PASSWORD, "");
-
-  const defaultSessionSecret = !isProduction ? "development-session-secret" : "";
-  const defaultInitialAdminPassword = !isProduction ? "AdminInit123!" : "";
 
   const config = {
     projectRoot,
@@ -129,7 +125,7 @@ function createConfig() {
       enableDemoData: readBooleanEnv(process.env.ENABLE_DEMO_DATA, false)
     },
     session: {
-      secret: requireEnv("SESSION_SECRET", process.env.SESSION_SECRET || defaultSessionSecret, { allowInTest: true }),
+      secret: requireEnv("SESSION_SECRET", process.env.SESSION_SECRET),
       cookieName: readStringEnv(process.env.SESSION_COOKIE_NAME, "berichtsheft.sid"),
       secure: readBooleanEnv(process.env.SESSION_SECURE, isProduction),
       sameSite: normalizeSameSite(process.env.SESSION_SAME_SITE, "lax"),
@@ -163,16 +159,12 @@ function createConfig() {
     initialAdmin: {
       username: readStringEnv(process.env.INITIAL_ADMIN_USERNAME, "admin"),
       email: readStringEnv(process.env.INITIAL_ADMIN_EMAIL, "admin@example.com").toLowerCase(),
-      password: requireEnv("INITIAL_ADMIN_PASSWORD", process.env.INITIAL_ADMIN_PASSWORD || defaultInitialAdminPassword, { allowInTest: true })
+      password: requireEnv("INITIAL_ADMIN_PASSWORD", process.env.INITIAL_ADMIN_PASSWORD)
     }
   };
 
   if (config.isProduction && config.bootstrap.enableDemoData) {
     throw new Error("ENABLE_DEMO_DATA darf in Produktion nicht aktiviert sein.");
-  }
-
-  if (!useRedisSessions) {
-    throw new Error("USE_REDIS_SESSIONS=false wird nicht mehr unterstuetzt. Sessions laufen ausschliesslich ueber Redis.");
   }
 
   if (config.session.sameSite === "none" && !config.session.secure) {

@@ -11,7 +11,11 @@ services:
     volumes:
       - mssql-data:/var/opt/mssql
     healthcheck:
-      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P $$MSSQL_SA_PASSWORD -Q \"SELECT 1\" || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "SQLCMD=$$(command -v sqlcmd || true); if [ -z \"$$SQLCMD\" ]; then for candidate in /opt/mssql-tools18/bin/sqlcmd /opt/mssql-tools/bin/sqlcmd; do if [ -x \"$$candidate\" ]; then SQLCMD=$$candidate; break; fi; done; fi; [ -n \"$$SQLCMD\" ] && $$SQLCMD -C -S localhost -U sa -P $$MSSQL_SA_PASSWORD -Q \"SELECT 1\" || exit 1"
+        ]
       interval: 10s
       timeout: 5s
       retries: 20
@@ -27,7 +31,17 @@ services:
       - /bin/bash
       - -lc
       - |
-        /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${MSSQL_PASSWORD:-YourStrong(!)Password}" -Q "IF DB_ID(N'${MSSQL_DATABASE:-berichtsheft}') IS NULL CREATE DATABASE [${MSSQL_DATABASE:-berichtsheft}]; IF DB_ID(N'${MSSQL_TEST_DATABASE:-berichtsheft_test}') IS NULL CREATE DATABASE [${MSSQL_TEST_DATABASE:-berichtsheft_test}];"
+        SQLCMD="$$(command -v sqlcmd || true)"
+        if [ -z "$$SQLCMD" ]; then
+          for candidate in /opt/mssql-tools18/bin/sqlcmd /opt/mssql-tools/bin/sqlcmd; do
+            if [ -x "$$candidate" ]; then
+              SQLCMD="$$candidate"
+              break
+            fi
+          done
+        fi
+        [ -n "$$SQLCMD" ] || exit 1
+        "$$SQLCMD" -C -S mssql -U sa -P "${MSSQL_PASSWORD:-YourStrong(!)Password}" -Q "IF DB_ID(N'${MSSQL_DATABASE:-berichtsheft}') IS NULL CREATE DATABASE [${MSSQL_DATABASE:-berichtsheft}]; IF DB_ID(N'${MSSQL_TEST_DATABASE:-berichtsheft_test}') IS NULL CREATE DATABASE [${MSSQL_TEST_DATABASE:-berichtsheft_test}];"
 
   redis:
     image: redis:7.4-alpine
@@ -65,7 +79,7 @@ services:
       API_BASE_URL: ${API_BASE_URL:-}
       TRUST_PROXY: ${TRUST_PROXY:-false}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
-      SESSION_SECRET: ${SESSION_SECRET:-compose-dev-session-secret}
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set}
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-berichtsheft.sid}
       SESSION_SECURE: ${SESSION_SECURE:-false}
       SESSION_SAME_SITE: ${SESSION_SAME_SITE:-lax}
@@ -92,7 +106,7 @@ services:
       ENABLE_DEMO_DATA: ${ENABLE_DEMO_DATA:-true}
       INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@example.com}
-      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-AdminInit123!}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?INITIAL_ADMIN_PASSWORD must be set}
     ports:
       - "${APP_PORT_MAPPING:-3010:3010}"
     healthcheck:

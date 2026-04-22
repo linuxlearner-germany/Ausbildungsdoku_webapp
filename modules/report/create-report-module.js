@@ -42,14 +42,16 @@ function createReportModule({ db, sharedRepository, auditHelpers, helpers, impor
       buildBatchResult: reportDomainService.buildBatchResult,
       isTrainerAssignedToTrainee: sharedRepository.isTrainerAssignedToTrainee,
       writeAuditLog: auditHelpers.writeAuditLog,
-      renderPdf: (res, trainee, entries) => renderPdf(res, trainee, entries, path.resolve(picturesDir)),
       buildEntriesCsv
     }
   });
 
   const reportController = createReportController({
     reportService,
-    schemas: reportSchemas
+    schemas: reportSchemas,
+    helpers: {
+      renderPdf: (res, trainee, entries) => renderPdf(res, trainee, entries, path.resolve(picturesDir))
+    }
   });
 
   return {

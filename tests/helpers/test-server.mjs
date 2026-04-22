@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 
 let nextPort = 3210;
+const START_TIMEOUT_MS = 20000;
+const HEALTH_CHECK_INTERVAL_MS = 250;
 
 function buildTestEnv(port, overrides = {}) {
   return {
@@ -8,7 +10,12 @@ function buildTestEnv(port, overrides = {}) {
     HOST: "127.0.0.1",
     PORT: String(port),
     NODE_ENV: "test",
+    LOG_LEVEL: "error",
     SESSION_SECRET: "test-session-secret",
+    SESSION_COOKIE_NAME: "berichtsheft.sid",
+    SESSION_SECURE: "false",
+    SESSION_SAME_SITE: "lax",
+    SESSION_MAX_AGE_MS: "28800000",
     INITIAL_ADMIN_USERNAME: "admin",
     INITIAL_ADMIN_EMAIL: "admin@example.com",
     INITIAL_ADMIN_PASSWORD: "admin123",
@@ -23,8 +30,49 @@ function buildTestEnv(port, overrides = {}) {
     MSSQL_PASSWORD: process.env.MSSQL_PASSWORD || "YourStrong(!)Password",
     MSSQL_TRUST_SERVER_CERTIFICATE: process.env.MSSQL_TRUST_SERVER_CERTIFICATE || "true",
     REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379",
+    REDIS_KEY_PREFIX: "berichtsheft:test:",
     ...overrides
   };
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function isServerHealthy(baseUrl) {
+  try {
+    const response = await fetch(`${baseUrl}/api/health`);
+    return response.ok;
+  } catch (_error) {
+    return false;
+  }
+}
+
+async function waitForServerReady({ child, baseUrl, timeoutMs, stderrBuffer, stdoutBuffer }) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    if (child.exitCode !== null) {
+      break;
+    }
+
+    if (await isServerHealthy(baseUrl)) {
+      return;
+    }
+
+    await delay(HEALTH_CHECK_INTERVAL_MS);
+  }
+
+  child.kill("SIGTERM");
+  throw new Error(
+    [
+      "Serverstart Timeout",
+      stderrBuffer.length ? `stderr: ${stderrBuffer.join("")}` : "",
+      stdoutBuffer.length ? `stdout: ${stdoutBuffer.join("")}` : ""
+    ].filter(Boolean).join("\n")
+  );
 }
 
 export function startServer(port, envOverrides = {}) {
@@ -34,33 +82,34 @@ export function startServer(port, envOverrides = {}) {
     stdio: ["ignore", "pipe", "pipe"]
   });
 
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      child.kill("SIGTERM");
-      reject(new Error("Serverstart Timeout"));
-    }, 20000);
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const stderrBuffer = [];
+  const stdoutBuffer = [];
 
+  return new Promise((resolve, reject) => {
     child.once("exit", (code) => {
-      clearTimeout(timeout);
       if (code !== 0) {
-        reject(new Error(`Serverprozess unerwartet beendet (${code ?? "signal"}).`));
+        reject(new Error(
+          [
+            `Serverprozess unerwartet beendet (${code ?? "signal"}).`,
+            stderrBuffer.length ? `stderr: ${stderrBuffer.join("")}` : "",
+            stdoutBuffer.length ? `stdout: ${stdoutBuffer.join("")}` : ""
+          ].filter(Boolean).join("\n")
+        ));
       }
     });
 
     child.stdout.on("data", (data) => {
-      if (String(data).includes(`http://127.0.0.1:${port}`)) {
-        clearTimeout(timeout);
-        resolve(child);
-      }
+      stdoutBuffer.push(String(data));
     });
 
     child.stderr.on("data", (data) => {
-      const message = String(data);
-      if (message.trim()) {
-        clearTimeout(timeout);
-        reject(new Error(message));
-      }
+      stderrBuffer.push(String(data));
     });
+
+    waitForServerReady({ child, baseUrl, timeoutMs: START_TIMEOUT_MS, stderrBuffer, stdoutBuffer })
+      .then(() => resolve(child))
+      .catch(reject);
   });
 }
 

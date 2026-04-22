@@ -107,20 +107,23 @@ function createGradesService({ gradesRepository, helpers }) {
     return { ok: true, traineeId, grades: await gradesRepository.listGradesForTrainee(traineeId) };
   }
 
-  async function exportPdf(user, query, res) {
+  async function getPdfExport(user, query) {
     const trainee = await resolveReadableTrainee(user, query.traineeId);
     if (!trainee) {
       throw new HttpError(400, "Azubi-ID fehlt.");
     }
 
-    helpers.renderGradesPdf(res, trainee, await gradesRepository.listGradesForTrainee(trainee.id));
+    return {
+      trainee,
+      grades: await gradesRepository.listGradesForTrainee(trainee.id)
+    };
   }
 
   return {
     listGrades,
     saveGrade,
     deleteGrade,
-    exportPdf
+    getPdfExport
   };
 }
 

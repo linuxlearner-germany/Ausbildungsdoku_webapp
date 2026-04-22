@@ -229,11 +229,12 @@ function createAdminService({ adminRepository, helpers }) {
     return result;
   }
 
-  async function exportUsersCsv(res) {
-    const csv = helpers.buildAdminUsersCsv(await adminRepository.listUsersWithRelations());
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", 'attachment; filename="verwaltung-benutzer.csv"');
-    res.send(csv);
+  async function getUsersCsvExport() {
+    return {
+      contentType: "text/csv; charset=utf-8",
+      fileName: "verwaltung-benutzer.csv",
+      body: helpers.buildAdminUsersCsv(await adminRepository.listUsersWithRelations())
+    };
   }
 
   async function listAuditLogs(query) {
@@ -305,7 +306,7 @@ function createAdminService({ adminRepository, helpers }) {
     importUsers,
     updateUser,
     deleteUser,
-    exportUsersCsv,
+    getUsersCsvExport,
     listAuditLogs,
     updateProfile,
     getAdminDashboard

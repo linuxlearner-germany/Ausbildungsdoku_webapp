@@ -6,6 +6,8 @@ Voraussetzung: MSSQL und Redis sind erreichbar.
 
 ```bash
 npm install
+cp .env.example .env
+# .env mit SESSION_SECRET und INITIAL_ADMIN_PASSWORD befuellen
 npm run dev
 ```
 
