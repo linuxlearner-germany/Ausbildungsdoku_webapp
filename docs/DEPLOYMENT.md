@@ -16,7 +16,7 @@
 - `MSSQL_PASSWORD`
 - `INITIAL_ADMIN_PASSWORD`
 
-Wenn Redis fuer Sessions aktiv ist, zusaetzlich:
+Zusaetzlich:
 
 - `REDIS_URL` oder `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD`
 

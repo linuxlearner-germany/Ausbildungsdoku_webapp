@@ -187,40 +187,45 @@ function createReportService({ reportRepository, helpers }) {
     };
   }
 
-  async function exportPdf(req, res) {
-    let traineeId = req.params.traineeId ? Number(req.params.traineeId) : req.user.id;
+  async function getPdfExport(user, requestedTraineeId) {
+    let traineeId = requestedTraineeId ? Number(requestedTraineeId) : user.id;
 
-    if (req.user.role === "trainee") {
-      traineeId = req.user.id;
+    if (user.role === "trainee") {
+      traineeId = user.id;
     }
 
     const trainee = await reportRepository.findTraineeById(traineeId);
     if (!trainee) {
       throw new HttpError(404, "Azubi nicht gefunden.");
     }
-    if (req.user.role === "trainer" && !await helpers.isTrainerAssignedToTrainee(req.user.id, trainee.id)) {
+    if (user.role === "trainer" && !await helpers.isTrainerAssignedToTrainee(user.id, trainee.id)) {
       throw new HttpError(403, "Keine Berechtigung fuer dieses Berichtsheft.");
     }
 
-    helpers.renderPdf(res, trainee, await reportRepository.listEntriesForTrainee(trainee.id));
+    return {
+      trainee,
+      entries: await reportRepository.listEntriesForTrainee(trainee.id)
+    };
   }
 
-  async function exportOwnCsv(req, res) {
-    const trainee = await reportRepository.findTraineeById(req.user.id);
+  async function getOwnCsvExport(user) {
+    const trainee = await reportRepository.findTraineeById(user.id);
     if (!trainee) {
       throw new HttpError(404, "Azubi nicht gefunden.");
     }
 
-    const csv = helpers.buildEntriesCsv(await reportRepository.listEntriesForTrainee(req.user.id));
+    const csv = helpers.buildEntriesCsv(await reportRepository.listEntriesForTrainee(user.id));
     const safeName = String(trainee.name || "azubi")
       .trim()
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "azubi";
 
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="berichtsheft-${safeName}.csv"`);
-    res.send(csv);
+    return {
+      contentType: "text/csv; charset=utf-8",
+      fileName: `berichtsheft-${safeName}.csv`,
+      body: csv
+    };
   }
 
   return {
@@ -236,8 +241,8 @@ function createReportService({ reportRepository, helpers }) {
     rejectEntry,
     commentEntry,
     batchTrainerAction,
-    exportPdf,
-    exportOwnCsv
+    getPdfExport,
+    getOwnCsvExport
   };
 }
 

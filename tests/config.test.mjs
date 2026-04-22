@@ -56,6 +56,8 @@ test("SameSite none erfordert secure cookies", () => {
   assert.throws(
     () => loadConfigWithEnv({
       NODE_ENV: "development",
+      SESSION_SECRET: "secret",
+      INITIAL_ADMIN_PASSWORD: "Password123!",
       SESSION_SAME_SITE: "none",
       SESSION_SECURE: "false",
       MSSQL_HOST: "db.example.test",
@@ -67,16 +69,32 @@ test("SameSite none erfordert secure cookies", () => {
   );
 });
 
-test("Redis-Sessions sind verpflichtend", () => {
+test("SESSION_SECRET ist immer verpflichtend", () => {
   assert.throws(
     () => loadConfigWithEnv({
       NODE_ENV: "development",
-      USE_REDIS_SESSIONS: "false",
+      SESSION_SECRET: "",
+      INITIAL_ADMIN_PASSWORD: "Password123!",
       MSSQL_HOST: "db.example.test",
       MSSQL_DATABASE: "berichtsheft",
       MSSQL_USER: "sa",
       MSSQL_PASSWORD: "Password123!"
     }),
-    /USE_REDIS_SESSIONS=false wird nicht mehr unterstuetzt/
+    /SESSION_SECRET muss gesetzt sein/
+  );
+});
+
+test("INITIAL_ADMIN_PASSWORD ist immer verpflichtend", () => {
+  assert.throws(
+    () => loadConfigWithEnv({
+      NODE_ENV: "development",
+      SESSION_SECRET: "secret",
+      INITIAL_ADMIN_PASSWORD: "",
+      MSSQL_HOST: "db.example.test",
+      MSSQL_DATABASE: "berichtsheft",
+      MSSQL_USER: "sa",
+      MSSQL_PASSWORD: "Password123!"
+    }),
+    /INITIAL_ADMIN_PASSWORD muss gesetzt sein/
   );
 });

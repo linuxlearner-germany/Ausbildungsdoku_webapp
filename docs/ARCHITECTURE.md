@@ -4,6 +4,7 @@
 
 - Zentraler Einstiegspunkt: [app/config.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/app/config.js)
 - Dort werden ENV-Werte gelesen, validiert und normalisiert.
+- Sensible Werte wie `SESSION_SECRET` und `INITIAL_ADMIN_PASSWORD` werden immer explizit erwartet.
 - Die restliche Anwendung verwendet nur das Config-Objekt.
 
 ## Backend-Schichten

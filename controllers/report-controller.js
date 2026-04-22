@@ -12,7 +12,13 @@ function parseSchema(schema, payload) {
   }
 }
 
-function createReportController({ reportService, schemas }) {
+function sendDownload(res, { contentType, fileName, body }) {
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+  res.send(body);
+}
+
+function createReportController({ reportService, schemas, helpers }) {
   return {
     async upsertReport(req, res) {
       const payload = parseSchema(schemas.reportUpsertSchema, req.body || {});
@@ -81,11 +87,12 @@ function createReportController({ reportService, schemas }) {
     },
 
     async exportPdf(req, res) {
-      await reportService.exportPdf(req, res);
+      const pdfExport = await reportService.getPdfExport(req.user, req.params.traineeId);
+      helpers.renderPdf(res, pdfExport.trainee, pdfExport.entries);
     },
 
     async exportOwnCsv(req, res) {
-      await reportService.exportOwnCsv(req, res);
+      sendDownload(res, await reportService.getOwnCsvExport(req.user));
     }
   };
 }

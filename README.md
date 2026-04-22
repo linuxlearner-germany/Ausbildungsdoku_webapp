@@ -21,6 +21,8 @@ Voraussetzung: MSSQL und Redis laufen lokal oder extern.
 
 ```bash
 npm install
+cp .env.example .env
+# .env mit SESSION_SECRET und INITIAL_ADMIN_PASSWORD befuellen
 npm run dev
 ```
 
@@ -69,6 +71,8 @@ Wichtige Bereiche:
 - MSSQL: `MSSQL_HOST`, `MSSQL_PORT`, `MSSQL_DATABASE`, `MSSQL_USER`, `MSSQL_PASSWORD`, TLS- und Pooling-Werte
 - Bootstrap: `APPLY_MIGRATIONS_ON_START`, `BOOTSTRAP_DATABASE_ON_START`, `RESET_DATABASE_ON_START`, `ENABLE_DEMO_DATA`
 - Initialer Admin: `INITIAL_ADMIN_USERNAME`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD`
+
+`SESSION_SECRET` und `INITIAL_ADMIN_PASSWORD` muessen explizit gesetzt werden. Es gibt dafuer keine stillen Entwicklungs-Defaults im Runtime-Code.
 
 Siehe [.env.example](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/.env.example).
 

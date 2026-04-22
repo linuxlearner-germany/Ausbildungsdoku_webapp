@@ -43,13 +43,12 @@ Die lokale `.env` ist angelegt und auf Host-Entwicklung ausgerichtet:
 - `MSSQL_PASSWORD=YourStrong(!)Password`
 - `MSSQL_ENCRYPT=true`
 - `MSSQL_TRUST_SERVER_CERTIFICATE=true`
-- `USE_REDIS_SESSIONS=true`
 - `REDIS_HOST=127.0.0.1`
 - `REDIS_PORT=6379`
-- `SESSION_SECRET=local-development-session-secret-change-me`
+- `SESSION_SECRET=<explizit in .env setzen>`
 - `INITIAL_ADMIN_USERNAME=admin`
 - `INITIAL_ADMIN_EMAIL=admin@example.com`
-- `INITIAL_ADMIN_PASSWORD=AdminInit123!`
+- `INITIAL_ADMIN_PASSWORD=<explizit in .env setzen>`
 
 ## Wichtige technische Erkenntnisse
 
@@ -61,7 +60,7 @@ Der Node-MSSQL/Tedious-Client konnte ueber einen normal publizierten Docker-Port
 - `nc 127.0.0.1 1433` funktionierte
 - `mssql`/`tedious` auf dem Host lief gegen `127.0.0.1:1433` in Timeouts
 
-Pragmatische Loesung:
+Pragmatische Loesung im frueheren Zwischenstand:
 
 - neue Datei `docker-compose.dev-infra.yml`
 - MSSQL fuer Host-Development mit `network_mode: host`
@@ -160,7 +159,7 @@ Erfolgreich getestet:
 
 ```bash
 curl -H 'Content-Type: application/json' \
-  -d '{"identifier":"admin","password":"AdminInit123!"}' \
+  -d '{"identifier":"admin","password":"<dein INITIAL_ADMIN_PASSWORD>"}' \
   http://127.0.0.1:3010/api/login
 ```
 
@@ -177,7 +176,7 @@ Erfolgreich getestet:
 ### Normale lokale Entwicklung (`.env`, Demo-Daten aus)
 
 - Benutzer: `admin`
-- Passwort: `AdminInit123!`
+- Passwort: Wert aus `INITIAL_ADMIN_PASSWORD`
 
 ### Testlauf (`tests/helpers/test-server.mjs`, Demo-Daten an)
 

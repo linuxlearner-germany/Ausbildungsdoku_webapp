@@ -12,6 +12,12 @@ function parseSchema(schema, payload) {
   }
 }
 
+function sendDownload(res, { contentType, fileName, body }) {
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+  res.send(body);
+}
+
 function createAdminController({ adminService, schemas }) {
   return {
     async createUser(req, res) {
@@ -50,7 +56,7 @@ function createAdminController({ adminService, schemas }) {
     },
 
     async exportUsersCsv(_req, res) {
-      await adminService.exportUsersCsv(res);
+      sendDownload(res, await adminService.getUsersCsvExport());
     },
 
     async listAuditLogs(req, res) {
