@@ -11,7 +11,7 @@ Produktionsnahe Webanwendung fuer digitale Ausbildungsnachweise mit Node.js, Exp
 - Frontend: React 19 + esbuild
 - Deployment-Ziel: App im Docker-Container, MSSQL extern, Redis extern oder separat
 
-SQLite ist kein Runtime-Pfad mehr.
+SQLite ist kein Runtime-Pfad mehr. In-Memory-Sessions ebenfalls nicht.
 
 ## Betriebsmodi
 
@@ -35,7 +35,7 @@ npm start
 Startet nur MSSQL und Redis fuer Host-based Entwicklung:
 
 ```bash
-docker compose -f docker-compose.local.yml up -d mssql mssql-init redis
+docker compose -f docker-compose.dev-infra.yml up -d
 npm run dev
 ```
 
@@ -44,7 +44,7 @@ npm run dev
 Startet App, MSSQL und Redis komplett in Docker:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.local.yml up --build
+docker compose -f docker-compose.local.yml up --build
 ```
 
 ## 4. Produktion / produktionsnaher Zielpfad
@@ -64,7 +64,7 @@ Alle deployment-relevanten Werte werden in [app/config.js](/home/paul/Dokumente/
 Wichtige Bereiche:
 
 - App/Server: `NODE_ENV`, `HOST`, `PORT`, `APP_BASE_URL`, `APP_BASE_PATH`, `API_BASE_URL`, `TRUST_PROXY`, `LOG_LEVEL`
-- Session/Security: `SESSION_SECRET`, `SESSION_COOKIE_NAME`, `SESSION_SECURE`, `SESSION_SAME_SITE`, `SESSION_MAX_AGE_MS`, `USE_REDIS_SESSIONS`
+- Session/Security: `SESSION_SECRET`, `SESSION_COOKIE_NAME`, `SESSION_SECURE`, `SESSION_SAME_SITE`, `SESSION_MAX_AGE_MS`
 - Redis: `REDIS_URL` oder `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD`
 - MSSQL: `MSSQL_HOST`, `MSSQL_PORT`, `MSSQL_DATABASE`, `MSSQL_USER`, `MSSQL_PASSWORD`, TLS- und Pooling-Werte
 - Bootstrap: `APPLY_MIGRATIONS_ON_START`, `BOOTSTRAP_DATABASE_ON_START`, `RESET_DATABASE_ON_START`, `ENABLE_DEMO_DATA`
@@ -78,9 +78,10 @@ Beim Start macht die App:
 
 1. Config laden und validieren
 2. MSSQL-Verbindung pruefen
-3. Migrationen ausfuehren
-4. Initial-Admin und optional Demo-Daten bootstrapen
-5. Express starten
+3. Redis-Verbindung pruefen
+4. Migrationen ausfuehren
+5. Initial-Admin und optional Demo-Daten bootstrapen
+6. Express starten
 
 ## Tests
 
@@ -93,7 +94,7 @@ npm test
 Integrationstests gegen MSSQL/Redis:
 
 ```bash
-docker compose -f docker-compose.local.yml up -d mssql mssql-init redis
+docker compose -f docker-compose.dev-infra.yml up -d
 npm run test:integration
 ```
 

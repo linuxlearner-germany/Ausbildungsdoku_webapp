@@ -9,45 +9,54 @@ const { createBootstrap } = require("./data/bootstrap-mssql");
 async function createRuntime() {
   const config = createConfig();
   const db = createDb(config);
-  const redisClient = createRedisClient(config);
+  let redisClient;
 
-  await verifyDbConnection(db, config);
+  try {
+    redisClient = await createRedisClient(config);
+    await verifyDbConnection(db, config);
 
-  if (config.bootstrap.applyMigrationsOnStart) {
-    await runMigrations({ db });
-  }
+    if (config.bootstrap.applyMigrationsOnStart) {
+      await runMigrations({ db });
+    }
 
-  const dependencies = createDependencies({ config, db });
-  const bootstrap = createBootstrap({
-    db,
-    config,
-    hashPassword: dependencies.bootstrapHelpers.hashPassword
-  });
+    const dependencies = createDependencies({ config, db });
+    const bootstrap = createBootstrap({
+      db,
+      config,
+      hashPassword: dependencies.bootstrapHelpers.hashPassword
+    });
 
-  let bootstrapResult = null;
-  if (config.bootstrap.bootstrapDatabaseOnStart) {
-    bootstrapResult = await bootstrap.run({ reset: config.bootstrap.resetDatabaseOnStart });
-  }
+    let bootstrapResult = null;
+    if (config.bootstrap.bootstrapDatabaseOnStart) {
+      bootstrapResult = await bootstrap.run({ reset: config.bootstrap.resetDatabaseOnStart });
+    }
 
-  const app = createApp({ config, db, redisClient, dependencies });
-  app.locals.bootstrap = bootstrapResult;
+    const app = createApp({ config, db, redisClient, dependencies });
+    app.locals.bootstrap = bootstrapResult;
 
-  async function shutdown() {
+    async function shutdown() {
+      await Promise.allSettled([
+        db.destroy(),
+        redisClient.quit()
+      ]);
+    }
+
+    return {
+      app,
+      db,
+      redisClient,
+      config,
+      dependencies,
+      bootstrap,
+      shutdown
+    };
+  } catch (error) {
     await Promise.allSettled([
       db.destroy(),
-      redisClient ? redisClient.quit() : Promise.resolve()
+      redisClient?.quit()
     ]);
+    throw error;
   }
-
-  return {
-    app,
-    db,
-    redisClient,
-    config,
-    dependencies,
-    bootstrap,
-    shutdown
-  };
 }
 
 async function startServer(runtime) {
@@ -61,16 +70,45 @@ if (require.main === module) {
   (async () => {
     const runtime = await createRuntime();
     const server = await startServer(runtime);
+    let shuttingDown = false;
 
-    const close = async () => {
-      server.close(async () => {
-        await runtime.shutdown();
-        process.exit(0);
+    const close = async (signal) => {
+      if (shuttingDown) {
+        return;
+      }
+
+      shuttingDown = true;
+      console.log(`${signal} empfangen. Server wird beendet...`);
+
+      await new Promise((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        });
       });
+
+      await runtime.shutdown();
+      process.exit(0);
     };
 
-    process.on("SIGINT", close);
-    process.on("SIGTERM", close);
+    process.on("SIGINT", () => {
+      close("SIGINT").catch(async (error) => {
+        console.error(error);
+        await runtime.shutdown();
+        process.exit(1);
+      });
+    });
+    process.on("SIGTERM", () => {
+      close("SIGTERM").catch(async (error) => {
+        console.error(error);
+        await runtime.shutdown();
+        process.exit(1);
+      });
+    });
 
     console.log(`Berichtsheft-App laeuft auf http://${runtime.config.server.host}:${runtime.config.server.port}${runtime.config.app.basePath || ""}`);
     if (runtime.config.bootstrap.enableDemoData) {

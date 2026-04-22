@@ -30,10 +30,8 @@ function createApp({ config, db, redisClient, dependencies }) {
   web.get("/api/health", async (_req, res, next) => {
     try {
       await db.raw("SELECT 1 AS ok");
-      const redisStatus = config.session.useRedisSessions
-        ? (redisClient?.isReady ? "up" : redisClient?.isOpen ? "connecting" : "down")
-        : "disabled";
-      res.json({ ok: true, status: "healthy", dependencies: { database: "up", redis: redisStatus } });
+      await redisClient.ping();
+      res.json({ ok: true, status: "healthy", dependencies: { database: "up", redis: "up" } });
     } catch (error) {
       next(error);
     }

@@ -2,11 +2,12 @@ services:
   mssql:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: ausbildungsdoku-mssql-dev
-    network_mode: host
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: "Developer"
       MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD:-YourStrong(!)Password}
+    ports:
+      - "${DEV_INFRA_MSSQL_PORT_MAPPING:-1433:1433}"
     volumes:
       - mssql-dev-data:/var/opt/mssql
     healthcheck:
@@ -18,8 +19,6 @@ services:
 
   mssql-init:
     image: mcr.microsoft.com/mssql-tools
-    container_name: ausbildungsdoku-mssql-dev-init
-    network_mode: host
     depends_on:
       mssql:
         condition: service_healthy
@@ -28,13 +27,14 @@ services:
       - /bin/bash
       - -lc
       - |
-        /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "${MSSQL_PASSWORD:-YourStrong(!)Password}" -Q "IF DB_ID(N'${MSSQL_DATABASE:-berichtsheft}') IS NULL CREATE DATABASE [${MSSQL_DATABASE:-berichtsheft}]; IF DB_ID(N'${MSSQL_TEST_DATABASE:-berichtsheft_test}') IS NULL CREATE DATABASE [${MSSQL_TEST_DATABASE:-berichtsheft_test}];"
+        /opt/mssql-tools/bin/sqlcmd -S mssql -U sa -P "${MSSQL_PASSWORD:-YourStrong(!)Password}" -Q "IF DB_ID(N'${MSSQL_DATABASE:-berichtsheft}') IS NULL CREATE DATABASE [${MSSQL_DATABASE:-berichtsheft}]; IF DB_ID(N'${MSSQL_TEST_DATABASE:-berichtsheft_test}') IS NULL CREATE DATABASE [${MSSQL_TEST_DATABASE:-berichtsheft_test}];"
 
   redis:
     image: redis:7.4-alpine
     container_name: ausbildungsdoku-redis-dev
-    network_mode: host
     command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${DEV_INFRA_REDIS_PORT_MAPPING:-6379:6379}"
     volumes:
       - redis-dev-data:/data
     healthcheck:

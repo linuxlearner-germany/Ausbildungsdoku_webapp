@@ -6,7 +6,7 @@
   place-items: center;
   padding: 1.5rem;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(238, 242, 246, 0.95)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(238, 242, 246, 0.98)),
     url("../../Pictures/background.png") center/cover no-repeat;
 }
 
@@ -16,9 +16,9 @@
   gap: 2rem;
   padding: 2rem;
   border: 1px solid var(--app-border);
-  border-radius: 1rem;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 24px 60px rgba(21, 32, 43, 0.12);
+  border-radius: 0.35rem;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 30px rgba(21, 32, 43, 0.08);
 }
 
 .login-brand {
@@ -50,7 +50,7 @@
 .quick-action-card,
 .trainer-card {
   border: 1px solid var(--app-border);
-  border-radius: 0.75rem;
+  border-radius: 0.35rem;
   background: var(--app-surface-muted);
 }
 

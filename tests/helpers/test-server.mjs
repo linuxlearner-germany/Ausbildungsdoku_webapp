@@ -7,9 +7,11 @@ function buildTestEnv(port, overrides = {}) {
     ...process.env,
     HOST: "127.0.0.1",
     PORT: String(port),
-    NODE_ENV: "development",
-    SESSION_SECRET: process.env.SESSION_SECRET || "test-session-secret",
-    INITIAL_ADMIN_PASSWORD: process.env.INITIAL_ADMIN_PASSWORD || "admin123",
+    NODE_ENV: "test",
+    SESSION_SECRET: "test-session-secret",
+    INITIAL_ADMIN_USERNAME: "admin",
+    INITIAL_ADMIN_EMAIL: "admin@example.com",
+    INITIAL_ADMIN_PASSWORD: "admin123",
     ENABLE_DEMO_DATA: "true",
     APPLY_MIGRATIONS_ON_START: "true",
     BOOTSTRAP_DATABASE_ON_START: "true",
@@ -37,6 +39,13 @@ export function startServer(port, envOverrides = {}) {
       child.kill("SIGTERM");
       reject(new Error("Serverstart Timeout"));
     }, 20000);
+
+    child.once("exit", (code) => {
+      clearTimeout(timeout);
+      if (code !== 0) {
+        reject(new Error(`Serverprozess unerwartet beendet (${code ?? "signal"}).`));
+      }
+    });
 
     child.stdout.on("data", (data) => {
       if (String(data).includes(`http://127.0.0.1:${port}`)) {
