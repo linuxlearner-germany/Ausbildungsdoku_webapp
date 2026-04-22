@@ -219,7 +219,7 @@ function createReportService({ reportRepository, helpers }) {
       .replace(/^-+|-+$/g, "") || "azubi";
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${safeName}-berichte.csv"`);
+    res.setHeader("Content-Disposition", `attachment; filename="berichtsheft-${safeName}.csv"`);
     res.send(csv);
   }
 

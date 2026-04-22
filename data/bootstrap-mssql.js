@@ -85,20 +85,20 @@ function createBootstrap({
       role: "trainer",
       theme_preference: "system",
       ausbildung: "",
-      betrieb: "WIWEB GmbH",
+      betrieb: "Muster GmbH",
       berufsschule: ""
     });
 
     const trainee = await ensureUser({
-      name: "Max Azubi",
+      name: "Max Mustermann",
       username: "azubi",
       email: "azubi@example.com",
       password_hash: hashPassword("azubi123"),
       role: "trainee",
       theme_preference: "system",
       ausbildung: "Fachinformatiker/in Systemintegration",
-      betrieb: "WIWEB GmbH",
-      berufsschule: "BSZ Technik"
+      betrieb: "Muster GmbH",
+      berufsschule: "BBS"
     });
 
     const assignment = await trx("trainee_trainers")
@@ -113,8 +113,8 @@ function createBootstrap({
         id: crypto.randomUUID(),
         trainee_id: trainee.id,
         weekLabel: "Warenannahme begleitet",
-        dateFrom: "2026-04-01",
-        dateTo: "2026-04-01",
+        dateFrom: "2026-03-24",
+        dateTo: "2026-03-24",
         betrieb: "Support",
         schule: "",
         status: "draft"
@@ -123,8 +123,8 @@ function createBootstrap({
         id: crypto.randomUUID(),
         trainee_id: trainee.id,
         weekLabel: "PC-Arbeitsplatz eingerichtet",
-        dateFrom: "2026-04-02",
-        dateTo: "2026-04-02",
+        dateFrom: "2026-03-25",
+        dateTo: "2026-03-25",
         betrieb: "Client Management",
         schule: "",
         status: "submitted"

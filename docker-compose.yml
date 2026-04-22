@@ -5,6 +5,7 @@ services:
       dockerfile: Dockerfile
     image: ausbildungsdoku-webapp:latest
     container_name: ausbildungsdoku-app
+    restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       HOST: ${HOST:-0.0.0.0}
@@ -19,7 +20,6 @@ services:
       SESSION_SECURE: ${SESSION_SECURE:-true}
       SESSION_SAME_SITE: ${SESSION_SAME_SITE:-lax}
       SESSION_MAX_AGE_MS: ${SESSION_MAX_AGE_MS:-28800000}
-      USE_REDIS_SESSIONS: ${USE_REDIS_SESSIONS:-true}
       REDIS_URL: ${REDIS_URL:-}
       REDIS_HOST: ${REDIS_HOST:-}
       REDIS_PORT: ${REDIS_PORT:-}

@@ -30,8 +30,7 @@ body,
 
 body {
   background:
-    radial-gradient(circle at top right, rgba(15, 91, 120, 0.08), transparent 24%),
-    linear-gradient(180deg, #f7f9fb 0%, var(--app-bg) 100%);
+    linear-gradient(180deg, #f6f8fa 0%, var(--app-bg) 100%);
   color: var(--app-text);
 }
 

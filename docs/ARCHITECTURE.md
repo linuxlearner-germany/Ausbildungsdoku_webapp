@@ -23,8 +23,8 @@
 
 ## Sessions
 
-- Redis-Session-Store, gesteuert ueber zentrale Config
-- Lokale In-Memory-Sessions nur bewusst per `USE_REDIS_SESSIONS=false` und nicht in Produktion
+- Redis-Session-Store ist der einzige Laufpfad
+- Startup scheitert sofort, wenn Redis nicht erreichbar ist
 
 ## Frontend-Runtime
 

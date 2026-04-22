@@ -66,3 +66,17 @@ test("SameSite none erfordert secure cookies", () => {
     /SESSION_SAME_SITE=none erfordert SESSION_SECURE=true/
   );
 });
+
+test("Redis-Sessions sind verpflichtend", () => {
+  assert.throws(
+    () => loadConfigWithEnv({
+      NODE_ENV: "development",
+      USE_REDIS_SESSIONS: "false",
+      MSSQL_HOST: "db.example.test",
+      MSSQL_DATABASE: "berichtsheft",
+      MSSQL_USER: "sa",
+      MSSQL_PASSWORD: "Password123!"
+    }),
+    /USE_REDIS_SESSIONS=false wird nicht mehr unterstuetzt/
+  );
+});

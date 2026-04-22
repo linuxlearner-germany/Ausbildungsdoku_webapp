@@ -18,7 +18,6 @@
 
 Wenn Redis fuer Sessions aktiv ist, zusaetzlich:
 
-- `USE_REDIS_SESSIONS=true`
 - `REDIS_URL` oder `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD`
 
 ## Empfohlene Produktionswerte
@@ -49,7 +48,6 @@ docker run --rm -p 3010:3010 \
   -e TRUST_PROXY=true \
   -e SESSION_SECRET=super-secret \
   -e SESSION_SECURE=true \
-  -e USE_REDIS_SESSIONS=true \
   -e REDIS_URL=redis://redis.example.internal:6379 \
   -e MSSQL_HOST=sql.example.internal \
   -e MSSQL_PORT=1433 \

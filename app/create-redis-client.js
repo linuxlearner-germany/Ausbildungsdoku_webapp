@@ -1,10 +1,6 @@
 const { createClient } = require("redis");
 
-function createRedisClient(config) {
-  if (!config.session.useRedisSessions) {
-    return null;
-  }
-
+async function createRedisClient(config) {
   const client = createClient({
     url: config.redis.url
   });
@@ -13,11 +9,20 @@ function createRedisClient(config) {
     console.error(`Redis-Fehler: ${error.message}`);
   });
 
-  client.connect().catch((error) => {
-    console.error(`Redis-Verbindung fehlgeschlagen: ${error.message}`);
-  });
+  try {
+    await client.connect();
+    await client.ping();
+    return client;
+  } catch (error) {
+    if (client.isOpen) {
+      await client.quit().catch(() => {});
+    }
 
-  return client;
+    const message = `Redis-Verbindung fehlgeschlagen (${config.redis.host}:${config.redis.port}): ${error.message}`;
+    const wrappedError = new Error(message);
+    wrappedError.cause = error;
+    throw wrappedError;
+  }
 }
 
 module.exports = {

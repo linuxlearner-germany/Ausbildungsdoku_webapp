@@ -133,11 +133,9 @@ function createConfig() {
       cookieName: readStringEnv(process.env.SESSION_COOKIE_NAME, "berichtsheft.sid"),
       secure: readBooleanEnv(process.env.SESSION_SECURE, isProduction),
       sameSite: normalizeSameSite(process.env.SESSION_SAME_SITE, "lax"),
-      maxAgeMs: readNumberEnv(process.env.SESSION_MAX_AGE_MS, 1000 * 60 * 60 * 8),
-      useRedisSessions
+      maxAgeMs: readNumberEnv(process.env.SESSION_MAX_AGE_MS, 1000 * 60 * 60 * 8)
     },
     redis: {
-      useSessions: useRedisSessions,
       url: buildRedisUrl({
         url: readStringEnv(process.env.REDIS_URL, ""),
         host: redisHost,
@@ -173,8 +171,8 @@ function createConfig() {
     throw new Error("ENABLE_DEMO_DATA darf in Produktion nicht aktiviert sein.");
   }
 
-  if (config.isProduction && !config.session.useRedisSessions) {
-    throw new Error("USE_REDIS_SESSIONS darf in Produktion nicht deaktiviert sein.");
+  if (!useRedisSessions) {
+    throw new Error("USE_REDIS_SESSIONS=false wird nicht mehr unterstuetzt. Sessions laufen ausschliesslich ueber Redis.");
   }
 
   if (config.session.sameSite === "none" && !config.session.secure) {
