@@ -29,8 +29,7 @@ body,
 }
 
 body {
-  background:
-    linear-gradient(180deg, #f6f8fa 0%, var(--app-bg) 100%);
+  background: var(--app-bg);
   color: var(--app-text);
 }
 

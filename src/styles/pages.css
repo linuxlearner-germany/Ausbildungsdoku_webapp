@@ -6,19 +6,19 @@
   place-items: center;
   padding: 1.5rem;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(238, 242, 246, 0.98)),
+    linear-gradient(180deg, rgba(244, 247, 250, 0.94), rgba(244, 247, 250, 0.97)),
     url("../../Pictures/background.png") center/cover no-repeat;
 }
 
 .login-card {
-  width: min(920px, 100%);
+  width: min(840px, 100%);
   display: grid;
-  gap: 2rem;
-  padding: 2rem;
+  gap: 1.75rem;
+  padding: 1.75rem;
   border: 1px solid var(--app-border);
-  border-radius: 0.35rem;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 12px 30px rgba(21, 32, 43, 0.08);
+  border-radius: 0.375rem;
+  background: rgba(255, 255, 255, 0.97);
+  box-shadow: 0 10px 24px rgba(21, 32, 43, 0.06);
 }
 
 .login-brand {
@@ -30,7 +30,7 @@
 .login-form {
   display: grid;
   gap: 1rem;
-  max-width: 440px;
+  max-width: 420px;
 }
 
 .two-column-grid {

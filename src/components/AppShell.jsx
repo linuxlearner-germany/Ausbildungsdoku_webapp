@@ -8,6 +8,7 @@ export function AppShell({ user, theme, themePreference, onLogout, onToggleTheme
   return (
     <div className="app-shell">
       <SidebarNavigation user={user} mobileNavOpen={mobileNavOpen} onNavigate={() => setMobileNavOpen(false)} />
+      {mobileNavOpen ? <button type="button" className="sidebar-backdrop" aria-label="Navigation schliessen" onClick={() => setMobileNavOpen(false)} /> : null}
       <div className="app-main">
         <Topbar
           user={user}
@@ -19,7 +20,7 @@ export function AppShell({ user, theme, themePreference, onLogout, onToggleTheme
           onToggleNavigation={() => setMobileNavOpen((current) => !current)}
         />
         {flash ? <div className={`flash alert ${flash.type === "error" ? "alert-danger" : "alert-success"}`}>{flash.message}</div> : null}
-        <main className="page-content container-fluid">{children}</main>
+        <main className="page-content container-fluid px-3 px-lg-4">{children}</main>
       </div>
     </div>
   );

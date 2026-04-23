@@ -24,6 +24,8 @@ function loadConfigWithEnv(env) {
 test("Config baut Redis-URL aus Host/Port/Passwort", () => {
   const config = loadConfigWithEnv({
     NODE_ENV: "development",
+    SESSION_SECRET: "secret",
+    INITIAL_ADMIN_PASSWORD: "Password123!",
     MSSQL_HOST: "db.example.test",
     MSSQL_DATABASE: "berichtsheft",
     MSSQL_USER: "sa",
@@ -34,6 +36,21 @@ test("Config baut Redis-URL aus Host/Port/Passwort", () => {
   });
 
   assert.equal(config.redis.url, "redis://:secret@redis.internal:6380");
+});
+
+test("Config berechnet Session-TTL aus Cookie-Max-Age", () => {
+  const config = loadConfigWithEnv({
+    NODE_ENV: "development",
+    SESSION_SECRET: "secret",
+    INITIAL_ADMIN_PASSWORD: "Password123!",
+    SESSION_MAX_AGE_MS: "120000",
+    MSSQL_HOST: "db.example.test",
+    MSSQL_DATABASE: "berichtsheft",
+    MSSQL_USER: "sa",
+    MSSQL_PASSWORD: "Password123!"
+  });
+
+  assert.equal(config.session.ttlSeconds, 120);
 });
 
 test("Produktion verbietet Demo-Daten", () => {
@@ -96,5 +113,38 @@ test("INITIAL_ADMIN_PASSWORD ist immer verpflichtend", () => {
       MSSQL_PASSWORD: "Password123!"
     }),
     /INITIAL_ADMIN_PASSWORD muss gesetzt sein/
+  );
+});
+
+test("REDIS_KEY_PREFIX muss mit Doppelpunkt enden", () => {
+  assert.throws(
+    () => loadConfigWithEnv({
+      NODE_ENV: "development",
+      SESSION_SECRET: "secret",
+      INITIAL_ADMIN_PASSWORD: "Password123!",
+      REDIS_KEY_PREFIX: "berichtsheft",
+      MSSQL_HOST: "db.example.test",
+      MSSQL_DATABASE: "berichtsheft",
+      MSSQL_USER: "sa",
+      MSSQL_PASSWORD: "Password123!"
+    }),
+    /REDIS_KEY_PREFIX muss mit ':' enden/
+  );
+});
+
+test("Produktion verbietet Reset beim Start", () => {
+  assert.throws(
+    () => loadConfigWithEnv({
+      NODE_ENV: "production",
+      SESSION_SECRET: "secret",
+      SESSION_SECURE: "true",
+      INITIAL_ADMIN_PASSWORD: "Password123!",
+      RESET_DATABASE_ON_START: "true",
+      MSSQL_HOST: "db.example.test",
+      MSSQL_DATABASE: "berichtsheft",
+      MSSQL_USER: "sa",
+      MSSQL_PASSWORD: "Password123!"
+    }),
+    /RESET_DATABASE_ON_START darf in Produktion nicht aktiviert sein/
   );
 });

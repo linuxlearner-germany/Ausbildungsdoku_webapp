@@ -1,6 +1,6 @@
 .page-stack {
   display: grid;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .page-header {
@@ -29,14 +29,14 @@
 .table-shell {
   background: var(--app-surface);
   border: 1px solid var(--app-border);
-  border-radius: 0.35rem;
+  border-radius: 0.375rem;
 }
 
 .panel-card,
 .stat-card,
 .empty-state,
 .empty-table {
-  padding: 1.25rem;
+  padding: 1.1rem 1.15rem;
 }
 
 .stats-grid {
@@ -77,20 +77,34 @@
   color: #a52834;
 }
 
+.table-shell {
+  overflow: hidden;
+}
+
 .data-table th {
   text-transform: uppercase;
   font-size: 0.75rem;
   letter-spacing: 0.04em;
   color: var(--app-muted);
   background: var(--app-surface-muted);
+  border-bottom-width: 1px;
 }
 
 .data-table td,
 .data-table th {
-  padding: 0.9rem 1rem;
+  padding: 0.85rem 0.9rem;
+  vertical-align: middle;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
 }
 
 .app-btn {
-  border-radius: 0.35rem;
+  border-radius: 0.375rem;
   font-weight: 600;
+}
+
+.field-message.error {
+  color: #b42318;
 }

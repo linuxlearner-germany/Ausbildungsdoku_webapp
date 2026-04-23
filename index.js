@@ -18,12 +18,18 @@ async function createRuntime() {
   const runtimeState = {
     startedAt: Date.now(),
     isReady: false,
-    isShuttingDown: false
+    isShuttingDown: false,
+    dependencies: {
+      database: "starting",
+      redis: "starting"
+    }
   };
 
   try {
     redisClient = await createRedisClient(config, { logger });
+    runtimeState.dependencies.redis = "up";
     await verifyDbConnection(db, config);
+    runtimeState.dependencies.database = "up";
 
     if (config.bootstrap.applyMigrationsOnStart) {
       await runMigrations({ db });
@@ -48,6 +54,8 @@ async function createRuntime() {
     async function shutdown() {
       runtimeState.isReady = false;
       runtimeState.isShuttingDown = true;
+      runtimeState.dependencies.database = "down";
+      runtimeState.dependencies.redis = "down";
       await Promise.allSettled([
         db.destroy(),
         redisClient.quit()
@@ -66,6 +74,10 @@ async function createRuntime() {
       shutdown
     };
   } catch (error) {
+    runtimeState.isReady = false;
+    runtimeState.isShuttingDown = true;
+    runtimeState.dependencies.database = "down";
+    runtimeState.dependencies.redis = "down";
     await Promise.allSettled([
       db.destroy(),
       redisClient?.quit()
@@ -98,6 +110,10 @@ if (require.main === module) {
       shuttingDown = true;
       runtime.runtimeState.isShuttingDown = true;
       runtime.runtimeState.isReady = false;
+      runtime.runtimeState.dependencies = {
+        database: "down",
+        redis: "down"
+      };
       runtime.logger.info("Shutdown gestartet", { signal });
 
       const forceShutdownTimer = setTimeout(() => {
@@ -139,6 +155,18 @@ if (require.main === module) {
         await runtime.shutdown();
         process.exit(1);
       });
+    });
+    process.on("uncaughtException", async (error) => {
+      runtime.logger.error("Unbehandelter Ausnahmefehler", { error });
+      await runtime.shutdown();
+      process.exit(1);
+    });
+    process.on("unhandledRejection", async (error) => {
+      runtime.logger.error("Unbehandeltes Promise-Rejection", {
+        error: error instanceof Error ? error : new Error(String(error))
+      });
+      await runtime.shutdown();
+      process.exit(1);
     });
 
     runtime.logger.info("HTTP-Server gestartet", {

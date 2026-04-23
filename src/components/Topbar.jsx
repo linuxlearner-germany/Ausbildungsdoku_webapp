@@ -9,7 +9,7 @@ function themeLabel(themePreference, theme) {
 
 export function Topbar({ user, theme, themePreference, onLogout, onToggleTheme, mobileNavOpen, onToggleNavigation }) {
   return (
-    <header className="topbar border-bottom">
+    <header className="topbar">
       <div className="topbar-main">
         <button
           type="button"
@@ -21,15 +21,18 @@ export function Topbar({ user, theme, themePreference, onLogout, onToggleTheme, 
           Menue
         </button>
         <div className="topbar-copy">
-          <p className="page-kicker">Berichtsheft Portal</p>
-          <small className="topbar-theme-label">Ansicht: {themeLabel(themePreference, theme)}</small>
+          <p className="page-kicker mb-1">Ausbildungsdoku</p>
+          <div className="topbar-meta">
+            <strong className="topbar-title">Arbeitsbereich</strong>
+            <small className="topbar-theme-label">Ansicht: {themeLabel(themePreference, theme)}</small>
+          </div>
         </div>
       </div>
       <div className="topbar-user">
         <button className="btn btn-outline-secondary" onClick={onToggleTheme} type="button">
           {theme === "dark" ? "Hell" : "Dunkel"}
         </button>
-        <div className="user-pill border rounded-3">
+        <div className="user-pill">
           <span>{user?.name || "Gast"}</span>
           <small>{user?.username ? `@${user.username} · ${user.role}` : user?.role || "ohne Sitzung"}</small>
         </div>

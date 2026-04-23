@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import XLSX from "xlsx";
 import { extractCookie, postJson, startServer } from "../helpers/test-server.mjs";
+import { buildIntegrationTestEnv } from "../helpers/test-env.mjs";
 
 let nextPort = 3510;
 let baseUrl = "";
@@ -29,24 +30,14 @@ await test("Produktion startet nicht mit Demo-Daten", { concurrency: false }, as
   await withIsolatedServer(async () => {
     const child = spawn("node", ["index.js"], {
       cwd: process.cwd(),
-      env: {
-        ...process.env,
-        HOST: "127.0.0.1",
+      env: buildIntegrationTestEnv({
         PORT: "3211",
         NODE_ENV: "production",
         SESSION_SECRET: "test-secret-production",
         INITIAL_ADMIN_PASSWORD: "AdminInitProd123!",
         ENABLE_DEMO_DATA: "true",
-        APPLY_MIGRATIONS_ON_START: "true",
-        BOOTSTRAP_DATABASE_ON_START: "true",
-        MSSQL_HOST: process.env.MSSQL_HOST || "127.0.0.1",
-        MSSQL_PORT: process.env.MSSQL_PORT || "1433",
-        MSSQL_DATABASE: process.env.MSSQL_DATABASE || "berichtsheft_test",
-        MSSQL_USER: process.env.MSSQL_USER || "sa",
-        MSSQL_PASSWORD: process.env.MSSQL_PASSWORD || "YourStrong(!)Password",
-        MSSQL_TRUST_SERVER_CERTIFICATE: process.env.MSSQL_TRUST_SERVER_CERTIFICATE || "true",
-        REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379"
-      },
+        BOOTSTRAP_DATABASE_ON_START: "true"
+      }),
       stdio: ["ignore", "pipe", "pipe"]
     });
 

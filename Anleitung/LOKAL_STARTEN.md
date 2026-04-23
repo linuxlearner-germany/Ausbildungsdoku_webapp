@@ -1,48 +1,16 @@
 # Lokal starten
 
-## Voraussetzungen
+Diese Datei wurde auf den aktuellen MSSQL-/Redis-Only-Stand gebracht.
 
-- Node.js installiert
-- `npm` installiert
-
-## Projekt lokal starten
-
-1. Terminal im Projektordner oeffnen:
-
-```bash
-cd /home/paul/WIWEB_CLOUD/berichtsheft_webapp
-```
-
-2. Falls noetig, Abhaengigkeiten installieren:
+Der empfohlene Weg ist:
 
 ```bash
 npm install
-```
-
-3. Anwendung starten:
-
-```bash
-npm start
-```
-
-## Alternative fuer Entwicklung
-
-Wenn du die App ohne vorherigen Produktions-Build starten willst:
-
-```bash
+cp .env.example .env
+npm run infra:up
+npm run db:migrate
+npm run db:bootstrap
 npm run dev
 ```
 
-## Aufruf im Browser
-
-Danach im Browser oeffnen:
-
-```text
-http://localhost:3000
-```
-
-## Hinweise
-
-- Die App nutzt lokal SQLite ueber den Ordner `data/`.
-- Wenn `npm start` genutzt wird, wird vorher das Frontend gebaut.
-- Wenn der Port belegt ist, pruefe die `PORT`-Angabe in deiner `.env`.
+Weitere Details stehen in [docs/LOCAL_DEVELOPMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/LOCAL_DEVELOPMENT.md).

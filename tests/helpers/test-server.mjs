@@ -1,38 +1,15 @@
 import { spawn } from "node:child_process";
+import { buildIntegrationTestEnv } from "./test-env.mjs";
 
 let nextPort = 3210;
 const START_TIMEOUT_MS = 20000;
 const HEALTH_CHECK_INTERVAL_MS = 250;
 
 function buildTestEnv(port, overrides = {}) {
-  return {
-    ...process.env,
-    HOST: "127.0.0.1",
+  return buildIntegrationTestEnv({
     PORT: String(port),
-    NODE_ENV: "test",
-    LOG_LEVEL: "error",
-    SESSION_SECRET: "test-session-secret",
-    SESSION_COOKIE_NAME: "berichtsheft.sid",
-    SESSION_SECURE: "false",
-    SESSION_SAME_SITE: "lax",
-    SESSION_MAX_AGE_MS: "28800000",
-    INITIAL_ADMIN_USERNAME: "admin",
-    INITIAL_ADMIN_EMAIL: "admin@example.com",
-    INITIAL_ADMIN_PASSWORD: "admin123",
-    ENABLE_DEMO_DATA: "true",
-    APPLY_MIGRATIONS_ON_START: "true",
-    BOOTSTRAP_DATABASE_ON_START: "true",
-    RESET_DATABASE_ON_START: "true",
-    MSSQL_HOST: process.env.MSSQL_HOST || "localhost",
-    MSSQL_PORT: process.env.MSSQL_PORT || "1433",
-    MSSQL_DATABASE: process.env.MSSQL_DATABASE || "berichtsheft_test",
-    MSSQL_USER: process.env.MSSQL_USER || "sa",
-    MSSQL_PASSWORD: process.env.MSSQL_PASSWORD || "YourStrong(!)Password",
-    MSSQL_TRUST_SERVER_CERTIFICATE: process.env.MSSQL_TRUST_SERVER_CERTIFICATE || "true",
-    REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379",
-    REDIS_KEY_PREFIX: "berichtsheft:test:",
     ...overrides
-  };
+  });
 }
 
 function delay(ms) {

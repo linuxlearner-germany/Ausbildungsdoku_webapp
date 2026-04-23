@@ -13,7 +13,7 @@ exports.up = async function up(knex) {
     table.string("ausbildung", 255).notNullable().defaultTo("");
     table.string("betrieb", 255).notNullable().defaultTo("");
     table.string("berufsschule", 255).notNullable().defaultTo("");
-    table.timestamp("created_at", { precision: 3, useTz: false }).notNullable().defaultTo(knex.fn.now());
+    table.dateTime("created_at", { precision: 3 }).notNullable().defaultTo(knex.fn.now());
   });
 
   await knex.raw(`
@@ -31,16 +31,16 @@ exports.up = async function up(knex) {
   await knex.schema.createTable("educations", (table) => {
     table.increments("id").primary();
     table.string("name", 255).notNullable().unique();
-    table.timestamp("created_at", { precision: 3, useTz: false }).notNullable().defaultTo(knex.fn.now());
+    table.dateTime("created_at", { precision: 3 }).notNullable().defaultTo(knex.fn.now());
   });
 
   await knex.schema.createTable("trainee_trainers", (table) => {
     table.integer("trainee_id").notNullable();
     table.integer("trainer_id").notNullable();
-    table.timestamp("created_at", { precision: 3, useTz: false }).notNullable().defaultTo(knex.fn.now());
+    table.dateTime("created_at", { precision: 3 }).notNullable().defaultTo(knex.fn.now());
     table.primary(["trainee_id", "trainer_id"]);
-    table.foreign("trainee_id").references("users.id");
-    table.foreign("trainer_id").references("users.id");
+    table.foreign("trainee_id").references("users.id").onDelete("CASCADE");
+    table.foreign("trainer_id").references("users.id").onDelete("CASCADE");
   });
 
   await knex.schema.createTable("entries", (table) => {
@@ -54,12 +54,14 @@ exports.up = async function up(knex) {
     table.text("themen").notNullable().defaultTo("");
     table.text("reflection").notNullable().defaultTo("");
     table.string("status", 20).notNullable().defaultTo("draft");
-    table.timestamp("signedAt", { precision: 3, useTz: false }).nullable();
+    table.dateTime("signedAt", { precision: 3 }).nullable();
     table.string("signerName", 255).notNullable().defaultTo("");
     table.text("trainerComment").notNullable().defaultTo("");
     table.text("rejectionReason").notNullable().defaultTo("");
-    table.timestamp("created_at", { precision: 3, useTz: false }).notNullable().defaultTo(knex.fn.now());
-    table.timestamp("updated_at", { precision: 3, useTz: false }).notNullable().defaultTo(knex.fn.now());
+    table.dateTime("created_at", { precision: 3 }).notNullable().defaultTo(knex.fn.now());
+    table.dateTime("updated_at", { precision: 3 }).notNullable().defaultTo(knex.fn.now());
+    table.index(["trainee_id", "status"], "idx_entries_trainee_status");
+    table.index(["trainee_id", "dateFrom"], "idx_entries_trainee_datefrom");
   });
 
   await knex.raw(`
@@ -83,8 +85,9 @@ exports.up = async function up(knex) {
     table.string("datum", 10).notNullable().defaultTo("");
     table.decimal("note", 4, 2).notNullable();
     table.integer("gewicht").notNullable();
-    table.timestamp("created_at", { precision: 3, useTz: false }).notNullable().defaultTo(knex.fn.now());
-    table.timestamp("updated_at", { precision: 3, useTz: false }).notNullable().defaultTo(knex.fn.now());
+    table.dateTime("created_at", { precision: 3 }).notNullable().defaultTo(knex.fn.now());
+    table.dateTime("updated_at", { precision: 3 }).notNullable().defaultTo(knex.fn.now());
+    table.index(["trainee_id", "fach", "datum"], "idx_grades_trainee_subject_date");
   });
 
   await knex.raw(`
@@ -93,9 +96,21 @@ exports.up = async function up(knex) {
     CHECK (typ IN ('Schulaufgabe', 'Stegreifaufgabe'));
   `);
 
+  await knex.raw(`
+    ALTER TABLE grades
+    ADD CONSTRAINT chk_grades_note
+    CHECK (note >= 1.00 AND note <= 6.00);
+  `);
+
+  await knex.raw(`
+    ALTER TABLE grades
+    ADD CONSTRAINT chk_grades_gewicht
+    CHECK (gewicht > 0);
+  `);
+
   await knex.schema.createTable("audit_logs", (table) => {
     table.increments("id").primary();
-    table.timestamp("created_at", { precision: 3, useTz: false }).notNullable().defaultTo(knex.fn.now());
+    table.dateTime("created_at", { precision: 3 }).notNullable().defaultTo(knex.fn.now());
     table.integer("actor_user_id").nullable().references("users.id");
     table.string("actor_name", 255).notNullable().defaultTo("");
     table.string("actor_role", 40).notNullable().defaultTo("");

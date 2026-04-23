@@ -17,15 +17,16 @@ export function SidebarNavigation({ user, mobileNavOpen, onNavigate }) {
   const visibleItems = items.filter((item) => item.roles.includes(user?.role));
 
   return (
-    <aside className={`sidebar${mobileNavOpen ? " is-open" : ""}`}>
-      <div className="sidebar-brand border-bottom">
+    <aside className={`sidebar${mobileNavOpen ? " is-open" : ""}`} aria-label="Seitenleiste">
+      <div className="sidebar-brand">
         <img src={assetUrl("/Pictures/wiweb-logo-kurz-blau_neu.png")} alt="WIWEB Logo" className="sidebar-logo" />
         <div>
-          <p className="page-kicker">WIWEB</p>
-          <strong>Berichtsheft Portal</strong>
+          <p className="page-kicker mb-1">WIWEB</p>
+          <strong className="d-block">Ausbildungsdoku</strong>
+          <small className="text-body-secondary">Digitales Berichtsheft</small>
         </div>
       </div>
-      <nav className="sidebar-nav" aria-label="Hauptnavigation">
+      <nav className="sidebar-nav nav flex-column" aria-label="Hauptnavigation">
         {visibleItems.map((item) => (
           <NavLink
             key={item.to}
