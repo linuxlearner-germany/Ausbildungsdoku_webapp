@@ -116,7 +116,11 @@ function createConfig() {
     server: {
       host,
       port,
-      trustProxy: readTrustProxy(process.env.TRUST_PROXY)
+      trustProxy: readTrustProxy(process.env.TRUST_PROXY),
+      requestTimeoutMs: readNumberEnv(process.env.SERVER_REQUEST_TIMEOUT_MS, 30_000),
+      headersTimeoutMs: readNumberEnv(process.env.SERVER_HEADERS_TIMEOUT_MS, 35_000),
+      keepAliveTimeoutMs: readNumberEnv(process.env.SERVER_KEEP_ALIVE_TIMEOUT_MS, 5_000),
+      shutdownTimeoutMs: readNumberEnv(process.env.SHUTDOWN_TIMEOUT_MS, 10_000)
     },
     bootstrap: {
       applyMigrationsOnStart: readBooleanEnv(process.env.APPLY_MIGRATIONS_ON_START, true),
@@ -141,7 +145,8 @@ function createConfig() {
       host: redisHost,
       port: redisPort,
       password: redisPassword,
-      keyPrefix: readStringEnv(process.env.REDIS_KEY_PREFIX, "berichtsheft:")
+      keyPrefix: readStringEnv(process.env.REDIS_KEY_PREFIX, "berichtsheft:"),
+      connectTimeoutMs: readNumberEnv(process.env.REDIS_CONNECT_TIMEOUT_MS, 10_000)
     },
     mssql: {
       host: readStringEnv(process.env.MSSQL_HOST, "localhost"),
@@ -167,8 +172,16 @@ function createConfig() {
     throw new Error("ENABLE_DEMO_DATA darf in Produktion nicht aktiviert sein.");
   }
 
+  if (config.isProduction && !config.session.secure) {
+    throw new Error("SESSION_SECURE darf in Produktion nicht deaktiviert sein.");
+  }
+
   if (config.session.sameSite === "none" && !config.session.secure) {
     throw new Error("SESSION_SAME_SITE=none erfordert SESSION_SECURE=true.");
+  }
+
+  if (config.server.headersTimeoutMs <= config.server.keepAliveTimeoutMs) {
+    throw new Error("SERVER_HEADERS_TIMEOUT_MS muss groesser als SERVER_KEEP_ALIVE_TIMEOUT_MS sein.");
   }
 
   return config;

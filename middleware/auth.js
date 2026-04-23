@@ -1,9 +1,11 @@
+const { HttpError } = require("../utils/http-error");
+
 function createAuthMiddleware({ getCurrentUser }) {
   async function requireAuth(req, res, next) {
     try {
       const user = await getCurrentUser(req);
       if (!user) {
-        return res.status(401).json({ error: "Nicht eingeloggt." });
+        throw new HttpError(401, "Nicht eingeloggt.", { code: "AUTH_REQUIRED" });
       }
 
       req.user = user;
@@ -18,10 +20,10 @@ function createAuthMiddleware({ getCurrentUser }) {
       try {
         const user = await getCurrentUser(req);
         if (!user) {
-          return res.status(401).json({ error: "Nicht eingeloggt." });
+          throw new HttpError(401, "Nicht eingeloggt.", { code: "AUTH_REQUIRED" });
         }
         if (!roles.includes(user.role)) {
-          return res.status(403).json({ error: "Keine Berechtigung." });
+          throw new HttpError(403, "Keine Berechtigung.", { code: "FORBIDDEN" });
         }
 
         req.user = user;

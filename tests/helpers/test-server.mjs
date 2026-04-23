@@ -43,7 +43,7 @@ function delay(ms) {
 
 async function isServerHealthy(baseUrl) {
   try {
-    const response = await fetch(`${baseUrl}/api/health`);
+    const response = await fetch(`${baseUrl}/api/ready`);
     return response.ok;
   } catch (_error) {
     return false;

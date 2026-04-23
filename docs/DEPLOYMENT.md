@@ -69,3 +69,9 @@ Wenn die App hinter einem Reverse Proxy unter einem Unterpfad liegt:
 - optional `API_BASE_URL=https://portal.example.de/berichtsheft/api`
 
 Die HTML-Auslieferung und Frontend-Runtime beruecksichtigen diese Werte.
+
+## Betriebschecks
+
+- `GET /api/health` prueft nur die Prozess-Liveness
+- `GET /api/ready` prueft MSSQL, Redis und den Ready-Zustand der App
+- Docker-Healthchecks verwenden `GET /api/ready`

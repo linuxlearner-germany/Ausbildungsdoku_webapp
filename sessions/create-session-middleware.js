@@ -13,8 +13,10 @@ function createSessionMiddleware({ config, redisClient }) {
     saveUninitialized: false,
     proxy: Boolean(config.server.trustProxy),
     rolling: true,
+    unset: "destroy",
     cookie: {
       httpOnly: true,
+      path: config.app.basePath || "/",
       sameSite: config.session.sameSite,
       secure: config.session.secure,
       maxAge: config.session.maxAgeMs
