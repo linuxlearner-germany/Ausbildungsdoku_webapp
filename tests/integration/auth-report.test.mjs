@@ -378,9 +378,14 @@ await test("Health-Endpoint ist erreichbar", { concurrency: false }, async () =>
   await withIsolatedServer(async () => {
     const response = await fetch(`${baseUrl}/api/health`);
     const data = await response.json();
+    const readyResponse = await fetch(`${baseUrl}/api/ready`);
+    const readyData = await readyResponse.json();
 
     assert.equal(response.status, 200);
     assert.equal(data.ok, true);
-    assert.equal(data.status, "healthy");
+    assert.equal(data.data.status, "live");
+    assert.equal(readyResponse.status, 200);
+    assert.equal(readyData.ok, true);
+    assert.equal(readyData.data.status, "ready");
   });
 });

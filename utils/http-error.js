@@ -3,7 +3,7 @@ class HttpError extends Error {
     super(message);
     this.name = "HttpError";
     this.status = status || 500;
-    this.code = options.code || null;
+    this.code = options.code || "HTTP_ERROR";
     this.details = options.details || null;
   }
 }

@@ -116,7 +116,7 @@ await test("Entwurf kann gespeichert werden, eingereichte und signierte Berichte
   );
   const submittedError = await saveSubmittedResponse.json();
   assert.equal(saveSubmittedResponse.status, 400);
-  assert.match(submittedError.error, /schreibgeschuetzt/i);
+  assert.match(submittedError.error.message, /schreibgeschuetzt/i);
 
   const saveSignedResponse = await postJson(
     `${baseUrl}/api/report`,
@@ -131,7 +131,7 @@ await test("Entwurf kann gespeichert werden, eingereichte und signierte Berichte
   );
   const signedError = await saveSignedResponse.json();
   assert.equal(saveSignedResponse.status, 400);
-  assert.match(signedError.error, /Signierte Eintraege/);
+  assert.match(signedError.error.message, /Signierte Eintraege/);
   });
 });
 

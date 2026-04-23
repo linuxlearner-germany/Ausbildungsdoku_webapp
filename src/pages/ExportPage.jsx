@@ -52,6 +52,18 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
 
   const previewSummary = useMemo(() => preview?.summary || { totalRows: 0, validRows: 0, invalidRows: 0 }, [preview]);
 
+  function readErrorMessage(data, fallbackMessage) {
+    if (typeof data?.error === "string") {
+      return data.error;
+    }
+
+    if (data?.error?.message) {
+      return data.error.message;
+    }
+
+    return fallbackMessage;
+  }
+
   async function handlePreview() {
     if (!selectedFile) {
       setError("Bitte zuerst eine .xlsx- oder .csv-Datei auswählen.");
@@ -119,7 +131,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
       if (!response.ok) {
         const contentType = response.headers.get("content-type") || "";
         const data = contentType.includes("application/json") ? await response.json() : null;
-        throw new Error(data?.error || "CSV-Export konnte nicht gestartet werden.");
+        throw new Error(readErrorMessage(data, "CSV-Export konnte nicht gestartet werden."));
       }
 
       const blob = await response.blob();

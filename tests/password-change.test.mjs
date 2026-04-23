@@ -99,7 +99,7 @@ await test("Falsches aktuelles Passwort liefert einen sauberen Fehler", { concur
     const data = await response.json();
 
     assert.equal(response.status, 400);
-    assert.equal(data.error, "Aktuelles Passwort ist nicht korrekt.");
+    assert.equal(data.error.message, "Aktuelles Passwort ist nicht korrekt.");
   });
 });
 
@@ -119,7 +119,7 @@ await test("Zu kurzes neues Passwort wird abgewiesen", { concurrency: false }, a
     const data = await response.json();
 
     assert.equal(response.status, 400);
-    assert.equal(data.error, "Neues Passwort muss mindestens 10 Zeichen lang sein.");
+    assert.equal(data.error.message, "Neues Passwort muss mindestens 10 Zeichen lang sein.");
   });
 });
 

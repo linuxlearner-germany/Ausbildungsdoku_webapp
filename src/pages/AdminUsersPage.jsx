@@ -48,6 +48,18 @@ function readFileAsBase64(file) {
   });
 }
 
+function readErrorMessage(data, fallbackMessage) {
+  if (typeof data?.error === "string") {
+    return data.error;
+  }
+
+  if (data?.error?.message) {
+    return data.error.message;
+  }
+
+  return fallbackMessage;
+}
+
 function EducationField({ value, educations, onChange, listId }) {
   return (
     <label>
@@ -682,7 +694,7 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
       if (!response.ok) {
         const contentType = response.headers.get("content-type") || "";
         const data = contentType.includes("application/json") ? await response.json() : null;
-        throw new Error(data?.error || "CSV-Export konnte nicht gestartet werden.");
+        throw new Error(readErrorMessage(data, "CSV-Export konnte nicht gestartet werden."));
       }
 
       const blob = await response.blob();

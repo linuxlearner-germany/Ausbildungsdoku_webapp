@@ -5,14 +5,24 @@ const { createDependencies } = require("./app/create-dependencies");
 const { createApp } = require("./app/create-app");
 const { runMigrations } = require("./app/run-migrations");
 const { createBootstrap } = require("./data/bootstrap-mssql");
+const { createLogger } = require("./utils/logger");
 
 async function createRuntime() {
   const config = createConfig();
+  const logger = createLogger(config.app.logLevel, {
+    service: "ausbildungsdoku-webapp",
+    nodeEnv: config.nodeEnv
+  });
   const db = createDb(config);
   let redisClient;
+  const runtimeState = {
+    startedAt: Date.now(),
+    isReady: false,
+    isShuttingDown: false
+  };
 
   try {
-    redisClient = await createRedisClient(config);
+    redisClient = await createRedisClient(config, { logger });
     await verifyDbConnection(db, config);
 
     if (config.bootstrap.applyMigrationsOnStart) {
@@ -31,10 +41,13 @@ async function createRuntime() {
       bootstrapResult = await bootstrap.run({ reset: config.bootstrap.resetDatabaseOnStart });
     }
 
-    const app = createApp({ config, db, redisClient, dependencies });
+    const app = createApp({ config, db, redisClient, dependencies, runtimeState, logger });
     app.locals.bootstrap = bootstrapResult;
+    runtimeState.isReady = true;
 
     async function shutdown() {
+      runtimeState.isReady = false;
+      runtimeState.isShuttingDown = true;
       await Promise.allSettled([
         db.destroy(),
         redisClient.quit()
@@ -46,6 +59,8 @@ async function createRuntime() {
       db,
       redisClient,
       config,
+      logger,
+      runtimeState,
       dependencies,
       bootstrap,
       shutdown
@@ -63,6 +78,9 @@ async function startServer(runtime) {
   return new Promise((resolve, reject) => {
     const server = runtime.app.listen(runtime.config.server.port, runtime.config.server.host, () => resolve(server));
     server.once("error", reject);
+    server.requestTimeout = runtime.config.server.requestTimeoutMs;
+    server.headersTimeout = runtime.config.server.headersTimeoutMs;
+    server.keepAliveTimeout = runtime.config.server.keepAliveTimeoutMs;
   });
 }
 
@@ -78,7 +96,19 @@ if (require.main === module) {
       }
 
       shuttingDown = true;
-      console.log(`${signal} empfangen. Server wird beendet...`);
+      runtime.runtimeState.isShuttingDown = true;
+      runtime.runtimeState.isReady = false;
+      runtime.logger.info("Shutdown gestartet", { signal });
+
+      const forceShutdownTimer = setTimeout(() => {
+        runtime.logger.error("Shutdown-Timeout erreicht, Verbindungen werden hart beendet.", {
+          timeoutMs: runtime.config.server.shutdownTimeoutMs
+        });
+        server.closeAllConnections?.();
+      }, runtime.config.server.shutdownTimeoutMs);
+      forceShutdownTimer.unref();
+
+      server.closeIdleConnections?.();
 
       await new Promise((resolve, reject) => {
         server.close((error) => {
@@ -90,6 +120,7 @@ if (require.main === module) {
           resolve();
         });
       });
+      clearTimeout(forceShutdownTimer);
 
       await runtime.shutdown();
       process.exit(0);
@@ -97,30 +128,45 @@ if (require.main === module) {
 
     process.on("SIGINT", () => {
       close("SIGINT").catch(async (error) => {
-        console.error(error);
+        runtime.logger.error("Shutdown fehlgeschlagen", { signal: "SIGINT", error });
         await runtime.shutdown();
         process.exit(1);
       });
     });
     process.on("SIGTERM", () => {
       close("SIGTERM").catch(async (error) => {
-        console.error(error);
+        runtime.logger.error("Shutdown fehlgeschlagen", { signal: "SIGTERM", error });
         await runtime.shutdown();
         process.exit(1);
       });
     });
 
-    console.log(`Berichtsheft-App laeuft auf http://${runtime.config.server.host}:${runtime.config.server.port}${runtime.config.app.basePath || ""}`);
+    runtime.logger.info("HTTP-Server gestartet", {
+      host: runtime.config.server.host,
+      port: runtime.config.server.port,
+      basePath: runtime.config.app.basePath || "/"
+    });
     if (runtime.config.bootstrap.enableDemoData) {
-      console.log("Demo-Logins: azubi@example.com / azubi123 | trainer@example.com / trainer123 | admin@example.com / admin123");
+      runtime.logger.warn("Demo-Daten sind aktiviert.", {
+        demoUsers: ["azubi@example.com", "trainer@example.com", "admin@example.com"]
+      });
     }
     if (runtime.app.locals.bootstrap?.initialAdmin?.created) {
-      console.log(
-        `Initialer Admin angelegt: ${runtime.config.initialAdmin.username} / ${runtime.config.initialAdmin.password}`
-      );
+      runtime.logger.warn("Initialer Admin wurde angelegt.", {
+        username: runtime.config.initialAdmin.username
+      });
     }
   })().catch(async (error) => {
-    console.error(error);
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: "error",
+      message: "Startup fehlgeschlagen",
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      }
+    }));
     process.exit(1);
   });
 }

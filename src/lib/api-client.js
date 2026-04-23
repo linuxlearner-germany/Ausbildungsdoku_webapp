@@ -18,6 +18,30 @@ async function parseResponse(response) {
   return response.json();
 }
 
+function getApiError(data) {
+  if (!data) {
+    return null;
+  }
+
+  if (typeof data.error === "string") {
+    return {
+      message: data.error,
+      code: data.code || null,
+      details: data.details || null
+    };
+  }
+
+  if (data.error && typeof data.error === "object") {
+    return {
+      message: data.error.message || "Anfrage fehlgeschlagen.",
+      code: data.error.code || null,
+      details: data.error.details || null
+    };
+  }
+
+  return null;
+}
+
 async function request(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
   const response = await fetch(path, {
@@ -32,10 +56,11 @@ async function request(path, options = {}) {
 
   const data = await parseResponse(response);
   if (!response.ok) {
-    throw new ApiClientError(data?.error || "Anfrage fehlgeschlagen.", {
+    const apiError = getApiError(data);
+    throw new ApiClientError(apiError?.message || "Anfrage fehlgeschlagen.", {
       status: response.status,
-      code: data?.code,
-      details: data?.details,
+      code: apiError?.code,
+      details: apiError?.details,
       method,
       path
     });

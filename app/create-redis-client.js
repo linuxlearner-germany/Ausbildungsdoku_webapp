@@ -1,12 +1,19 @@
 const { createClient } = require("redis");
 
-async function createRedisClient(config) {
+async function createRedisClient(config, { logger = console } = {}) {
   const client = createClient({
-    url: config.redis.url
+    url: config.redis.url,
+    socket: {
+      connectTimeout: config.redis.connectTimeoutMs
+    }
   });
 
   client.on("error", (error) => {
-    console.error(`Redis-Fehler: ${error.message}`);
+    logger.error("Redis-Fehler", {
+      host: config.redis.host,
+      port: config.redis.port,
+      error
+    });
   });
 
   try {

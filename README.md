@@ -87,6 +87,11 @@ Beim Start macht die App:
 5. Initial-Admin und optional Demo-Daten bootstrapen
 6. Express starten
 
+## Betriebsendpunkte
+
+- `GET /api/health`: Liveness des Node-/Express-Prozesses
+- `GET /api/ready`: Readiness inklusive MSSQL- und Redis-Pruefung
+
 ## Tests
 
 Schnelle Tests:
