@@ -1,77 +1,55 @@
 # Deployment
 
-## Zielmodell
+## Zielbild
 
-- Webapp im Docker-Container
-- Microsoft SQL Server extern
-- Redis extern oder separat
-- Konfiguration nur ueber ENV
+- App im Docker-Container
+- MSSQL extern
+- Redis extern oder separat betrieben
 
-## Pflichtvariablen fuer Produktion
+`docker-compose.yml` startet nur den App-Container und erwartet alle Infrastrukturwerte per ENV.
+
+## Pflichtwerte
 
 - `SESSION_SECRET`
+- `INITIAL_ADMIN_PASSWORD`
 - `MSSQL_HOST`
 - `MSSQL_DATABASE`
 - `MSSQL_USER`
 - `MSSQL_PASSWORD`
-- `INITIAL_ADMIN_PASSWORD`
 
-Zusaetzlich:
-
-- `REDIS_URL` oder `REDIS_HOST`/`REDIS_PORT`/`REDIS_PASSWORD`
-
-## Empfohlene Produktionswerte
+## Produktionsrelevante Empfehlungen
 
 - `NODE_ENV=production`
-- `HOST=0.0.0.0`
-- `PORT=3010`
-- `TRUST_PROXY=true`
 - `SESSION_SECURE=true`
 - `SESSION_SAME_SITE=lax`
+- `TRUST_PROXY=1` oder passend zur Proxy-Kette
 - `MSSQL_ENCRYPT=true`
 - `MSSQL_TRUST_SERVER_CERTIFICATE=false`
 - `ENABLE_DEMO_DATA=false`
+- `RESET_DATABASE_ON_START=false`
 
-## Container-Build
-
-```bash
-docker build -t ausbildungsdoku-webapp:latest .
-```
-
-## App-Container mit externer Infrastruktur starten
+## Start
 
 ```bash
-docker run --rm -p 3010:3010 \
-  -e NODE_ENV=production \
-  -e HOST=0.0.0.0 \
-  -e PORT=3010 \
-  -e TRUST_PROXY=true \
-  -e SESSION_SECRET=super-secret \
-  -e SESSION_SECURE=true \
-  -e REDIS_URL=redis://redis.example.internal:6379 \
-  -e MSSQL_HOST=sql.example.internal \
-  -e MSSQL_PORT=1433 \
-  -e MSSQL_DATABASE=berichtsheft \
-  -e MSSQL_USER=berichtsheft_app \
-  -e MSSQL_PASSWORD=super-db-secret \
-  -e MSSQL_ENCRYPT=true \
-  -e MSSQL_TRUST_SERVER_CERTIFICATE=false \
-  -e INITIAL_ADMIN_PASSWORD=super-admin-secret \
-  ausbildungsdoku-webapp:latest
+docker compose up --build -d
 ```
 
-## Reverse Proxy / Unterpfad
+## Healthchecks
 
-Wenn die App hinter einem Reverse Proxy unter einem Unterpfad liegt:
+Der Container meldet Readiness ueber:
 
-- `APP_BASE_PATH=/berichtsheft`
-- optional `APP_BASE_URL=https://portal.example.de`
-- optional `API_BASE_URL=https://portal.example.de/berichtsheft/api`
+- `GET /api/ready`
 
-Die HTML-Auslieferung und Frontend-Runtime beruecksichtigen diese Werte.
+Zusatzlich verfuegbar:
 
-## Betriebschecks
+- `GET /api/live`
+- `GET /api/health`
 
-- `GET /api/health` prueft nur die Prozess-Liveness
-- `GET /api/ready` prueft MSSQL, Redis und den Ready-Zustand der App
-- Docker-Healthchecks verwenden `GET /api/ready`
+## Shutdown
+
+Bei `SIGTERM` und `SIGINT` beendet die App:
+
+1. Readiness
+2. HTTP-Server
+3. MSSQL-Verbindungen
+4. Redis-Verbindung

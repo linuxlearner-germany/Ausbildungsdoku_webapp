@@ -25,10 +25,19 @@ function createApp({ config, db, redisClient, dependencies, runtimeState, logger
     loginRateLimiter: dependencies.loginRateLimiter
   });
 
-  web.get("/api/health", (_req, res) => {
+  web.get("/api/live", (_req, res) => {
     res.json(createApiSuccess({
       status: runtimeState.isShuttingDown ? "shutting_down" : "live",
       uptimeMs: Date.now() - runtimeState.startedAt
+    }));
+  });
+
+  web.get("/api/health", (_req, res) => {
+    res.json(createApiSuccess({
+      status: runtimeState.isShuttingDown ? "shutting_down" : "live",
+      uptimeMs: Date.now() - runtimeState.startedAt,
+      ready: runtimeState.isReady,
+      dependencies: runtimeState.dependencies
     }));
   });
 
@@ -46,15 +55,21 @@ function createApp({ config, db, redisClient, dependencies, runtimeState, logger
 
       await db.raw("SELECT 1 AS ok");
       await redisClient.ping();
+      runtimeState.dependencies = {
+        database: "up",
+        redis: "up"
+      };
 
       res.json(createApiSuccess({
         status: "ready",
-        dependencies: {
-          database: "up",
-          redis: "up"
-        }
+        dependencies: runtimeState.dependencies
       }));
     } catch (error) {
+      runtimeState.dependencies = {
+        database: "unknown",
+        redis: "unknown"
+      };
+
       if (error instanceof HttpError) {
         next(error);
         return;

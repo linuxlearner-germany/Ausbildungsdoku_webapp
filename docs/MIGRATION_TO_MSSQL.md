@@ -1,20 +1,32 @@
-# Migration zu MSSQL
+# MSSQL-Betrieb
 
-## Status
+Die Anwendung ist auf Microsoft SQL Server als einzigen Datenbankpfad ausgelegt.
 
-- SQLite ist aus dem Runtime-Pfad entfernt
-- MSSQL ist die einzige Ziel- und Laufzeitdatenbank
-- Fachlogik bleibt erhalten
+## Technische Basis
 
-## Technische Umsetzung
+- Knex-Client: `mssql`
+- Migrationen unter `data/migrations`
+- Verbindungsaufbau in `app/create-db.js`
+- zentrale MSSQL-Konfiguration in `app/config.js`
 
-- Knex-Migrationen statt implizitem Tabellenaufbau
-- Repositories greifen direkt ueber Knex auf MSSQL zu
-- Bootstrap fuer Initial-Admin und Demo-Daten ist idempotent
-- Connection-Pooling, Encrypt und Timeouts sind konfigurierbar
+## Lokal
 
-## Wichtige Punkte
+Fuer lokale Entwicklung und Tests wird dieselbe MSSQL-Richtung genutzt:
 
-- Constraints und Foreign Keys werden in der Migration definiert
-- `entries` haben einen Unique-Index auf `(trainee_id, dateFrom)`
-- Rollen, Trainer-Zuordnungen, Noten und Audit-Logs bleiben fachlich erhalten
+- Host-based gegen lokale oder externe Instanz
+- lokaler Infra-Stack via `docker-compose.dev-infra.yml`
+- kompletter Docker-Stack via `docker-compose.local.yml`
+
+## Wichtige ENV-Werte
+
+- `MSSQL_HOST`
+- `MSSQL_PORT`
+- `MSSQL_DATABASE`
+- `MSSQL_USER`
+- `MSSQL_PASSWORD`
+- `MSSQL_ENCRYPT`
+- `MSSQL_TRUST_SERVER_CERTIFICATE`
+- `MSSQL_POOL_MIN`
+- `MSSQL_POOL_MAX`
+- `MSSQL_CONNECTION_TIMEOUT_MS`
+- `MSSQL_REQUEST_TIMEOUT_MS`

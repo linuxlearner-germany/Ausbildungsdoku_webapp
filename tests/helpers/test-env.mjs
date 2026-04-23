@@ -1,0 +1,33 @@
+export function buildIntegrationTestEnv(overrides = {}) {
+  return {
+    ...process.env,
+    HOST: "127.0.0.1",
+    NODE_ENV: "test",
+    LOG_LEVEL: "error",
+    SESSION_SECRET: "test-session-secret",
+    SESSION_COOKIE_NAME: "berichtsheft.sid",
+    SESSION_SECURE: "false",
+    SESSION_SAME_SITE: "lax",
+    SESSION_MAX_AGE_MS: "28800000",
+    SESSION_TTL_SECONDS: "28800",
+    INITIAL_ADMIN_USERNAME: "admin",
+    INITIAL_ADMIN_EMAIL: "admin@example.com",
+    INITIAL_ADMIN_PASSWORD: "admin123",
+    ENABLE_DEMO_DATA: "true",
+    APPLY_MIGRATIONS_ON_START: "true",
+    BOOTSTRAP_DATABASE_ON_START: "true",
+    RESET_DATABASE_ON_START: "true",
+    MSSQL_HOST: process.env.MSSQL_HOST || "127.0.0.1",
+    MSSQL_PORT: process.env.MSSQL_PORT || "1433",
+    MSSQL_DATABASE: process.env.MSSQL_DATABASE || process.env.MSSQL_TEST_DATABASE || "berichtsheft_test",
+    MSSQL_USER: process.env.MSSQL_USER || "sa",
+    MSSQL_PASSWORD: process.env.MSSQL_PASSWORD || "YourStrong(!)Password",
+    MSSQL_TRUST_SERVER_CERTIFICATE: process.env.MSSQL_TRUST_SERVER_CERTIFICATE || "true",
+    REDIS_URL: process.env.REDIS_URL || "redis://127.0.0.1:6379",
+    REDIS_KEY_PREFIX: "berichtsheft:test:",
+    REDIS_MAX_RETRIES: "1",
+    REDIS_CONNECT_TIMEOUT_MS: "2000",
+    REDIS_COMMAND_TIMEOUT_MS: "2000",
+    ...overrides
+  };
+}

@@ -42,8 +42,8 @@ function registerCoreMiddleware(app, { config, sessionMiddleware, publicDir, pic
     next();
   });
 
-  app.use(express.json({ limit: "15mb" }));
-  app.use(express.urlencoded({ extended: true, limit: "15mb" }));
+  app.use(express.json({ limit: config.server.requestBodyLimit }));
+  app.use(express.urlencoded({ extended: true, limit: config.server.requestBodyLimit }));
   app.use("/Pictures", express.static(picturesDir));
   app.use(sessionMiddleware);
   app.use(express.static(publicDir, { index: false }));

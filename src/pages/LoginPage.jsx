@@ -25,8 +25,9 @@ export function LoginPage() {
         <div className="login-brand">
           <img src={assetUrl("/Pictures/wiweb-logo-kurz-blau_neu.png")} alt="WIWEB Logo" className="sidebar-logo" />
           <div>
-            <p className="page-kicker">Berichtsheft Portal</p>
-            <h1>Willkommen im Ausbildungsportal</h1>
+            <p className="page-kicker mb-2">WIWEB</p>
+            <h1>Ausbildungsdoku</h1>
+            <p className="text-body-secondary mb-0">Digitale Tagesberichte, Freigaben und Noten in einem durchgaengigen Arbeitsbereich.</p>
             {isStaticDemo() ? <small className="field-message">Demo-Logins: admin, trainer, azubi.</small> : null}
           </div>
         </div>

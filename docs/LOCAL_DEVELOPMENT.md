@@ -1,50 +1,77 @@
 # Lokale Entwicklung
 
-## Modus 1: Host-based Entwicklung
+## Zielbild
 
-Voraussetzung: MSSQL und Redis sind erreichbar.
+Lokal soll dieselbe technische Richtung wie spaeter im Betrieb nutzbar sein:
+
+- App mit Node.js auf dem Host oder im Container
+- MSSQL als einzige Datenbank
+- Redis als einziger Session-Store
+
+## Variante A: Host-based gegen lokale Infra
 
 ```bash
 npm install
 cp .env.example .env
-# .env mit SESSION_SECRET und INITIAL_ADMIN_PASSWORD befuellen
+npm run infra:up
+npm run db:migrate
+npm run db:bootstrap
 npm run dev
 ```
 
-Relevante ENV-Werte:
+Standardports:
 
-- `MSSQL_HOST`, `MSSQL_DATABASE`, `MSSQL_USER`, `MSSQL_PASSWORD`
-- `REDIS_URL` oder `REDIS_HOST`/`REDIS_PORT`
-- `SESSION_SECRET`, `INITIAL_ADMIN_PASSWORD`
+- App: `3010`
+- MSSQL: `1433`
+- Redis: `6379`
 
-## Modus 2: Lokaler Infra-Stack
+## Variante B: Host-based gegen externe MSSQL/Redis
 
-Nur MSSQL und Redis in Docker:
+In `.env` nur die externen Verbindungsdaten eintragen, dann:
 
 ```bash
-docker compose -f docker-compose.dev-infra.yml up -d
-npm run dev
+npm install
+cp .env.example .env
+npm run db:migrate
+npm run db:bootstrap
+npm start
 ```
 
-Das ist der bevorzugte lokale Entwicklungsmodus.
-
-## Modus 3: Full Local Docker
+## Variante C: Full Local Docker
 
 ```bash
-docker compose -f docker-compose.local.yml up --build
+npm run docker:local:up
 ```
 
-Damit laufen App, MSSQL und Redis zusammen in Docker.
+Die Compose-Datei startet:
 
-## Tests lokal
+- App
+- MSSQL
+- Redis
+- Datenbankinitialisierung fuer Runtime- und Testdatenbank
+
+## Datenbank- und Testablauf
+
+Runtime-Datenbank migrieren:
 
 ```bash
-docker compose -f docker-compose.dev-infra.yml up -d
+npm run db:migrate
+```
+
+Initialdaten anlegen:
+
+```bash
+npm run db:bootstrap
+```
+
+Testdatenbank zuruecksetzen:
+
+```bash
+npm run db:reset-test
+```
+
+Kompletter Testlauf:
+
+```bash
 npm test
-```
-
-Oder nur Integration:
-
-```bash
-npm run test:integration
 ```

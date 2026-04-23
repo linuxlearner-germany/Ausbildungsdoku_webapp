@@ -8,6 +8,10 @@
     "dev": "node scripts/dev.mjs",
     "dev:server": "node --watch index.js",
     "dev:client": "node scripts/build.mjs --watch",
+    "infra:up": "docker compose -f docker-compose.dev-infra.yml up -d",
+    "infra:down": "docker compose -f docker-compose.dev-infra.yml down",
+    "docker:local:up": "docker compose -f docker-compose.local.yml up --build",
+    "docker:local:down": "docker compose -f docker-compose.local.yml down",
     "build": "node scripts/build.mjs",
     "build:github-pages": "node scripts/build-github-pages.mjs",
     "start": "node index.js",
@@ -15,6 +19,7 @@
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:bootstrap": "node scripts/db-bootstrap.mjs",
     "db:reset-test": "node scripts/db-reset-test.mjs",
+    "test:unit": "node --test --test-concurrency=1 tests/*.test.mjs",
     "test": "node --test --test-concurrency=1 tests/*.test.mjs tests/integration/*.test.mjs",
     "test:integration": "node --test --test-concurrency=1 tests/integration/*.test.mjs"
   },

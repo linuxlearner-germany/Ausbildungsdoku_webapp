@@ -11,6 +11,7 @@ function createDb(config) {
       database: config.mssql.database,
       connectionTimeout: config.mssql.connectionTimeoutMs,
       requestTimeout: config.mssql.requestTimeoutMs,
+      appName: config.mssql.appName,
       options: {
         encrypt: config.mssql.encrypt,
         trustServerCertificate: config.mssql.trustServerCertificate
@@ -24,7 +25,8 @@ function createDb(config) {
     migrations: {
       tableName: "knex_migrations",
       directory: `${config.projectRoot}/data/migrations`
-    }
+    },
+    asyncStackTraces: !config.isProduction
   });
 }
 

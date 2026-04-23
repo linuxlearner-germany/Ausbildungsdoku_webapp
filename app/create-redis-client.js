@@ -3,8 +3,17 @@ const { createClient } = require("redis");
 async function createRedisClient(config, { logger = console } = {}) {
   const client = createClient({
     url: config.redis.url,
+    pingInterval: config.redis.pingIntervalMs,
+    disableOfflineQueue: true,
     socket: {
-      connectTimeout: config.redis.connectTimeoutMs
+      connectTimeout: config.redis.connectTimeoutMs,
+      reconnectStrategy(retryCount) {
+        if (retryCount >= config.redis.maxRetries) {
+          return new Error(`Redis-Reconnect-Limit erreicht (${config.redis.maxRetries}).`);
+        }
+
+        return Math.min((retryCount + 1) * 250, 2_000);
+      }
     }
   });
 
@@ -23,6 +32,8 @@ async function createRedisClient(config, { logger = console } = {}) {
   } catch (error) {
     if (client.isOpen) {
       await client.quit().catch(() => {});
+    } else if (client.isReady || client.isOpen) {
+      await client.disconnect().catch(() => {});
     }
 
     const message = `Redis-Verbindung fehlgeschlagen (${config.redis.host}:${config.redis.port}): ${error.message}`;
