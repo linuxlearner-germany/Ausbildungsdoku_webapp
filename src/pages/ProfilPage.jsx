@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { EmptyState } from "../components/EmptyState";
-import { downloadReportPdf } from "../lib/reportExport";
+import { downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
 import { apiUrl, isStaticDemo } from "../lib/runtime";
 
 function buildProfileForm(profile) {
@@ -193,6 +193,7 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
   const [selectedId, setSelectedId] = useState(() => targets[0]?.id || null);
   const selectedProfile = targets.find((target) => target.id === selectedId) || null;
   const [form, setForm] = useState(buildProfileForm(selectedProfile));
+  const [pdfError, setPdfError] = useState("");
 
   useEffect(() => {
     if (!targets.length) {
@@ -209,8 +210,9 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
     setForm(buildProfileForm(selectedProfile));
   }, [selectedProfile]);
 
-  function handlePdfExport(profile, entries) {
+  async function handlePdfExport(profile, entries) {
     if (isStaticDemo()) {
+      setPdfError("");
       downloadReportPdf({
         entries,
         traineeName: profile?.name || "",
@@ -219,7 +221,12 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
       return;
     }
 
-    window.location.href = profile?.id ? apiUrl(`/api/report/pdf/${profile.id}`) : apiUrl("/api/report/pdf");
+    try {
+      setPdfError("");
+      await downloadPdfFromApi(profile?.id ? apiUrl(`/api/report/pdf/${profile.id}`) : apiUrl("/api/report/pdf"), `berichtsheft-${profile?.name || "azubi"}.pdf`);
+    } catch (error) {
+      setPdfError(error.message || "PDF konnte nicht geladen werden.");
+    }
   }
 
   if (role === "trainee") {
@@ -234,6 +241,7 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
             </button>
           }
         />
+        {pdfError ? <div className="field-message error report-error-banner">{pdfError}</div> : null}
         <section className="panel-card">
           <ProfileDetailGrid profile={report?.trainee} />
         </section>
@@ -261,6 +269,7 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
           ) : null
         }
       />
+      {pdfError ? <div className="field-message error report-error-banner">{pdfError}</div> : null}
 
       <section className="profile-manager-layout">
         <article className="panel-card profile-picker">

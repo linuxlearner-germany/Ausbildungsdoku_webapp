@@ -5,7 +5,7 @@ import { DataTable } from "../components/DataTable";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { EmptyState } from "../components/EmptyState";
 import { FilterBar } from "../components/FilterBar";
-import { downloadReportPdf } from "../lib/reportExport";
+import { downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
 import { apiUrl, isStaticDemo } from "../lib/runtime";
 
 function formatDate(value) {
@@ -47,6 +47,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
   const [sortBy, setSortBy] = useState("date-desc");
   const [busyAction, setBusyAction] = useState("");
   const [actionError, setActionError] = useState("");
+  const [pdfError, setPdfError] = useState("");
 
   if (role === "trainee") {
     const entries = report?.entries || [];
@@ -257,7 +258,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
     );
   }
 
-  function handlePdfExport() {
+  async function handlePdfExport() {
     if (!selectedEntry) {
       return;
     }
@@ -268,6 +269,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
     }
 
     if (isStaticDemo()) {
+      setPdfError("");
       downloadReportPdf({
         entries: trainee.entries || [],
         traineeName: trainee.name,
@@ -276,7 +278,12 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
       return;
     }
 
-    window.location.href = apiUrl(`/api/report/pdf/${selectedEntry.traineeId}`);
+    try {
+      setPdfError("");
+      await downloadPdfFromApi(apiUrl(`/api/report/pdf/${selectedEntry.traineeId}`), `berichtsheft-${trainee.name || "azubi"}.pdf`);
+    } catch (error) {
+      setPdfError(error.message || "PDF konnte nicht geladen werden.");
+    }
   }
 
   return (
@@ -285,6 +292,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
         kicker="Freigaben"
         title="Prüfungen und Freigaben"
       />
+      {pdfError ? <div className="field-message error report-error-banner">{pdfError}</div> : null}
 
       <section className="approval-summary">
         <article className="approval-summary-item">
