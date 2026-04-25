@@ -6,7 +6,7 @@ export function DataTable({ columns, rows, rowKey, onRowClick }) {
   }
 
   return (
-    <div className="table-responsive table-shell border rounded-3 bg-white">
+    <div className="table-responsive table-shell">
       <table className="table table-hover align-middle mb-0 data-table">
         <thead>
           <tr>

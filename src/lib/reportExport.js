@@ -28,6 +28,43 @@ function escapeCsv(value) {
   return text;
 }
 
+function readErrorMessage(data, fallbackMessage) {
+  if (typeof data?.error === "string") {
+    return data.error;
+  }
+
+  if (data?.error?.message) {
+    return data.error.message;
+  }
+
+  return fallbackMessage;
+}
+
+async function parseErrorResponse(response, fallbackMessage) {
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    return fallbackMessage;
+  }
+
+  try {
+    const data = await response.json();
+    return readErrorMessage(data, fallbackMessage);
+  } catch (_error) {
+    return fallbackMessage;
+  }
+}
+
+function readFilename(response, fallbackFilename) {
+  const disposition = response.headers.get("content-disposition") || "";
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+
+  const plainMatch = disposition.match(/filename="([^"]+)"/i);
+  return plainMatch?.[1] || fallbackFilename;
+}
+
 function formatDate(value) {
   if (!value) {
     return "-";
@@ -93,6 +130,20 @@ export function downloadUsersCsv(users) {
 
   const csv = [header, ...rows].map((row) => row.map(escapeCsv).join(";")).join("\n");
   downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "verwaltung-benutzer.csv");
+}
+
+export async function downloadPdfFromApi(url, fallbackFilename = "berichtsheft.pdf") {
+  const response = await fetch(url, {
+    method: "GET",
+    credentials: "same-origin"
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response, "PDF konnte nicht geladen werden."));
+  }
+
+  const blob = await response.blob();
+  downloadBlob(blob, readFilename(response, fallbackFilename));
 }
 
 export function downloadReportPdf({ entries, traineeName, trainingTitle }) {

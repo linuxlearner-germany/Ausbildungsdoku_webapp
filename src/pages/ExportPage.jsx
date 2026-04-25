@@ -4,7 +4,7 @@ import { StatCard } from "../components/StatCard";
 import { EmptyState } from "../components/EmptyState";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { StatusBadge } from "../components/StatusBadge";
-import { downloadEntriesCsv, downloadReportPdf } from "../lib/reportExport";
+import { downloadEntriesCsv, downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
 import { apiUrl, assetUrl, isStaticDemo } from "../lib/runtime";
 
 function readFileAsBase64(file) {
@@ -48,6 +48,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
   const [importPayload, setImportPayload] = useState(null);
   const [error, setError] = useState("");
   const [csvError, setCsvError] = useState("");
+  const [pdfError, setPdfError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const previewSummary = useMemo(() => preview?.summary || { totalRows: 0, validRows: 0, invalidRows: 0 }, [preview]);
@@ -152,6 +153,28 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
     }
   }
 
+  async function handlePdfExport() {
+    setBusy(true);
+    setPdfError("");
+
+    try {
+      if (isStaticDemo()) {
+        downloadReportPdf({
+          entries,
+          traineeName: report?.trainee?.name || "",
+          trainingTitle: report?.trainee?.ausbildung || ""
+        });
+        return;
+      }
+
+      await downloadPdfFromApi(apiUrl("/api/report/pdf"), "berichtsheft.pdf");
+    } catch (exportError) {
+      setPdfError(exportError.message || "PDF-Export konnte nicht gestartet werden.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -165,18 +188,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
             <button
               type="button"
               className="button button-secondary"
-              onClick={() => {
-                if (isStaticDemo()) {
-                  downloadReportPdf({
-                    entries,
-                    traineeName: report?.trainee?.name || "",
-                    trainingTitle: report?.trainee?.ausbildung || ""
-                  });
-                  return;
-                }
-
-                window.location.href = apiUrl("/api/report/pdf");
-              }}
+              onClick={handlePdfExport}
             >
               PDF herunterladen
             </button>
@@ -189,6 +201,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
         <StatCard label="In Prüfung" value={submittedEntries} note="Aktuell beim Ausbilder" />
         <StatCard label="Importierbar" value={previewSummary.validRows} note="Gültige Zeilen in der aktuellen Vorschau" />
       </section>
+      {pdfError ? <div className="field-message error report-error-banner">{pdfError}</div> : null}
 
       <section className="reports-layout">
         <article className="panel-card">
@@ -205,18 +218,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
                 <button
                   type="button"
                   className="button button-secondary"
-                  onClick={() => {
-                    if (isStaticDemo()) {
-                      downloadReportPdf({
-                        entries,
-                        traineeName: report?.trainee?.name || "",
-                        trainingTitle: report?.trainee?.ausbildung || ""
-                      });
-                      return;
-                    }
-
-                    window.location.href = apiUrl("/api/report/pdf");
-                  }}
+                  onClick={handlePdfExport}
                 >
                   PDF herunterladen
                 </button>

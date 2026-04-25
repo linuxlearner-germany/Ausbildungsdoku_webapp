@@ -169,3 +169,94 @@ await test("CSV-Export ist fuer Ausbilder ueber die Azubi-Route gesperrt", { con
     assert.equal(response.status, 403);
   });
 });
+
+await test("PDF-Export liefert fuer Azubi und Ausbilder gueltige Downloads", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const traineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+    const traineeCookie = extractCookie(traineeLogin);
+
+    const ownPdfResponse = await fetch(`${baseUrl}/api/report/pdf`, {
+      headers: { Cookie: traineeCookie }
+    });
+
+    assert.equal(ownPdfResponse.status, 200);
+    assert.match(ownPdfResponse.headers.get("content-type") || "", /application\/pdf/i);
+    assert.match(ownPdfResponse.headers.get("content-disposition") || "", /attachment;/i);
+    assert.ok((await ownPdfResponse.arrayBuffer()).byteLength > 500);
+
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    const createTrainerResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "PDF Test Ausbilder",
+        username: "pdf-test-trainer",
+        email: "pdf-test-trainer@example.com",
+        password: "Passwort123!",
+        role: "trainer",
+        ausbildung: "",
+        betrieb: "PDF Betrieb",
+        berufsschule: ""
+      },
+      adminCookie
+    );
+    assert.equal(createTrainerResponse.status, 200);
+
+    const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    assert.equal(adminDashboardResponse.status, 200);
+    const adminDashboard = await adminDashboardResponse.json();
+    const trainerId = adminDashboard.users.find((user) => user.username === "pdf-test-trainer")?.id;
+
+    assert.ok(trainerId, "Der angelegte Ausbilder sollte eine ID haben.");
+
+    const createTraineeResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "PDF Test Azubi",
+        username: "pdf-test-azubi",
+        email: "pdf-test-azubi@example.com",
+        password: "Passwort123!",
+        role: "trainee",
+        ausbildung: "Fachinformatiker Systemintegration",
+        betrieb: "PDF Betrieb",
+        berufsschule: "PDF Schule",
+        trainerIds: [trainerId]
+      },
+      adminCookie
+    );
+    assert.equal(createTraineeResponse.status, 200);
+
+    const refreshedAdminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    assert.equal(refreshedAdminDashboardResponse.status, 200);
+    const refreshedAdminDashboard = await refreshedAdminDashboardResponse.json();
+    const traineeId = refreshedAdminDashboard.users.find((user) => user.username === "pdf-test-azubi")?.id;
+
+    assert.ok(traineeId, "Der angelegte Azubi sollte eine ID haben.");
+
+    const trainerLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "pdf-test-trainer",
+      password: "Passwort123!"
+    });
+    const trainerCookie = extractCookie(trainerLogin);
+
+    const traineePdfResponse = await fetch(`${baseUrl}/api/report/pdf/${traineeId}`, {
+      headers: { Cookie: trainerCookie }
+    });
+
+    assert.equal(traineePdfResponse.status, 200);
+    assert.match(traineePdfResponse.headers.get("content-type") || "", /application\/pdf/i);
+    assert.match(traineePdfResponse.headers.get("content-disposition") || "", /attachment;/i);
+    assert.ok((await traineePdfResponse.arrayBuffer()).byteLength > 500);
+  });
+});

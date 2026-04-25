@@ -1,11 +1,11 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { StatCard } from "../components/StatCard";
 import { EmptyState } from "../components/EmptyState";
 import { StatusBadge } from "../components/StatusBadge";
 import { calculateWeightedAverage, formatGrade } from "../lib/grades";
-import { downloadReportPdf } from "../lib/reportExport";
+import { downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
 import { apiUrl, isStaticDemo } from "../lib/runtime";
 
 function latestItems(entries) {
@@ -23,8 +23,11 @@ function trainerSummary(trainee) {
 }
 
 export function DashboardPage({ role, report, trainees, users }) {
-  function openPdfForTrainee(trainee) {
+  const [pdfError, setPdfError] = useState("");
+
+  async function openPdfForTrainee(trainee) {
     if (isStaticDemo()) {
+      setPdfError("");
       downloadReportPdf({
         entries: trainee.entries || [],
         traineeName: trainee.name,
@@ -33,7 +36,12 @@ export function DashboardPage({ role, report, trainees, users }) {
       return;
     }
 
-    window.location.href = apiUrl(`/api/report/pdf/${trainee.id}`);
+    try {
+      setPdfError("");
+      await downloadPdfFromApi(apiUrl(`/api/report/pdf/${trainee.id}`), `berichtsheft-${trainee.name || "azubi"}.pdf`);
+    } catch (error) {
+      setPdfError(error.message || "PDF konnte nicht geladen werden.");
+    }
   }
 
   if (role === "trainee") {
@@ -102,6 +110,7 @@ export function DashboardPage({ role, report, trainees, users }) {
           title="Freigabeübersicht"
           actions={<Link className="btn btn-primary app-btn" to="/freigaben">Freigaben öffnen</Link>}
         />
+        {pdfError ? <div className="field-message error report-error-banner">{pdfError}</div> : null}
         <section className="stats-grid">
           <StatCard label="Azubis" value={trainees.length} note="Dir zugeordnete Personen" />
           <StatCard label="Offene Prüfungen" value={allEntries.filter((entry) => entry.status === "submitted").length} note="Zur Freigabe eingereicht" />
@@ -191,6 +200,7 @@ export function DashboardPage({ role, report, trainees, users }) {
   return (
     <div className="page-stack">
       <PageHeader kicker="Dashboard" title="Verwaltungsübersicht" />
+      {pdfError ? <div className="field-message error report-error-banner">{pdfError}</div> : null}
       <section className="stats-grid">
         <StatCard label="Benutzer" value={users.length} note="Alle registrierten Konten" />
         <StatCard label="Azubis" value={users.filter((user) => user.role === "trainee").length} note="Aktive Auszubildende" />

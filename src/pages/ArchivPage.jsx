@@ -1,14 +1,17 @@
-import React from "react";
+import React, { useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { DataTable } from "../components/DataTable";
 import { StatusBadge } from "../components/StatusBadge";
 import { EmptyState } from "../components/EmptyState";
-import { downloadReportPdf } from "../lib/reportExport";
+import { downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
 import { apiUrl, isStaticDemo } from "../lib/runtime";
 
 export function ArchivPage({ role, report, trainees }) {
-  function exportPdf(trainee) {
+  const [pdfError, setPdfError] = useState("");
+
+  async function exportPdf(trainee) {
     if (isStaticDemo()) {
+      setPdfError("");
       downloadReportPdf({
         entries: trainee.entries || [],
         traineeName: trainee.name,
@@ -17,7 +20,31 @@ export function ArchivPage({ role, report, trainees }) {
       return;
     }
 
-    window.location.href = apiUrl(`/api/report/pdf/${trainee.id}`);
+    try {
+      setPdfError("");
+      await downloadPdfFromApi(apiUrl(`/api/report/pdf/${trainee.id}`), `berichtsheft-${trainee.name || "azubi"}.pdf`);
+    } catch (error) {
+      setPdfError(error.message || "PDF konnte nicht geladen werden.");
+    }
+  }
+
+  async function exportOwnPdf() {
+    if (isStaticDemo()) {
+      setPdfError("");
+      downloadReportPdf({
+        entries: report?.entries || [],
+        traineeName: report?.trainee?.name || "",
+        trainingTitle: report?.trainee?.ausbildung || ""
+      });
+      return;
+    }
+
+    try {
+      setPdfError("");
+      await downloadPdfFromApi(apiUrl("/api/report/pdf"), "berichtsheft.pdf");
+    } catch (error) {
+      setPdfError(error.message || "PDF konnte nicht geladen werden.");
+    }
   }
 
   const rows =
@@ -35,16 +62,7 @@ export function ArchivPage({ role, report, trainees }) {
         actions={
           role === "trainee" ? (
             <button type="button" className="button button-primary" onClick={() => {
-              if (isStaticDemo()) {
-                downloadReportPdf({
-                  entries: report?.entries || [],
-                  traineeName: report?.trainee?.name || "",
-                  trainingTitle: report?.trainee?.ausbildung || ""
-                });
-                return;
-              }
-
-              window.location.href = apiUrl("/api/report/pdf");
+              exportOwnPdf();
             }}>
               Gesamtes PDF laden
             </button>
@@ -59,6 +77,7 @@ export function ArchivPage({ role, report, trainees }) {
           ) : null
         }
       />
+      {pdfError ? <div className="field-message error report-error-banner">{pdfError}</div> : null}
       <section className="panel-card">
         <div className="mobile-records">
           {rows.length ? (
