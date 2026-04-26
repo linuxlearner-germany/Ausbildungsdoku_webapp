@@ -14,6 +14,17 @@ Hauptfunktionen:
 - Notenverwaltung
 - CSV-/PDF-Exporte
 
+## Features
+
+- Tagesberichte mit Kalender-, Listen- und Schreibansicht
+- Freigabe-Workflow mit Entwurf, Einreichung, Signatur und Nachbearbeitung
+- Trainer- und Admin-Freigaben inklusive Kommentar- und Sammelaktionen
+- CSV-Importe für Berichte und Benutzer mit Vorschau und Validierung
+- PDF-Export ausschließlich für signierte Berichte
+- CSV-Export für eigene Berichte und Verwaltungsdaten
+- Theme-Umschaltung für Hell, Dunkel und System mit persistenter Speicherung
+- Audit-Log für Verwaltungsaktionen
+
 ## Tech Stack
 
 - Node.js
@@ -71,8 +82,32 @@ Verwendung:
 
 - vollständiger lokaler Stack
 - sinnvoll für reproduzierbare lokale Umgebungen
+- Standardstart über `make up`
 
 ## Setup
+
+### Schnellstart
+
+Der klare Standard-Einstieg fuer die komplette lokale Anwendung ist:
+
+```bash
+make up
+```
+
+Das Ziel erledigt:
+
+- `.env` bei Bedarf aus `.env.example` erzeugen
+- Docker-Erreichbarkeit pruefen
+- Full-Docker-Stack mit App, MSSQL und Redis bauen und starten
+- auf den Healthy-Status der App warten
+
+Wichtige Begleitbefehle:
+
+```bash
+make down
+make logs
+make ps
+```
 
 ### Standard-Setup mit lokalem Infra-Stack
 
@@ -103,13 +138,13 @@ Standardports:
 ### Full Docker
 
 ```bash
-npm run docker:local:up
+make up
 ```
 
 Beenden:
 
 ```bash
-npm run docker:local:down
+make down
 ```
 
 ## Docker
@@ -144,6 +179,12 @@ Vollständiger lokaler Stack:
 - `mssql`: lokale MSSQL-Instanz
 - `mssql-init`: erzeugt Runtime- und Testdatenbank
 - `redis`: lokaler Session-Store
+
+Empfohlene Bedienung:
+
+- `make up` statt direkter `docker compose`- oder `npm`-Aufrufe
+- `make down` zum Stoppen
+- `make logs` fuer Diagnose
 
 ## Wichtige Umgebungsvariablen
 
@@ -245,6 +286,14 @@ npm run infra:up
 npm test
 ```
 
+## Rollenmodell
+
+- `trainee`: eigene Berichte, Exporte, Profilansicht und eigene Noten
+- `trainer`: Freigaben, Kommentare, PDF-Export für zugeordnete Azubis, Profilpflege für zugeordnete Azubis
+- `admin`: Benutzerverwaltung, Zuordnungen, Audit-Log, CSV-Import/-Export und Systempflege
+
+Das Rollenmodell bleibt serverseitig erzwungen. Frontend-Sichten sind nur Ergänzung, nicht Sicherheitsgrenze.
+
 ## Build
 
 Frontend-Build:
@@ -258,6 +307,32 @@ npm run build
 - `GET /api/live`: Prozess lebt
 - `GET /api/health`: Prozessstatus und bekannte Abhängigkeiten
 - `GET /api/ready`: echte Readiness-Prüfung gegen MSSQL und Redis
+
+## Export
+
+- `GET /api/report/pdf`: PDF des eigenen Berichtshefts
+- `GET /api/report/pdf/:traineeId`: PDF für zugeordneten Azubi oder Admin-Sicht
+- `GET /api/report/csv`: CSV der eigenen Berichte
+- `GET /api/admin/users/export.csv`: Verwaltungs-CSV für Admins
+
+Fachliche Regeln:
+
+- PDF enthält ausschließlich signierte Berichte
+- PDF nutzt UTF-8-fähige Fonts, damit Umlaute korrekt bleiben
+- Leere Exporte werden mit sauberer Fehlermeldung abgewiesen
+
+## Troubleshooting
+
+- `ROUTE_NOT_FOUND` bei API-Aufrufen:
+  `APP_BASE_PATH` und `API_BASE_URL` prüfen. Der Frontend-Client baut API-Pfade zentral aus diesen Werten.
+- `503` bei `/api/ready`:
+  Erreichbarkeit von MSSQL und Redis prüfen. Sessions benötigen Redis zwingend.
+- Login schlägt lokal fehl:
+  `SESSION_SECRET`, `INITIAL_ADMIN_PASSWORD` und die MSSQL-/Redis-Verbindung in `.env` prüfen.
+- PDF leer oder nicht verfügbar:
+  Es werden nur signierte Berichte exportiert. Entwürfe, eingereichte oder zurückgegebene Berichte erscheinen nicht im PDF.
+- Tests schlagen gegen lokaler Infrastruktur fehl:
+  `npm run infra:up` ausführen und sicherstellen, dass die Testdatenbank vorhanden ist.
 
 ## Projektstruktur
 

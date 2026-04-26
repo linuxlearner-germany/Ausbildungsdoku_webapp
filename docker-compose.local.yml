@@ -8,9 +8,6 @@ services:
       MSSQL_PID: "Developer"
       # SA-Passwort für die lokale Container-Datenbank.
       MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD:-YourStrong(!)Password}
-    ports:
-      # Host-Port:Container-Port für lokale Verbindungen vom Host.
-      - "${LOCAL_MSSQL_PORT_MAPPING:-1433:1433}"
     volumes:
       # Persistiert MSSQL-Daten über Container-Neustarts hinweg.
       - mssql-data:/var/opt/mssql
@@ -53,9 +50,6 @@ services:
     image: redis:7.4-alpine
     container_name: ausbildungsdoku-redis
     command: ["redis-server", "--appendonly", "yes"]
-    ports:
-      # Host-Port:Container-Port für lokale Verbindungen vom Host.
-      - "${LOCAL_REDIS_PORT_MAPPING:-6379:6379}"
     volumes:
       # Persistiert Redis-Daten für lokale Sessions.
       - redis-data:/data

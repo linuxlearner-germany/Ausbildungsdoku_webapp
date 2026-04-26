@@ -19,7 +19,7 @@ export function buildIntegrationTestEnv(overrides = {}) {
     RESET_DATABASE_ON_START: "true",
     MSSQL_HOST: process.env.MSSQL_HOST || "127.0.0.1",
     MSSQL_PORT: process.env.MSSQL_PORT || "1433",
-    MSSQL_DATABASE: process.env.MSSQL_DATABASE || process.env.MSSQL_TEST_DATABASE || "berichtsheft_test",
+    MSSQL_DATABASE: process.env.MSSQL_TEST_DATABASE || process.env.MSSQL_DATABASE || "berichtsheft_test",
     MSSQL_USER: process.env.MSSQL_USER || "sa",
     MSSQL_PASSWORD: process.env.MSSQL_PASSWORD || "YourStrong(!)Password",
     MSSQL_TRUST_SERVER_CERTIFICATE: process.env.MSSQL_TRUST_SERVER_CERTIFICATE || "true",

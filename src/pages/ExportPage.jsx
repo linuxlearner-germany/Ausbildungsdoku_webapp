@@ -4,7 +4,7 @@ import { StatCard } from "../components/StatCard";
 import { EmptyState } from "../components/EmptyState";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { StatusBadge } from "../components/StatusBadge";
-import { downloadEntriesCsv, downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
+import { downloadCsvFromApi, downloadEntriesCsv, downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
 import { apiUrl, assetUrl, isStaticDemo } from "../lib/runtime";
 
 function readFileAsBase64(file) {
@@ -52,18 +52,6 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
   const [busy, setBusy] = useState(false);
 
   const previewSummary = useMemo(() => preview?.summary || { totalRows: 0, validRows: 0, invalidRows: 0 }, [preview]);
-
-  function readErrorMessage(data, fallbackMessage) {
-    if (typeof data?.error === "string") {
-      return data.error;
-    }
-
-    if (data?.error?.message) {
-      return data.error.message;
-    }
-
-    return fallbackMessage;
-  }
 
   async function handlePreview() {
     if (!selectedFile) {
@@ -124,28 +112,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
         return;
       }
 
-      const response = await fetch(apiUrl("/api/report/csv"), {
-        method: "GET",
-        credentials: "same-origin"
-      });
-
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type") || "";
-        const data = contentType.includes("application/json") ? await response.json() : null;
-        throw new Error(readErrorMessage(data, "CSV-Export konnte nicht gestartet werden."));
-      }
-
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const disposition = response.headers.get("content-disposition") || "";
-      const match = disposition.match(/filename="([^"]+)"/i);
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = match?.[1] || "berichtsheft.csv";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(downloadUrl);
+      await downloadCsvFromApi(apiUrl("/api/report/csv"), "berichtsheft.csv");
     } catch (exportError) {
       setCsvError(exportError.message || "CSV-Export konnte nicht gestartet werden.");
     } finally {
@@ -182,13 +149,14 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
         title="PDF-Export und Import"
         actions={
           <div className="page-actions">
-            <PrimaryButton onClick={handleCsvExport} disabled={busy}>
+            <PrimaryButton onClick={handleCsvExport} disabled={busy || !entries.length}>
               {busy ? "CSV wird erstellt..." : "CSV exportieren"}
             </PrimaryButton>
             <button
               type="button"
               className="button button-secondary"
               onClick={handlePdfExport}
+              disabled={busy || !signedEntries}
             >
               PDF herunterladen
             </button>
@@ -219,10 +187,12 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
                   type="button"
                   className="button button-secondary"
                   onClick={handlePdfExport}
+                  disabled={busy || !signedEntries}
                 >
                   PDF herunterladen
                 </button>
               </div>
+              {!signedEntries ? <div className="field-message">PDF wird erst verfügbar, sobald mindestens ein Bericht signiert ist.</div> : null}
               {csvError ? <div className="field-message error">{csvError}</div> : null}
             </div>
           ) : (

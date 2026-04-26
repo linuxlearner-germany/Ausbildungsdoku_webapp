@@ -132,18 +132,30 @@ export function downloadUsersCsv(users) {
   downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "verwaltung-benutzer.csv");
 }
 
-export async function downloadPdfFromApi(url, fallbackFilename = "berichtsheft.pdf") {
+export async function downloadFileFromApi(url, fallbackFilename, { errorMessage, method = "GET" } = {}) {
   const response = await fetch(url, {
-    method: "GET",
+    method,
     credentials: "same-origin"
   });
 
   if (!response.ok) {
-    throw new Error(await parseErrorResponse(response, "PDF konnte nicht geladen werden."));
+    throw new Error(await parseErrorResponse(response, errorMessage || "Datei konnte nicht geladen werden."));
   }
 
   const blob = await response.blob();
   downloadBlob(blob, readFilename(response, fallbackFilename));
+}
+
+export async function downloadPdfFromApi(url, fallbackFilename = "berichtsheft.pdf") {
+  return downloadFileFromApi(url, fallbackFilename, {
+    errorMessage: "PDF konnte nicht geladen werden."
+  });
+}
+
+export async function downloadCsvFromApi(url, fallbackFilename = "berichtsheft.csv") {
+  return downloadFileFromApi(url, fallbackFilename, {
+    errorMessage: "CSV-Export konnte nicht gestartet werden."
+  });
 }
 
 export function downloadReportPdf({ entries, traineeName, trainingTitle }) {

@@ -54,6 +54,10 @@ function registerSecurityMiddleware(app, { config, isProduction, loginRateLimite
       allowedOrigins.add(new URL(config.app.baseUrl).origin);
     }
 
+    if (config.app.apiBaseUrl && /^https?:\/\//i.test(config.app.apiBaseUrl)) {
+      allowedOrigins.add(new URL(config.app.apiBaseUrl).origin);
+    }
+
     if (!allowedOrigins.has(requestOrigin)) {
       next(new HttpError(403, "Ungueltige Herkunft fuer API-Request.", { code: "ORIGIN_NOT_ALLOWED" }));
       return;

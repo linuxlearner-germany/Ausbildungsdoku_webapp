@@ -78,6 +78,8 @@ function createAdminRepository({
         ausbildung: user.ausbildung,
         betrieb: user.betrieb,
         berufsschule: user.berufsschule,
+        ausbildungs_start: user.ausbildungsStart || null,
+        ausbildungs_ende: user.ausbildungsEnde || null,
         theme_preference: "system"
       }, ["id"]);
       return created;
@@ -85,7 +87,7 @@ function createAdminRepository({
 
     async findUserForUpdate(userId) {
       return db("users")
-        .select("id", "name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule")
+        .select("id", "name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule", "ausbildungs_start as ausbildungsStart", "ausbildungs_ende as ausbildungsEnde")
         .where({ id: userId })
         .first();
     },
@@ -98,7 +100,9 @@ function createAdminRepository({
         role: user.role,
         ausbildung: user.ausbildung,
         betrieb: user.betrieb,
-        berufsschule: user.berufsschule
+        berufsschule: user.berufsschule,
+        ausbildungs_start: user.ausbildungsStart || null,
+        ausbildungs_ende: user.ausbildungsEnde || null
       };
 
       if (user.passwordHash) {
@@ -118,7 +122,7 @@ function createAdminRepository({
 
     async findTraineeProfile(userId) {
       return db("users")
-        .select("id", "name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule")
+        .select("id", "name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule", "ausbildungs_start as ausbildungsStart", "ausbildungs_ende as ausbildungsEnde")
         .where({ id: userId })
         .first();
     },

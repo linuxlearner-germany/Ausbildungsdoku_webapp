@@ -352,3 +352,83 @@ await test("Import legt Berichte als submitted an", { concurrency: false }, asyn
   assert.ok(importData.entries.some((entry) => entry.dateFrom === "2026-04-02" && entry.status === "submitted"));
   });
 });
+
+await test("Importierte eingereichte Berichte erscheinen beim zugeordneten Ausbilder, aber nicht bei fremden Ausbildern", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    const secondTrainerResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "Import Fremdtrainer",
+        username: "import-fremdtrainer",
+        email: "import-fremdtrainer@example.com",
+        password: "Trainerkonto123!",
+        role: "trainer",
+        betrieb: "Muster GmbH"
+      },
+      adminCookie
+    );
+    assert.equal(secondTrainerResponse.status, 200);
+
+    const traineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+    const traineeCookie = extractCookie(traineeLogin);
+
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      ["Datum", "Titel", "Betrieb", "Berufsschule"],
+      ["2026-04-07", "CSV Import Sichtbarkeit 1", "Support", ""],
+      ["2026-04-08", "CSV Import Sichtbarkeit 2", "", "Berufsschule"]
+    ]);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Import");
+    const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" });
+
+    const importResponse = await postJson(
+      `${baseUrl}/api/report/import`,
+      {
+        filename: "berichte-sichtbarkeit.xlsx",
+        contentBase64: buffer.toString("base64")
+      },
+      traineeCookie
+    );
+    assert.equal(importResponse.status, 200);
+
+    const trainerLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "trainer",
+      password: "trainer123"
+    });
+    const trainerCookie = extractCookie(trainerLogin);
+    const trainerDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: trainerCookie }
+    });
+    const trainerDashboard = await trainerDashboardResponse.json();
+    const trainerEntries = trainerDashboard.trainees
+      .find((trainee) => trainee.username === "azubi")
+      ?.entries || [];
+
+    assert.ok(trainerEntries.some((entry) => entry.weekLabel === "CSV Import Sichtbarkeit 1" && entry.status === "submitted"));
+    assert.ok(trainerEntries.some((entry) => entry.weekLabel === "CSV Import Sichtbarkeit 2" && entry.status === "submitted"));
+
+    const secondTrainerLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "import-fremdtrainer",
+      password: "Trainerkonto123!"
+    });
+    const secondTrainerCookie = extractCookie(secondTrainerLogin);
+    const secondTrainerDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: secondTrainerCookie }
+    });
+    const secondTrainerDashboard = await secondTrainerDashboardResponse.json();
+    const foreignEntries = secondTrainerDashboard.trainees.flatMap((trainee) => trainee.entries);
+
+    assert.equal(secondTrainerDashboard.trainees.some((trainee) => trainee.username === "azubi"), false);
+    assert.equal(foreignEntries.some((entry) => entry.weekLabel === "CSV Import Sichtbarkeit 1"), false);
+    assert.equal(foreignEntries.some((entry) => entry.weekLabel === "CSV Import Sichtbarkeit 2"), false);
+  });
+});

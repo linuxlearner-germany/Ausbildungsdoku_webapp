@@ -45,6 +45,116 @@ function sanitizeUser(user) {
   };
 }
 
+function isIsoDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+}
+
+function parseIsoDate(value) {
+  if (!isIsoDate(value)) return null;
+  const [year, month, day] = String(value).split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+function formatIsoDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function buildReportingProgress(trainee, entries, today = new Date()) {
+  const trainingStartDate = String(trainee?.ausbildungsStart || "").trim();
+  const trainingEndDate = String(trainee?.ausbildungsEnde || "").trim();
+  const startDate = parseIsoDate(trainingStartDate);
+  const endDate = parseIsoDate(trainingEndDate);
+
+  if (!startDate) {
+    return {
+      available: false,
+      message: "Ausbildungsbeginn nicht hinterlegt.",
+      trainingStartDate,
+      trainingEndDate,
+      calculationUntil: "",
+      requiredWorkdays: 0,
+      existingReportDays: 0,
+      missingReportDays: 0
+    };
+  }
+
+  const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const calculationUntilDate = endDate && endDate < normalizedToday ? endDate : normalizedToday;
+  if (startDate > calculationUntilDate) {
+    return {
+      available: true,
+      message: "",
+      trainingStartDate,
+      trainingEndDate,
+      calculationUntil: formatIsoDate(calculationUntilDate),
+      requiredWorkdays: 0,
+      existingReportDays: 0,
+      missingReportDays: 0
+    };
+  }
+
+  const existingDates = new Set((entries || []).map((entry) => String(entry.dateFrom || "").trim()).filter(isIsoDate));
+  let requiredWorkdays = 0;
+  let existingReportDays = 0;
+
+  for (const cursor = new Date(startDate); cursor <= calculationUntilDate; cursor.setDate(cursor.getDate() + 1)) {
+    const weekDay = cursor.getDay();
+    if (weekDay === 0 || weekDay === 6) continue;
+
+    requiredWorkdays += 1;
+    if (existingDates.has(formatIsoDate(cursor))) {
+      existingReportDays += 1;
+    }
+  }
+
+  return {
+    available: true,
+    message: "",
+    trainingStartDate,
+    trainingEndDate,
+    calculationUntil: formatIsoDate(calculationUntilDate),
+    requiredWorkdays,
+    existingReportDays,
+    missingReportDays: Math.max(0, requiredWorkdays - existingReportDays)
+  };
+}
+
+function validateTrainingDates(role, startDate, endDate) {
+  if (role !== "trainee") {
+    return { startDate: "", endDate: "" };
+  }
+
+  if (startDate && !isIsoDate(startDate)) {
+    throw new Error("Ausbildungsbeginn ist ungültig.");
+  }
+
+  if (endDate && !isIsoDate(endDate)) {
+    throw new Error("Ausbildungsende ist ungültig.");
+  }
+
+  if (startDate && endDate && startDate > endDate) {
+    throw new Error("Ausbildungsbeginn darf nicht nach dem Ausbildungsende liegen.");
+  }
+
+  return { startDate, endDate };
+}
+
+function normalizeTrainerIds(input) {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return [...new Set(input.map(Number).filter((value) => Number.isInteger(value) && value > 0))];
+}
+
+function ensureTraineeTrainerAssignment(role, trainerIds) {
+  if (role === "trainee" && !normalizeTrainerIds(trainerIds).length) {
+    throw new Error("Fuer Azubis muss mindestens ein Ausbilder zugeordnet werden.");
+  }
+}
+
 function validatePasswordStrength(password) {
   return /[A-Z]/.test(password) && /[a-z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password);
 }
@@ -141,12 +251,14 @@ function buildDashboard(store, currentUser) {
   }
 
   if (currentUser.role === "trainee") {
+    const entries = getEntriesForTrainee(store, currentUser.id);
     return {
       role: "trainee",
       report: {
         trainee: sanitizeUser(currentUser),
-        entries: getEntriesForTrainee(store, currentUser.id),
-        grades: getGradesForTrainee(store, currentUser.id)
+        entries,
+        grades: getGradesForTrainee(store, currentUser.id),
+        reportingProgress: buildReportingProgress(currentUser, entries)
       },
       trainees: [],
       users: [],
@@ -247,10 +359,11 @@ function parseUserRows(payload, store) {
     if (!["trainee", "trainer", "admin"].includes(role)) errors.push("Rolle ist ungültig.");
     if (store.users.some((user) => user.username === username)) errors.push("Benutzername existiert bereits.");
     if (store.users.some((user) => user.email === email)) errors.push("E-Mail existiert bereits.");
+    if (role === "trainee" && !trainerUsernames.length) errors.push("Fuer Azubis muss mindestens ein Ausbilder zugeordnet werden.");
 
     const missingTrainers = trainerUsernames.filter((trainerUsername) => !knownTrainers.has(trainerUsername));
     if (missingTrainers.length) {
-      warnings.push(`Ausbilder unbekannt: ${missingTrainers.join(", ")}`);
+      errors.push(`Ausbilder unbekannt: ${missingTrainers.join(", ")}`);
     }
 
     return {
@@ -670,6 +783,13 @@ export function StaticAppProvider({ children }) {
     }
 
     const password = String(payload.password || "").trim() || "Start!12345";
+    const trainerIds = payload.role === "trainee" ? normalizeTrainerIds(payload.trainerIds) : [];
+    ensureTraineeTrainerAssignment(payload.role || "trainee", trainerIds);
+    const trainingDates = validateTrainingDates(
+      payload.role || "trainee",
+      String(payload.ausbildungsStart || "").trim(),
+      String(payload.ausbildungsEnde || "").trim()
+    );
     commit((draft) => {
       const newUser = {
         id: draft.nextUserId,
@@ -681,7 +801,9 @@ export function StaticAppProvider({ children }) {
         ausbildung: String(payload.ausbildung || "").trim(),
         betrieb: String(payload.betrieb || "").trim(),
         berufsschule: String(payload.berufsschule || "").trim(),
-        trainerIds: payload.role === "trainee" ? (payload.trainerIds || []).map(Number) : [],
+        ausbildungsStart: trainingDates.startDate,
+        ausbildungsEnde: trainingDates.endDate,
+        trainerIds,
         themePreference: "system"
       };
       draft.users.push(newUser);
@@ -710,10 +832,12 @@ export function StaticAppProvider({ children }) {
       throw new Error("Nur Admins können Ausbilder zuweisen.");
     }
 
+    ensureTraineeTrainerAssignment("trainee", trainerIds);
+
     commit((draft) => {
       const trainee = draft.users.find((user) => user.id === Number(traineeId) && user.role === "trainee");
       if (!trainee) throw new Error("Azubi nicht gefunden.");
-      trainee.trainerIds = (trainerIds || []).map(Number);
+      trainee.trainerIds = normalizeTrainerIds(trainerIds);
       addAuditLog(draft, {
         actorUserId: currentUser.id,
         actorName: currentUser.name,
@@ -746,15 +870,26 @@ export function StaticAppProvider({ children }) {
         throw new Error("E-Mail existiert bereits.");
       }
 
+      const nextRole = payload.role || user.role;
+      const trainerIds = nextRole === "trainee" ? normalizeTrainerIds(payload.trainerIds) : [];
+      ensureTraineeTrainerAssignment(nextRole, trainerIds);
+      const trainingDates = validateTrainingDates(
+        nextRole,
+        String(payload.ausbildungsStart || "").trim(),
+        String(payload.ausbildungsEnde || "").trim()
+      );
+
       Object.assign(user, {
         name: String(payload.name || "").trim(),
         username: nextUsername,
         email: nextEmail,
-        role: payload.role || user.role,
+        role: nextRole,
         ausbildung: String(payload.ausbildung || "").trim(),
         betrieb: String(payload.betrieb || "").trim(),
         berufsschule: String(payload.berufsschule || "").trim(),
-        trainerIds: (payload.role || user.role) === "trainee" ? (payload.trainerIds || []).map(Number) : []
+        ausbildungsStart: trainingDates.startDate,
+        ausbildungsEnde: trainingDates.endDate,
+        trainerIds
       });
 
       if (payload.password?.trim()) {
@@ -851,6 +986,8 @@ export function StaticAppProvider({ children }) {
           ausbildung: row.ausbildung,
           betrieb: row.betrieb,
           berufsschule: row.berufsschule,
+          ausbildungsStart: "",
+          ausbildungsEnde: "",
           trainerIds,
           themePreference: "system"
         });

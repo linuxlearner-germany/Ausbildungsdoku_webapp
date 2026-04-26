@@ -9,6 +9,8 @@ const adminUserPayloadSchema = z.object({
   ausbildung: z.string().optional().default(""),
   betrieb: z.string().optional().default(""),
   berufsschule: z.string().optional().default(""),
+  ausbildungsStart: z.string().optional().default(""),
+  ausbildungsEnde: z.string().optional().default(""),
   trainerIds: z.array(z.union([z.number(), z.string()])).optional().default([])
 }).passthrough();
 

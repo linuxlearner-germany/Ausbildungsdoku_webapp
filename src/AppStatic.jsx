@@ -11,6 +11,7 @@ import { ArchivPage } from "./pages/ArchivPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
 import { NotenPage } from "./pages/NotenPage";
 import { ExportPage } from "./pages/ExportPage";
+import { canAccessMenuItem, getDefaultRouteForRole } from "./navigation/menuConfig.mjs";
 
 function ProtectedApp() {
   const navigate = useNavigate();
@@ -60,6 +61,11 @@ function ProtectedApp() {
   const trainees = dashboard?.trainees || [];
   const users = dashboard?.users || [];
   const educations = dashboard?.educations || [];
+  const fallbackRoute = getDefaultRouteForRole(role);
+
+  function guardRoute(menuKey, element) {
+    return canAccessMenuItem(role, menuKey) ? element : <Navigate to={fallbackRoute} replace />;
+  }
 
   return (
     <AppShell
@@ -75,11 +81,10 @@ function ProtectedApp() {
     >
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<DashboardPage role={role} report={report} trainees={trainees} users={users} />} />
+        <Route path="/dashboard" element={<DashboardPage role={role} report={report} trainees={trainees} users={users} onLoadAuditLogs={loadAuditLogs} />} />
         <Route
           path="/berichte"
-          element={
-            role === "trainee" ? (
+          element={guardRoute("reports",
               <TagesberichtePage
                 report={report}
                 initialView="calendar"
@@ -112,16 +117,13 @@ function ProtectedApp() {
                   return data;
                 }}
               />
-            ) : (
-              <Navigate to="/dashboard" replace />
-            )
-          }
+          )}
         />
-        <Route path="/tagesberichte" element={<Navigate to="/berichte?view=write" replace />} />
-        <Route path="/kalender" element={<Navigate to="/berichte?view=calendar" replace />} />
+        <Route path="/tagesberichte" element={canAccessMenuItem(role, "reports") ? <Navigate to="/berichte?view=write" replace /> : <Navigate to={fallbackRoute} replace />} />
+        <Route path="/kalender" element={canAccessMenuItem(role, "reports") ? <Navigate to="/berichte?view=calendar" replace /> : <Navigate to={fallbackRoute} replace />} />
         <Route
           path="/freigaben"
-          element={
+          element={guardRoute("approvals",
             <FreigabenPage
               role={role}
               report={report}
@@ -154,12 +156,11 @@ function ProtectedApp() {
                 setFlash({ type: "success", message: "Kommentar gespeichert." });
               }}
             />
-          }
+          )}
         />
         <Route
           path="/noten"
-          element={
-            ["trainee", "trainer", "admin"].includes(role) ? (
+          element={guardRoute("grades",
               <NotenPage
                 role={role}
                 grades={grades}
@@ -177,15 +178,11 @@ function ProtectedApp() {
                   setFlash({ type: "success", message: "Note gelöscht." });
                 }}
               />
-            ) : (
-              <Navigate to="/dashboard" replace />
-            )
-          }
+          )}
         />
         <Route
           path="/profil"
-          element={
-            ["trainee", "trainer", "admin"].includes(role) ? (
+          element={guardRoute("profile",
               <ProfilPage
                 role={role}
                 report={report}
@@ -210,15 +207,11 @@ function ProtectedApp() {
                   setFlash({ type: "success", message: "Dein Passwort wurde erfolgreich geändert." });
                 }}
               />
-            ) : (
-              <Navigate to="/dashboard" replace />
-            )
-          }
+          )}
         />
         <Route
           path="/export"
-          element={
-            role === "trainee" ? (
+          element={guardRoute("exports",
               <ExportPage
                 report={report}
                 onPreviewImport={previewReportImport}
@@ -228,17 +221,14 @@ function ProtectedApp() {
                   return data;
                 }}
               />
-            ) : (
-              <Navigate to="/dashboard" replace />
-            )
-          }
+          )}
         />
-        <Route path="/archiv" element={<ArchivPage role={role} report={report} trainees={trainees} />} />
+        <Route path="/archiv" element={guardRoute("archive", <ArchivPage role={role} report={report} trainees={trainees} />)} />
         <Route
-          path="/verwaltung"
-          element={
-            role === "admin" ? (
+          path="/admin/users/new"
+          element={guardRoute("admin-create-user",
               <AdminUsersPage
+                section="create"
                 users={users}
                 educations={educations}
                 onPreviewUserImport={previewUserImport}
@@ -266,11 +256,111 @@ function ProtectedApp() {
                   setFlash({ type: "success", message: "Nutzer angelegt." });
                 }}
               />
-            ) : (
-              <Navigate to="/dashboard" replace />
-            )
-          }
+          )}
         />
+        <Route
+          path="/admin/users"
+          element={guardRoute("admin-users",
+            <AdminUsersPage
+              section="users"
+              users={users}
+              educations={educations}
+              onPreviewUserImport={previewUserImport}
+              onImportUsers={async (payload) => {
+                const data = await importUsers(payload);
+                setFlash({ type: "success", message: `${data.importedCount} Nutzer importiert.` });
+                return data;
+              }}
+              onLoadAuditLogs={loadAuditLogs}
+              onAssignTrainer={async (traineeId, trainerIds) => {
+                await assignTrainer(traineeId, trainerIds);
+                setFlash({ type: "success", message: "Ausbilder-Zuordnung gespeichert." });
+              }}
+              onUpdateUser={async (userId, payload) => {
+                await updateUser(userId, payload);
+                setFlash({ type: "success", message: "Benutzer aktualisiert." });
+              }}
+              onDeleteUser={async (userId) => {
+                const data = await deleteUser(userId);
+                setFlash({ type: "success", message: `${data.deletedUser?.name || "Benutzer"} gelöscht.` });
+                return data;
+              }}
+              onCreateUser={async (payload) => {
+                await createUser(payload);
+                setFlash({ type: "success", message: "Nutzer angelegt." });
+              }}
+            />
+          )}
+        />
+        <Route
+          path="/admin/assignments"
+          element={guardRoute("admin-assignments",
+            <AdminUsersPage
+              section="assignments"
+              users={users}
+              educations={educations}
+              onPreviewUserImport={previewUserImport}
+              onImportUsers={async (payload) => {
+                const data = await importUsers(payload);
+                setFlash({ type: "success", message: `${data.importedCount} Nutzer importiert.` });
+                return data;
+              }}
+              onLoadAuditLogs={loadAuditLogs}
+              onAssignTrainer={async (traineeId, trainerIds) => {
+                await assignTrainer(traineeId, trainerIds);
+                setFlash({ type: "success", message: "Ausbilder-Zuordnung gespeichert." });
+              }}
+              onUpdateUser={async (userId, payload) => {
+                await updateUser(userId, payload);
+                setFlash({ type: "success", message: "Benutzer aktualisiert." });
+              }}
+              onDeleteUser={async (userId) => {
+                const data = await deleteUser(userId);
+                setFlash({ type: "success", message: `${data.deletedUser?.name || "Benutzer"} gelöscht.` });
+                return data;
+              }}
+              onCreateUser={async (payload) => {
+                await createUser(payload);
+                setFlash({ type: "success", message: "Nutzer angelegt." });
+              }}
+            />
+          )}
+        />
+        <Route
+          path="/admin/audit-log"
+          element={guardRoute("admin-audit-log",
+            <AdminUsersPage
+              section="audit"
+              users={users}
+              educations={educations}
+              onPreviewUserImport={previewUserImport}
+              onImportUsers={async (payload) => {
+                const data = await importUsers(payload);
+                setFlash({ type: "success", message: `${data.importedCount} Nutzer importiert.` });
+                return data;
+              }}
+              onLoadAuditLogs={loadAuditLogs}
+              onAssignTrainer={async (traineeId, trainerIds) => {
+                await assignTrainer(traineeId, trainerIds);
+                setFlash({ type: "success", message: "Ausbilder-Zuordnung gespeichert." });
+              }}
+              onUpdateUser={async (userId, payload) => {
+                await updateUser(userId, payload);
+                setFlash({ type: "success", message: "Benutzer aktualisiert." });
+              }}
+              onDeleteUser={async (userId) => {
+                const data = await deleteUser(userId);
+                setFlash({ type: "success", message: `${data.deletedUser?.name || "Benutzer"} gelöscht.` });
+                return data;
+              }}
+              onCreateUser={async (payload) => {
+                await createUser(payload);
+                setFlash({ type: "success", message: "Nutzer angelegt." });
+              }}
+            />
+          )}
+        />
+        <Route path="/verwaltung" element={<Navigate to="/admin/users" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </AppShell>

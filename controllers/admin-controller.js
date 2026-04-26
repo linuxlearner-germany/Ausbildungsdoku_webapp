@@ -1,16 +1,5 @@
-const { ZodError } = require("zod");
 const { HttpError } = require("../utils/http-error");
-
-function parseSchema(schema, payload) {
-  try {
-    return schema.parse(payload);
-  } catch (error) {
-    if (error instanceof ZodError) {
-      throw new HttpError(400, error.issues[0]?.message || "Ungueltige Eingabedaten.");
-    }
-    throw error;
-  }
-}
+const { parseSchema } = require("../utils/parse-schema");
 
 function sendDownload(res, { contentType, fileName, body }) {
   res.setHeader("Content-Type", contentType);
