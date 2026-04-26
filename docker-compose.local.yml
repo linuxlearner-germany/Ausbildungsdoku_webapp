@@ -1,14 +1,18 @@
 services:
   mssql:
+    # Lokale MSSQL-Instanz für Entwicklung und Full-Docker-Tests.
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: ausbildungsdoku-mssql
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_PID: "Developer"
+      # SA-Passwort für die lokale Container-Datenbank.
       MSSQL_SA_PASSWORD: ${MSSQL_PASSWORD:-YourStrong(!)Password}
     ports:
+      # Host-Port:Container-Port für lokale Verbindungen vom Host.
       - "${LOCAL_MSSQL_PORT_MAPPING:-1433:1433}"
     volumes:
+      # Persistiert MSSQL-Daten über Container-Neustarts hinweg.
       - mssql-data:/var/opt/mssql
     healthcheck:
       test:
@@ -22,6 +26,7 @@ services:
       start_period: 20s
 
   mssql-init:
+    # Erstellt Runtime- und Testdatenbank, nachdem MSSQL healthy ist.
     image: mcr.microsoft.com/mssql-tools
     depends_on:
       mssql:
@@ -44,12 +49,15 @@ services:
         "$$SQLCMD" -C -S mssql -U sa -P "${MSSQL_PASSWORD:-YourStrong(!)Password}" -Q "IF DB_ID(N'${MSSQL_DATABASE:-berichtsheft}') IS NULL CREATE DATABASE [${MSSQL_DATABASE:-berichtsheft}]; IF DB_ID(N'${MSSQL_TEST_DATABASE:-berichtsheft_test}') IS NULL CREATE DATABASE [${MSSQL_TEST_DATABASE:-berichtsheft_test}];"
 
   redis:
+    # Lokaler Redis-Container als Session-Store.
     image: redis:7.4-alpine
     container_name: ausbildungsdoku-redis
     command: ["redis-server", "--appendonly", "yes"]
     ports:
+      # Host-Port:Container-Port für lokale Verbindungen vom Host.
       - "${LOCAL_REDIS_PORT_MAPPING:-6379:6379}"
     volumes:
+      # Persistiert Redis-Daten für lokale Sessions.
       - redis-data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -58,6 +66,7 @@ services:
       retries: 10
 
   app:
+    # Full-Docker-Modus: App läuft zusammen mit lokaler MSSQL- und Redis-Infra.
     build:
       context: .
       dockerfile: Dockerfile
@@ -72,6 +81,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      # Entwicklungsmodus im Container.
       NODE_ENV: ${NODE_ENV:-development}
       HOST: 0.0.0.0
       PORT: 3010
@@ -80,11 +90,13 @@ services:
       API_BASE_URL: ${API_BASE_URL:-}
       TRUST_PROXY: ${TRUST_PROXY:-false}
       LOG_LEVEL: ${LOG_LEVEL:-debug}
+      # Server-Limits und Timeouts.
       REQUEST_BODY_LIMIT: ${REQUEST_BODY_LIMIT:-15mb}
       SERVER_REQUEST_TIMEOUT_MS: ${SERVER_REQUEST_TIMEOUT_MS:-30000}
       SERVER_HEADERS_TIMEOUT_MS: ${SERVER_HEADERS_TIMEOUT_MS:-35000}
       SERVER_KEEP_ALIVE_TIMEOUT_MS: ${SERVER_KEEP_ALIVE_TIMEOUT_MS:-5000}
       SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
+      # Session-/Cookie-Einstellungen; Redis läuft im Compose-Netzwerk.
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set}
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-berichtsheft.sid}
       SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
@@ -92,6 +104,7 @@ services:
       SESSION_SAME_SITE: ${SESSION_SAME_SITE:-lax}
       SESSION_MAX_AGE_MS: ${SESSION_MAX_AGE_MS:-28800000}
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-28800}
+      # Redis wird im lokalen Stack über den Service-Namen angesprochen.
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -101,6 +114,7 @@ services:
       REDIS_COMMAND_TIMEOUT_MS: ${REDIS_COMMAND_TIMEOUT_MS:-5000}
       REDIS_MAX_RETRIES: ${REDIS_MAX_RETRIES:-4}
       REDIS_PING_INTERVAL_MS: ${REDIS_PING_INTERVAL_MS:-30000}
+      # MSSQL wird im lokalen Stack über den Service-Namen angesprochen.
       MSSQL_HOST: mssql
       MSSQL_PORT: 1433
       MSSQL_DATABASE: ${MSSQL_DATABASE:-berichtsheft}
@@ -112,6 +126,7 @@ services:
       MSSQL_POOL_MAX: ${MSSQL_POOL_MAX:-10}
       MSSQL_CONNECTION_TIMEOUT_MS: ${MSSQL_CONNECTION_TIMEOUT_MS:-15000}
       MSSQL_REQUEST_TIMEOUT_MS: ${MSSQL_REQUEST_TIMEOUT_MS:-15000}
+      # Beim Containerstart werden Migrationen und Bootstrap automatisch ausgeführt.
       APPLY_MIGRATIONS_ON_START: ${APPLY_MIGRATIONS_ON_START:-true}
       BOOTSTRAP_DATABASE_ON_START: ${BOOTSTRAP_DATABASE_ON_START:-true}
       RESET_DATABASE_ON_START: ${RESET_DATABASE_ON_START:-false}
@@ -120,6 +135,7 @@ services:
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@example.com}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?INITIAL_ADMIN_PASSWORD must be set}
     ports:
+      # Host-Port:Container-Port für die lokal erreichbare Webapp.
       - "${APP_PORT_MAPPING:-3010:3010}"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3010${APP_BASE_PATH:-}/api/ready').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))\""]
@@ -129,5 +145,6 @@ services:
       start_period: 20s
 
 volumes:
+  # Persistente Volumes für den lokalen Full-Docker-Modus.
   mssql-data:
   redis-data:

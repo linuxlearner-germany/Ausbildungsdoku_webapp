@@ -95,45 +95,91 @@ function buildEntriesCsv(entries) {
   return `\uFEFF${[headers, ...rows].map((row) => row.map(escapeCsvCell).join(";")).join("\r\n")}\r\n`;
 }
 
+function normalizePdfText(value) {
+  if (value == null) return "";
+  return String(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+}
+
+function hasMeaningfulPdfContent(value) {
+  const normalized = normalizePdfText(value);
+  return Boolean(normalized) && !/^[-\s]+$/.test(normalized);
+}
+
+function formatPdfDate(value) {
+  if (!value) return "-";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
+    const [year, month, day] = String(value).split("-");
+    return `${day}.${month}.${year}`;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatPdfDateTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function toPdfDate(value) {
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return new Date(`${value}T00:00:00`);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getIsoWeekInfo(value) {
+  const date = toPdfDate(value);
+  if (!date) return null;
+  const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = utc.getUTCDay() || 7;
+  utc.setUTCDate(utc.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
+  return { year: utc.getUTCFullYear(), week: Math.ceil((((utc - yearStart) / 86400000) + 1) / 7) };
+}
+
+function slugifyFilePart(value, fallback = "azubi") {
+  return String(value || fallback)
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || fallback;
+}
+
+function resolvePdfFontPaths() {
+  const candidates = [
+    {
+      regular: "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+      bold: "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+    }
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate.regular) && fs.existsSync(candidate.bold)) || null;
+}
+
+function registerPdfFonts(doc) {
+  const fontPaths = resolvePdfFontPaths();
+  if (!fontPaths) {
+    return { regular: "Helvetica", bold: "Helvetica-Bold" };
+  }
+
+  doc.registerFont("ReportSans", fontPaths.regular);
+  doc.registerFont("ReportSans-Bold", fontPaths.bold);
+  return { regular: "ReportSans", bold: "ReportSans-Bold" };
+}
+
 function renderPdf(res, trainee, entries, picturesDir) {
   const logoPath = path.join(picturesDir, "WIWEB-waage-vektor_ohne_schrift.png");
-  const sortedEntries = [...entries].filter((entry) => entry.status === "signed").sort((a, b) => String(a.dateFrom).localeCompare(String(b.dateFrom)));
+  const fonts = registerPdfFonts(new PDFDocument({ autoFirstPage: false }));
+  const sortedEntries = [...entries]
+    .filter((entry) => entry.status === "signed")
+    .sort((a, b) => String(a.dateFrom).localeCompare(String(b.dateFrom)));
   const weekGroups = [];
-
-  function formatDate(value) {
-    if (!value) return "-";
-    if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-      const [year, month, day] = String(value).split("-");
-      return `${day}.${month}.${year}`;
-    }
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value);
-    return date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" });
-  }
-
-  function formatDateTime(value) {
-    if (!value) return "-";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value);
-    return date.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
-  }
-
-  function toDate(value) {
-    if (!value) return null;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return new Date(`${value}T00:00:00`);
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  function getIsoWeekInfo(value) {
-    const date = toDate(value);
-    if (!date) return null;
-    const utc = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-    const day = utc.getUTCDay() || 7;
-    utc.setUTCDate(utc.getUTCDate() + 4 - day);
-    const yearStart = new Date(Date.UTC(utc.getUTCFullYear(), 0, 1));
-    return { year: utc.getUTCFullYear(), week: Math.ceil((((utc - yearStart) / 86400000) + 1) / 7) };
-  }
 
   let currentGroup = null;
   for (const entry of sortedEntries) {
@@ -147,6 +193,13 @@ function renderPdf(res, trainee, entries, picturesDir) {
   }
 
   const doc = new PDFDocument({ size: "A4", margin: 50, autoFirstPage: true });
+  if (fonts.regular === "ReportSans") {
+    doc.registerFont("ReportSans", resolvePdfFontPaths().regular);
+    doc.registerFont("ReportSans-Bold", resolvePdfFontPaths().bold);
+  }
+
+  const regularFont = fonts.regular;
+  const boldFont = fonts.bold;
   const pageBottomY = doc.page.height - doc.page.margins.bottom;
   const cardX = 50;
   const cardWidth = 495;
@@ -155,40 +208,41 @@ function renderPdf(res, trainee, entries, picturesDir) {
   const innerWidth = cardWidth - (cardPadding * 2);
   const cardGap = 14;
   const contentStartY = 245;
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", `attachment; filename="berichtsheft-${trainee.name.replace(/\s+/g, "-").toLowerCase()}.pdf"`);
+
+  res.setHeader("Content-Type", "application/pdf; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename="berichtsheft-${slugifyFilePart(trainee.name)}.pdf"`);
   doc.pipe(res);
+
+  function setFont(variant, size) {
+    doc.font(variant === "bold" ? boldFont : regularFont).fontSize(size);
+  }
 
   function renderHeader(pageTitle, weekLabel = "") {
     if (fs.existsSync(logoPath)) doc.image(logoPath, 50, 42, { fit: [64, 64] });
-    doc.font("Helvetica-Bold").fontSize(22).text("Berichtsheft", 130, 50);
-    doc.font("Helvetica").fontSize(11);
+    setFont("bold", 22);
+    doc.fillColor("#11211F").text("Berichtsheft", 130, 50);
+    setFont("regular", 11);
+    doc.fillColor("#334155");
     doc.text(`Name: ${trainee.name}`, 130, 80);
     doc.text(`Ausbildung: ${trainee.ausbildung || "-"}`, 130, 96);
     doc.text(`Betrieb: ${trainee.betrieb || "-"}`, 130, 112);
     doc.text(`Berufsschule: ${trainee.berufsschule || "-"}`, 130, 128);
-    doc.text(`Stand: ${formatDate(new Date())}`, 130, 144);
-    doc.font("Helvetica-Bold").fontSize(15).text(pageTitle, 50, 182);
-    if (weekLabel) doc.font("Helvetica").fontSize(11).text(weekLabel, 50, 202);
+    doc.text(`Stand: ${formatPdfDate(new Date())}`, 130, 144);
+    setFont("bold", 15);
+    doc.fillColor("#11211F").text(pageTitle, 50, 182);
+    if (weekLabel) {
+      setFont("regular", 11);
+      doc.fillColor("#4B5F5B").text(weekLabel, 50, 202);
+    }
     doc.moveTo(50, 225).lineTo(545, 225).strokeColor("#B7C7C1").lineWidth(1).stroke();
-  }
-
-  function normalizePdfText(value) {
-    if (value == null) return "";
-    return String(value).replace(/\r\n/g, "\n").replace(/\r/g, "\n").trimEnd();
-  }
-
-  function hasMeaningfulPdfContent(value) {
-    const normalized = normalizePdfText(value).trim();
-    return Boolean(normalized) && !/^[-\s]+$/.test(normalized);
   }
 
   function buildEntryBody(entry) {
     const sections = [];
-    if (hasMeaningfulPdfContent(entry.betrieb)) sections.push(["Betrieb", normalizePdfText(entry.betrieb).trim()]);
-    if (hasMeaningfulPdfContent(entry.schule)) sections.push(["Berufsschule", normalizePdfText(entry.schule).trim()]);
-    if (entry.trainerComment) sections.push(["Kommentar Ausbilder", normalizePdfText(entry.trainerComment)]);
-    if (entry.rejectionReason) sections.push(["Rueckmeldung", normalizePdfText(entry.rejectionReason)]);
+    if (hasMeaningfulPdfContent(entry.betrieb)) sections.push(["Betrieb", normalizePdfText(entry.betrieb)]);
+    if (hasMeaningfulPdfContent(entry.schule)) sections.push(["Berufsschule", normalizePdfText(entry.schule)]);
+    if (hasMeaningfulPdfContent(entry.trainerComment)) sections.push(["Kommentar Ausbilder", normalizePdfText(entry.trainerComment)]);
+    if (hasMeaningfulPdfContent(entry.rejectionReason)) sections.push(["Rückmeldung", normalizePdfText(entry.rejectionReason)]);
     if (!sections.length) return "Keine Inhalte hinterlegt.";
     return sections.map(([label, content]) => `${label}\n${content}`).join("\n\n");
   }
@@ -202,6 +256,7 @@ function renderPdf(res, trainee, entries, picturesDir) {
     if (!normalizedText || maxHeight <= 0) return { fittingText: "", remainingText: normalizedText };
     const fullHeight = measureTextHeight(normalizedText, options);
     if (fullHeight <= maxHeight) return { fittingText: normalizedText, remainingText: "" };
+
     let low = 1;
     let high = normalizedText.length;
     let best = 0;
@@ -214,6 +269,7 @@ function renderPdf(res, trainee, entries, picturesDir) {
         high = mid - 1;
       }
     }
+
     if (!best) return { fittingText: "", remainingText: normalizedText };
     const searchWindowStart = Math.max(0, best - 120);
     const tail = normalizedText.slice(searchWindowStart, best);
@@ -235,18 +291,27 @@ function renderPdf(res, trainee, entries, picturesDir) {
     const metaHeight = measureTextHeight(statusText, metaOptions);
     const bodyHeight = measureTextHeight(bodyText, bodyOptions);
     const boxHeight = cardPadding + titleHeight + 6 + metaHeight + 12 + bodyHeight + cardPadding;
+
     doc.roundedRect(cardX, boxTop, cardWidth, boxHeight, 10).fillAndStroke("#F7FAF8", "#D7E1DB");
-    doc.fillColor("#11211F").font("Helvetica-Bold").fontSize(11).text(title, innerX, boxTop + cardPadding, titleOptions);
-    doc.font("Helvetica").fontSize(9.5).fillColor("#4B5F5B").text(statusText, innerX, boxTop + cardPadding + titleHeight + 6, metaOptions);
-    doc.font("Helvetica").fontSize(10).fillColor("#11211F").text(bodyText, innerX, boxTop + cardPadding + titleHeight + 6 + metaHeight + 12, bodyOptions);
+    setFont("bold", 11);
+    doc.fillColor("#11211F").text(title, innerX, boxTop + cardPadding, titleOptions);
+    setFont("regular", 9.5);
+    doc.fillColor("#4B5F5B").text(statusText, innerX, boxTop + cardPadding + titleHeight + 6, metaOptions);
+    setFont("regular", 10);
+    doc.fillColor("#11211F").text(bodyText, innerX, boxTop + cardPadding + titleHeight + 6 + metaHeight + 12, bodyOptions);
     return boxHeight;
   }
 
   function renderEntryAcrossPages(entry, weekTitle, weekRange, cursorY) {
-    const baseTitle = `${formatDate(entry.dateFrom)} · ${entry.weekLabel || "Ohne Titel"}`;
-    const statusText = entry.status === "signed" ? `Signiert von ${entry.signerName || "-"} am ${formatDateTime(entry.signedAt)}` : `Status: ${entry.status}`;
+    const baseTitle = `${formatPdfDate(entry.dateFrom)} · ${entry.weekLabel || "Ohne Titel"}`;
+    const statusText = `Signiert von ${entry.signerName || "-"} am ${formatPdfDateTime(entry.signedAt)}`;
     const bodyText = buildEntryBody(entry);
-    const fixedContentHeight = cardPadding + measureTextHeight(baseTitle, { width: innerWidth, lineGap: 1 }) + 6 + measureTextHeight(statusText, { width: innerWidth, lineGap: 1 }) + 12 + cardPadding;
+    const fixedContentHeight = cardPadding
+      + measureTextHeight(baseTitle, { width: innerWidth, lineGap: 1 })
+      + 6
+      + measureTextHeight(statusText, { width: innerWidth, lineGap: 1 })
+      + 12
+      + cardPadding;
     let remainingBody = bodyText;
     let segmentIndex = 0;
 
@@ -258,6 +323,7 @@ function renderPdf(res, trainee, entries, picturesDir) {
         cursorY = contentStartY;
         availableHeight = pageBottomY - cursorY;
       }
+
       const { fittingText, remainingText } = fitTextToHeight(remainingBody, { width: innerWidth, lineGap: 2 }, availableHeight - fixedContentHeight);
       if (!fittingText) {
         doc.addPage();
@@ -265,30 +331,48 @@ function renderPdf(res, trainee, entries, picturesDir) {
         cursorY = contentStartY;
         continue;
       }
+
       const boxHeight = drawEntryCard(cursorY, segmentIndex > 0 ? `${baseTitle} (Fortsetzung)` : baseTitle, statusText, fittingText);
       cursorY += boxHeight + cardGap;
       remainingBody = remainingText;
       segmentIndex += 1;
+
       if (remainingBody) {
         doc.addPage();
         renderHeader(weekTitle, weekRange);
         cursorY = contentStartY;
       }
     }
+
     return cursorY;
   }
 
   if (!weekGroups.length) {
     renderHeader("Keine Tagesberichte vorhanden");
-    doc.font("Helvetica").fontSize(12).text("Aktuell sind keine Einträge für den PDF-Export vorhanden.", 50, 250);
+    setFont("regular", 12);
+    doc.fillColor("#11211F").text("Aktuell sind keine signierten Einträge für den PDF-Export vorhanden.", 50, 250);
+    doc.addPage();
+    renderHeader("Unterschriften");
+    setFont("bold", 12);
+    doc.fillColor("#11211F").text("Bestätigung", 50, 310);
+    setFont("regular", 11);
+    doc.text("Hiermit wird bestätigt, dass die Berichtsheftführung geprüft wurde.", 50, 332, { width: 495 });
+    doc.moveTo(50, 430).lineTo(260, 430).strokeColor("#526763").lineWidth(1).stroke();
+    doc.moveTo(320, 430).lineTo(545, 430).strokeColor("#526763").lineWidth(1).stroke();
+    doc.fillColor("#5D6F6A").text("Ort, Datum", 50, 438);
+    doc.text("Unterschrift Azubi", 320, 438);
+    doc.moveTo(50, 520).lineTo(260, 520).strokeColor("#526763").lineWidth(1).stroke();
+    doc.moveTo(320, 520).lineTo(545, 520).strokeColor("#526763").lineWidth(1).stroke();
+    doc.text("Ort, Datum", 50, 528);
+    doc.text("Unterschrift Ausbilder", 320, 528);
     doc.end();
     return;
   }
 
   weekGroups.forEach((group, groupIndex) => {
     if (groupIndex > 0) doc.addPage();
-    const firstDate = formatDate(group.entries[0]?.dateFrom);
-    const lastDate = formatDate(group.entries[group.entries.length - 1]?.dateFrom);
+    const firstDate = formatPdfDate(group.entries[0]?.dateFrom);
+    const lastDate = formatPdfDate(group.entries[group.entries.length - 1]?.dateFrom);
     const weekTitle = `KW ${group.week}/${group.year}`;
     const weekRange = `${firstDate} bis ${lastDate}`;
     renderHeader(weekTitle, weekRange);
@@ -300,11 +384,13 @@ function renderPdf(res, trainee, entries, picturesDir) {
 
   doc.addPage();
   renderHeader("Unterschriften");
-  doc.font("Helvetica-Bold").fontSize(12).text("Bestaetigung", 50, 310);
-  doc.font("Helvetica").fontSize(11).text("Hiermit wird bestaetigt, dass die Berichtsheftfuehrung geprueft wurde.", 50, 332, { width: 495 });
+  setFont("bold", 12);
+  doc.fillColor("#11211F").text("Bestätigung", 50, 310);
+  setFont("regular", 11);
+  doc.text("Hiermit wird bestätigt, dass die Berichtsheftführung geprüft wurde.", 50, 332, { width: 495 });
   doc.moveTo(50, 430).lineTo(260, 430).strokeColor("#526763").lineWidth(1).stroke();
   doc.moveTo(320, 430).lineTo(545, 430).strokeColor("#526763").lineWidth(1).stroke();
-  doc.fillColor("#5D6F6A").font("Helvetica").fontSize(10).text("Ort, Datum", 50, 438);
+  doc.fillColor("#5D6F6A").text("Ort, Datum", 50, 438);
   doc.text("Unterschrift Azubi", 320, 438);
   doc.moveTo(50, 520).lineTo(260, 520).strokeColor("#526763").lineWidth(1).stroke();
   doc.moveTo(320, 520).lineTo(545, 520).strokeColor("#526763").lineWidth(1).stroke();
