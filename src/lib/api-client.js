@@ -1,3 +1,5 @@
+import { apiUrl } from "./runtime";
+
 export class ApiClientError extends Error {
   constructor(message, { status, code, details, method, path } = {}) {
     super(message);
@@ -16,6 +18,20 @@ async function parseResponse(response) {
     return null;
   }
   return response.json();
+}
+
+async function parseErrorMessage(response, fallbackMessage) {
+  const contentType = response.headers.get("content-type") || "";
+  if (contentType.includes("application/json")) {
+    return fallbackMessage;
+  }
+
+  try {
+    const text = (await response.text()).trim();
+    return text || fallbackMessage;
+  } catch (_error) {
+    return fallbackMessage;
+  }
 }
 
 function getApiError(data) {
@@ -44,10 +60,12 @@ function getApiError(data) {
 
 async function request(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
-  const response = await fetch(path, {
+  const hasJsonBody = options.body !== undefined;
+  const targetPath = apiUrl(path);
+  const response = await fetch(targetPath, {
     credentials: "same-origin",
     headers: {
-      "Content-Type": "application/json",
+      ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
       ...(options.headers || {})
     },
     ...options,
@@ -57,12 +75,12 @@ async function request(path, options = {}) {
   const data = await parseResponse(response);
   if (!response.ok) {
     const apiError = getApiError(data);
-    throw new ApiClientError(apiError?.message || "Anfrage fehlgeschlagen.", {
+    throw new ApiClientError(apiError?.message || await parseErrorMessage(response, "Anfrage fehlgeschlagen."), {
       status: response.status,
       code: apiError?.code,
       details: apiError?.details,
       method,
-      path
+      path: targetPath
     });
   }
 

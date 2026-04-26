@@ -227,6 +227,11 @@ await test("Ausbilder kann mehrere eingereichte Berichte gesammelt freigeben", {
 
 await test("Ausbilder kann mehrere eingereichte Berichte gesammelt zurueckgeben", { concurrency: false }, async () => {
   await withIsolatedServer(async () => {
+    const uniqueOffset = Number(String(Date.now()).slice(-3));
+    const firstBatchDate = new Date(Date.UTC(2035, 0, 1 + uniqueOffset));
+    const secondBatchDate = new Date(firstBatchDate.getTime() + 24 * 60 * 60 * 1000);
+    const toIsoDate = (value) => value.toISOString().slice(0, 10);
+
     const traineeLogin = await postJson(`${baseUrl}/api/login`, {
       identifier: "azubi",
       password: "azubi123"
@@ -238,18 +243,34 @@ await test("Ausbilder kann mehrere eingereichte Berichte gesammelt zurueckgeben"
     });
     const dashboard = await dashboardResponse.json();
 
-    const draftResponse = await postJson(
-      `${baseUrl}/api/report/draft`,
-      { dateFrom: "2026-04-03", weekLabel: "Batch Rueckgabe Neu", betrieb: "Support", schule: "" },
-      traineeCookie
-    );
-    const draft = await draftResponse.json();
-    await postJson(
-      `${baseUrl}/api/report/entry/${draft.entry.id}`,
-      { ...draft.entry, weekLabel: "Batch Rueckgabe Neu", betrieb: "Support", schule: "" },
-      traineeCookie
-    );
-    await postJson(`${baseUrl}/api/report/submit`, { entryId: draft.entry.id }, traineeCookie);
+    const batchDrafts = [
+      { dateFrom: toIsoDate(firstBatchDate), weekLabel: "Batch Rueckgabe Neu 1" },
+      { dateFrom: toIsoDate(secondBatchDate), weekLabel: "Batch Rueckgabe Neu 2" }
+    ];
+    const createdEntryIds = [];
+
+    for (const draftSeed of batchDrafts) {
+      const draftResponse = await postJson(
+        `${baseUrl}/api/report/draft`,
+        { dateFrom: draftSeed.dateFrom, weekLabel: draftSeed.weekLabel, betrieb: "Support", schule: "" },
+        traineeCookie
+      );
+      assert.equal(draftResponse.status, 200);
+      const draft = await draftResponse.json();
+      createdEntryIds.push(draft.entry.id);
+
+      const updateResponse = await postJson(
+        `${baseUrl}/api/report/entry/${draft.entry.id}`,
+        { ...draft.entry, weekLabel: draftSeed.weekLabel, betrieb: "Support", schule: "" },
+        traineeCookie
+      );
+      assert.equal(updateResponse.status, 200);
+      await updateResponse.json();
+
+      const submitResponse = await postJson(`${baseUrl}/api/report/submit`, { entryId: draft.entry.id }, traineeCookie);
+      assert.equal(submitResponse.status, 200);
+      await submitResponse.json();
+    }
 
     const trainerLogin = await postJson(`${baseUrl}/api/login`, {
       identifier: "trainer",
@@ -257,15 +278,9 @@ await test("Ausbilder kann mehrere eingereichte Berichte gesammelt zurueckgeben"
     });
     const trainerCookie = extractCookie(trainerLogin);
 
-    const trainerDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
-      headers: { Cookie: trainerCookie }
-    });
-    const trainerDashboard = await trainerDashboardResponse.json();
-    const submittedEntries = trainerDashboard.trainees.flatMap((trainee) => trainee.entries).filter((entry) => entry.status === "submitted");
-
     const batchResponse = await postJson(
       `${baseUrl}/api/trainer/batch`,
-      { action: "reject", entryIds: submittedEntries.slice(0, 2).map((entry) => entry.id), reason: "Bitte nacharbeiten" },
+      { action: "reject", entryIds: createdEntryIds, reason: "Bitte nacharbeiten" },
       trainerCookie
     );
     const batchData = await batchResponse.json();
@@ -278,7 +293,7 @@ await test("Ausbilder kann mehrere eingereichte Berichte gesammelt zurueckgeben"
       headers: { Cookie: traineeCookie }
     });
     const refreshedDashboard = await refreshedResponse.json();
-    for (const entryId of submittedEntries.slice(0, 2).map((entry) => entry.id)) {
+    for (const entryId of createdEntryIds) {
       assert.ok(refreshedDashboard.report.entries.some((entry) => entry.id === entryId && entry.status === "rejected" && entry.rejectionReason === "Bitte nacharbeiten"));
     }
   });
@@ -387,5 +402,28 @@ await test("Health-Endpoint ist erreichbar", { concurrency: false }, async () =>
     assert.equal(readyResponse.status, 200);
     assert.equal(readyData.ok, true);
     assert.equal(readyData.data.status, "ready");
+  });
+});
+
+await test("Azubi-Dashboard liefert Berichtsheftpflicht aus Ausbildungszeitraum und vorhandenen Tagen", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const loginResponse = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+    const traineeCookie = extractCookie(loginResponse);
+
+    const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: traineeCookie }
+    });
+    assert.equal(dashboardResponse.status, 200);
+    const dashboard = await dashboardResponse.json();
+
+    assert.equal(dashboard.report.reportingProgress.trainingStartDate, "2026-03-01");
+    assert.equal(dashboard.report.reportingProgress.trainingEndDate, "2029-02-28");
+    assert.equal(dashboard.report.reportingProgress.calculationUntil, "2026-04-26");
+    assert.equal(dashboard.report.reportingProgress.requiredWorkdays, 40);
+    assert.equal(dashboard.report.reportingProgress.existingReportDays, 3);
+    assert.equal(dashboard.report.reportingProgress.missingReportDays, 37);
   });
 });

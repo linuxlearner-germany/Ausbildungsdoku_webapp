@@ -202,9 +202,14 @@ function createReportService({ reportRepository, helpers }) {
       throw new HttpError(403, "Keine Berechtigung fuer dieses Berichtsheft.");
     }
 
+    const entries = await reportRepository.listEntriesForTrainee(trainee.id);
+    if (!entries.some((entry) => entry.status === "signed")) {
+      throw new HttpError(400, "Keine signierten Berichte fuer den PDF-Export vorhanden.");
+    }
+
     return {
       trainee,
-      entries: await reportRepository.listEntriesForTrainee(trainee.id)
+      entries
     };
   }
 
@@ -214,10 +219,18 @@ function createReportService({ reportRepository, helpers }) {
       throw new HttpError(404, "Azubi nicht gefunden.");
     }
 
-    const csv = helpers.buildEntriesCsv(await reportRepository.listEntriesForTrainee(user.id));
+    const entries = await reportRepository.listEntriesForTrainee(user.id);
+    if (!entries.length) {
+      throw new HttpError(400, "Keine Berichte fuer den CSV-Export vorhanden.");
+    }
+
+    const csv = helpers.buildEntriesCsv(entries);
     const safeName = String(trainee.name || "azubi")
       .trim()
       .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/ß/g, "ss")
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "azubi";
 

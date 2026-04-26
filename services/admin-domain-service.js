@@ -13,6 +13,35 @@ function createAdminDomainService({
   parseImportRows,
   detectUserImportColumns
 }) {
+  function normalizeOptionalIsoDate(value) {
+    const normalized = String(value || "").trim();
+    return normalized || "";
+  }
+
+  function isIsoDate(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(value);
+  }
+
+  function validateTrainingWindow(role, ausbildungsStart, ausbildungsEnde) {
+    if (role !== "trainee") {
+      return { ausbildungsStart: "", ausbildungsEnde: "" };
+    }
+
+    if (ausbildungsStart && !isIsoDate(ausbildungsStart)) {
+      return { error: "Ausbildungsbeginn ist ungueltig." };
+    }
+
+    if (ausbildungsEnde && !isIsoDate(ausbildungsEnde)) {
+      return { error: "Ausbildungsende ist ungueltig." };
+    }
+
+    if (ausbildungsStart && ausbildungsEnde && ausbildungsStart > ausbildungsEnde) {
+      return { error: "Ausbildungsbeginn darf nicht nach dem Ausbildungsende liegen." };
+    }
+
+    return { ausbildungsStart, ausbildungsEnde };
+  }
+
   function validateProfilePayload(input) {
     const profile = {
       name: String(input?.name || "").trim(),
@@ -38,6 +67,8 @@ function createAdminDomainService({
     const betrieb = String(input?.betrieb || "").trim();
     const berufsschule = String(input?.berufsschule || "").trim();
     const trainerIds = role === "trainee" ? sharedRepository.parseTrainerIds(input?.trainerIds) : [];
+    const ausbildungsStart = normalizeOptionalIsoDate(input?.ausbildungsStart);
+    const ausbildungsEnde = normalizeOptionalIsoDate(input?.ausbildungsEnde);
 
     if (!name || !username || !email || !["trainee", "trainer", "admin"].includes(role)) {
       return { error: "Ungueltige Nutzerdaten." };
@@ -54,6 +85,16 @@ function createAdminDomainService({
     if (role === "trainee" && !ausbildung) {
       return { error: "Azubis benoetigen eine Ausbildung." };
     }
+    // Trainer-Dashboards lesen eingereichte Berichte nur ueber trainee_trainers.
+    // Ohne diese Zuordnung bleiben auch korrekt importierte "submitted"-Berichte unsichtbar.
+    if (role === "trainee" && !trainerIds.length) {
+      return { error: "Fuer Azubis muss mindestens ein Ausbilder zugeordnet werden." };
+    }
+
+    const trainingWindow = validateTrainingWindow(role, ausbildungsStart, ausbildungsEnde);
+    if (trainingWindow.error) {
+      return trainingWindow;
+    }
 
     return {
       data: {
@@ -65,6 +106,8 @@ function createAdminDomainService({
         ausbildung,
         betrieb,
         berufsschule,
+        ausbildungsStart: trainingWindow.ausbildungsStart,
+        ausbildungsEnde: trainingWindow.ausbildungsEnde,
         trainerIds
       }
     };
@@ -118,6 +161,7 @@ function createAdminDomainService({
       if (!role) errors.push("Rolle ist ungueltig");
       if (password && password.length < 10) errors.push("Passwort muss mindestens 10 Zeichen lang sein");
       if (role === "trainee" && !ausbildung) errors.push("Azubis benoetigen eine Ausbildung");
+      if (role === "trainee" && !trainerUsernames.length) errors.push("Fuer Azubis muss mindestens ein Ausbilder zugeordnet werden");
       if (role !== "trainee" && trainerUsernames.length) errors.push("trainer_usernames ist nur fuer Azubis erlaubt");
 
       if (usernameRows.has(username)) {

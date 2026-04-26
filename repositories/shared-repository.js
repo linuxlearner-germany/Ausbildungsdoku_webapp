@@ -62,6 +62,8 @@ function createSharedRepository({ db, writeAuditLog }) {
         "ausbildung",
         "betrieb",
         "berufsschule",
+        "ausbildungs_start as ausbildungsStart",
+        "ausbildungs_ende as ausbildungsEnde",
         "created_at as createdAt",
         "theme_preference as themePreference"
       )
@@ -105,7 +107,7 @@ function createSharedRepository({ db, writeAuditLog }) {
 
   async function findUserForAdmin(userId) {
     return db("users")
-      .select("id", "name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule", "created_at as createdAt")
+      .select("id", "name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule", "ausbildungs_start as ausbildungsStart", "ausbildungs_ende as ausbildungsEnde", "created_at as createdAt")
       .where({ id: userId })
       .first();
   }
@@ -180,9 +182,10 @@ function createSharedRepository({ db, writeAuditLog }) {
   }
 
   async function listTraineesForTrainer(trainerId) {
+    // Trainer sehen nur Azubis, die explizit ueber trainee_trainers zugeordnet sind.
     return db("users")
       .join("trainee_trainers", "trainee_trainers.trainee_id", "users.id")
-      .select("users.id", "users.name", "users.username", "users.email", "users.ausbildung", "users.betrieb", "users.berufsschule")
+      .select("users.id", "users.name", "users.username", "users.email", "users.ausbildung", "users.betrieb", "users.berufsschule", "users.ausbildungs_start as ausbildungsStart", "users.ausbildungs_ende as ausbildungsEnde")
       .where("users.role", "trainee")
       .andWhere("trainee_trainers.trainer_id", trainerId)
       .orderByRaw("LOWER(users.name) ASC");
@@ -206,6 +209,8 @@ function createSharedRepository({ db, writeAuditLog }) {
         "ausbildung",
         "betrieb",
         "berufsschule",
+        "ausbildungs_start as ausbildungsStart",
+        "ausbildungs_ende as ausbildungsEnde",
         "theme_preference as themePreference"
       )
       .where({ id: userId })
@@ -266,7 +271,7 @@ function createSharedRepository({ db, writeAuditLog }) {
 
   async function findTraineeById(traineeId) {
     return db("users")
-      .select("id", "name", "username", "email", "ausbildung", "betrieb", "berufsschule")
+      .select("id", "name", "username", "email", "ausbildung", "betrieb", "berufsschule", "ausbildungs_start as ausbildungsStart", "ausbildungs_ende as ausbildungsEnde")
       .where({ id: traineeId, role: "trainee" })
       .first();
   }

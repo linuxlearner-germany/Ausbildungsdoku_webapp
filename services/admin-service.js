@@ -54,7 +54,9 @@ function createAdminService({ adminRepository, helpers }) {
           username: data.username,
           email: data.email,
           role: data.role,
-          ausbildung: data.ausbildung
+          ausbildung: data.ausbildung,
+          ausbildungsStart: data.ausbildungsStart,
+          ausbildungsEnde: data.ausbildungsEnde
         }
       });
 
@@ -71,6 +73,9 @@ function createAdminService({ adminRepository, helpers }) {
     }
 
     const trainerIds = adminRepository.parseTrainerIds(payload.trainerIds);
+    if (!trainerIds.length) {
+      throw new HttpError(400, "Fuer Azubis muss mindestens ein Ausbilder zugeordnet werden.");
+    }
     const matchingTrainerCount = await adminRepository.countMatchingTrainers(trainerIds);
     if (matchingTrainerCount !== trainerIds.length) {
       throw new HttpError(400, "Mindestens ein ausgewaehlter Ausbilder wurde nicht gefunden.");
@@ -165,10 +170,12 @@ function createAdminService({ adminRepository, helpers }) {
         role: data.role,
         ausbildung: data.ausbildung,
         betrieb: data.betrieb,
-        berufsschule: data.berufsschule
+        berufsschule: data.berufsschule,
+        ausbildungsStart: data.ausbildungsStart,
+        ausbildungsEnde: data.ausbildungsEnde
       };
 
-      const changes = helpers.computeChangedFields(existingUser, updatedUser, ["name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule"]);
+      const changes = helpers.computeChangedFields(existingUser, updatedUser, ["name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule", "ausbildungsStart", "ausbildungsEnde"]);
       await helpers.writeAuditLog({
         actor,
         actionType: "USER_UPDATED",
@@ -182,7 +189,9 @@ function createAdminService({ adminRepository, helpers }) {
           role: "Rolle",
           ausbildung: "Ausbildung",
           betrieb: "Betrieb",
-          berufsschule: "Berufsschule"
+          berufsschule: "Berufsschule",
+          ausbildungsStart: "Ausbildungsbeginn",
+          ausbildungsEnde: "Ausbildungsende"
         })}`,
         changes
       });

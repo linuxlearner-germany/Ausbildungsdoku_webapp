@@ -11,9 +11,12 @@ test.beforeEach(async () => {
   server = await startServer(port);
 });
 
-test.afterEach(() => {
+test.afterEach(async () => {
   if (server) {
-    server.kill("SIGTERM");
+    await new Promise((resolve) => {
+      server.once("exit", resolve);
+      server.kill("SIGTERM");
+    });
     server = null;
   }
 });

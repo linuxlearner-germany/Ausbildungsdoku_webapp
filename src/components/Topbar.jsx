@@ -1,5 +1,12 @@
 import React from "react";
 
+function roleLabel(role) {
+  if (role === "trainee") return "Azubi";
+  if (role === "trainer") return "Ausbilder";
+  if (role === "admin") return "Admin";
+  return role || "ohne Sitzung";
+}
+
 function themeLabel(themePreference, theme) {
   if (themePreference === "system") {
     return `System (${theme === "dark" ? "dunkel" : "hell"})`;
@@ -18,12 +25,12 @@ export function Topbar({ user, theme, themePreference, onLogout, onToggleTheme, 
           aria-expanded={mobileNavOpen}
           aria-label="Navigation umschalten"
         >
-          Menue
+          Menü
         </button>
         <div className="topbar-copy">
           <p className="page-kicker mb-1">Ausbildungsdoku</p>
           <div className="topbar-meta">
-            <strong className="topbar-title">Arbeitsbereich</strong>
+            <strong className="topbar-title">Digitales Berichtsheft</strong>
             <small className="topbar-theme-label">Ansicht: {themeLabel(themePreference, theme)}</small>
           </div>
         </div>
@@ -34,7 +41,7 @@ export function Topbar({ user, theme, themePreference, onLogout, onToggleTheme, 
         </button>
         <div className="user-pill">
           <span>{user?.name || "Gast"}</span>
-          <small>{user?.username ? `@${user.username} · ${user.role}` : user?.role || "ohne Sitzung"}</small>
+          <small>{user?.username ? `@${user.username} · ${roleLabel(user.role)}` : roleLabel(user?.role)}</small>
         </div>
         {user ? (
           <button className="btn btn-outline-secondary" onClick={onLogout} type="button">

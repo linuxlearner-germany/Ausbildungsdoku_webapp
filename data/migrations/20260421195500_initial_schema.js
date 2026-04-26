@@ -39,13 +39,11 @@ exports.up = async function up(knex) {
     table.integer("trainer_id").notNullable();
     table.dateTime("created_at", { precision: 3 }).notNullable().defaultTo(knex.fn.now());
     table.primary(["trainee_id", "trainer_id"]);
-    table.foreign("trainee_id").references("users.id").onDelete("CASCADE");
-    table.foreign("trainer_id").references("users.id").onDelete("CASCADE");
   });
 
   await knex.schema.createTable("entries", (table) => {
     table.string("id", 64).primary();
-    table.integer("trainee_id").notNullable().references("users.id").onDelete("CASCADE");
+    table.integer("trainee_id").notNullable();
     table.string("weekLabel", 255).notNullable().defaultTo("");
     table.string("dateFrom", 10).notNullable().defaultTo("");
     table.string("dateTo", 10).notNullable().defaultTo("");
@@ -78,7 +76,7 @@ exports.up = async function up(knex) {
 
   await knex.schema.createTable("grades", (table) => {
     table.increments("id").primary();
-    table.integer("trainee_id").notNullable().references("users.id").onDelete("CASCADE");
+    table.integer("trainee_id").notNullable();
     table.string("fach", 120).notNullable().defaultTo("");
     table.string("typ", 40).notNullable();
     table.string("bezeichnung", 255).notNullable().defaultTo("");
@@ -111,19 +109,21 @@ exports.up = async function up(knex) {
   await knex.schema.createTable("audit_logs", (table) => {
     table.increments("id").primary();
     table.dateTime("created_at", { precision: 3 }).notNullable().defaultTo(knex.fn.now());
-    table.integer("actor_user_id").nullable().references("users.id");
+    table.integer("actor_user_id").nullable();
     table.string("actor_name", 255).notNullable().defaultTo("");
     table.string("actor_role", 40).notNullable().defaultTo("");
     table.string("action_type", 80).notNullable();
     table.string("entity_type", 80).notNullable();
     table.string("entity_id", 64).notNullable().defaultTo("");
-    table.integer("target_user_id").nullable().references("users.id");
+    table.integer("target_user_id").nullable();
     table.string("summary", 500).notNullable().defaultTo("");
     table.text("changes_json").nullable();
     table.text("metadata_json").nullable();
   });
 
   await knex.schema.alterTable("audit_logs", (table) => {
+    table.foreign("actor_user_id").references("users.id");
+    table.foreign("target_user_id").references("users.id");
     table.index(["created_at"], "idx_audit_logs_created_at");
     table.index(["action_type"], "idx_audit_logs_action_type");
     table.index(["actor_user_id"], "idx_audit_logs_actor_user_id");
@@ -131,7 +131,17 @@ exports.up = async function up(knex) {
   });
 
   await knex.schema.alterTable("trainee_trainers", (table) => {
+    table.foreign("trainee_id").references("users.id");
+    table.foreign("trainer_id").references("users.id");
     table.index(["trainer_id"], "idx_trainee_trainers_trainer");
+  });
+
+  await knex.schema.alterTable("entries", (table) => {
+    table.foreign("trainee_id").references("users.id").onDelete("CASCADE");
+  });
+
+  await knex.schema.alterTable("grades", (table) => {
+    table.foreign("trainee_id").references("users.id").onDelete("CASCADE");
   });
 };
 
@@ -145,4 +155,8 @@ exports.down = async function down(knex) {
   await knex.schema.dropTableIfExists("trainee_trainers");
   await knex.schema.dropTableIfExists("educations");
   await knex.schema.dropTableIfExists("users");
+};
+
+exports.config = {
+  transaction: false
 };

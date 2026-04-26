@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { NavLink } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { EmptyState } from "../components/EmptyState";
 import { StatusBadge } from "../components/StatusBadge";
-import { downloadUsersCsv } from "../lib/reportExport";
+import { FilterBar } from "../components/FilterBar";
+import { downloadCsvFromApi, downloadUsersCsv } from "../lib/reportExport";
 import { apiUrl, assetUrl, isStaticDemo } from "../lib/runtime";
+import { getAdminSectionLinks } from "../navigation/menuConfig.mjs";
 
 function buildUserForm(user = null) {
   return {
@@ -16,6 +19,8 @@ function buildUserForm(user = null) {
     ausbildung: user?.ausbildung || "",
     betrieb: user?.betrieb || "",
     berufsschule: user?.berufsschule || "",
+    ausbildungsStart: user?.ausbildungsStart || "",
+    ausbildungsEnde: user?.ausbildungsEnde || "",
     trainerIds: Array.isArray(user?.trainerIds) ? user.trainerIds.map(Number) : []
   };
 }
@@ -36,6 +41,18 @@ function formatRelationshipList(items, emptyLabel) {
   return items.map((item) => item.name).join(", ");
 }
 
+function getAssignedTrainerItems(user) {
+  if (Array.isArray(user?.assignedTrainers) && user.assignedTrainers.length) {
+    return user.assignedTrainers;
+  }
+
+  if (Array.isArray(user?.trainerNames) && user.trainerNames.length) {
+    return user.trainerNames.map((name, index) => ({ id: `static-${index}`, name, email: "" }));
+  }
+
+  return [];
+}
+
 function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -46,18 +63,6 @@ function readFileAsBase64(file) {
     reader.onerror = () => reject(new Error("Datei konnte nicht gelesen werden."));
     reader.readAsDataURL(file);
   });
-}
-
-function readErrorMessage(data, fallbackMessage) {
-  if (typeof data?.error === "string") {
-    return data.error;
-  }
-
-  if (data?.error?.message) {
-    return data.error.message;
-  }
-
-  return fallbackMessage;
 }
 
 function EducationField({ value, educations, onChange, listId }) {
@@ -74,34 +79,51 @@ function EducationField({ value, educations, onChange, listId }) {
   );
 }
 
-function TrainerMultiSelect({ trainers, value, onChange, excludeUserId }) {
+function TrainerMultiSelect({ trainers, value, onChange, excludeUserId, required = false }) {
   const availableTrainers = trainers.filter((trainer) => trainer.id !== excludeUserId);
+  const selectedTrainers = availableTrainers.filter((trainer) => value.includes(trainer.id));
+  const showError = required && !value.length;
 
   return (
     <div className="admin-trainer-selector">
       <div className="admin-section-label">
-        <strong>Zugeordnete Ausbilder</strong>
+        <strong>Zugeordneter Ausbilder</strong>
+        <small>Pflichtfeld fuer Azubis</small>
       </div>
       {availableTrainers.length ? (
-        <div className="admin-chip-grid">
-          {availableTrainers.map((trainer) => {
-            const checked = value.includes(trainer.id);
-            return (
-              <label key={trainer.id} className={`admin-choice-chip${checked ? " active" : ""}`}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => onChange(toggleId(value, trainer.id))}
-                />
-                <span>{trainer.name}</span>
-                <small>{trainer.email}</small>
-              </label>
-            );
-          })}
-        </div>
+        <>
+          <div className="admin-chip-grid">
+            {availableTrainers.map((trainer) => {
+              const checked = value.includes(trainer.id);
+              return (
+                <label key={trainer.id} className={`admin-choice-chip${checked ? " active" : ""}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => onChange(toggleId(value, trainer.id))}
+                  />
+                  <span>{trainer.name}</span>
+                  <small>{trainer.email}</small>
+                </label>
+              );
+            })}
+          </div>
+          <div className="admin-selected-trainers">
+            {selectedTrainers.length ? (
+              selectedTrainers.map((trainer) => (
+                <span key={`selected-${trainer.id}`} className="admin-role-pill">
+                  {trainer.name}
+                </span>
+              ))
+            ) : (
+              <span className="field-message">Noch kein Ausbilder ausgewaehlt.</span>
+            )}
+          </div>
+        </>
       ) : (
         <p className="field-message">Noch keine Ausbilder vorhanden.</p>
       )}
+      {showError ? <p className="field-message error">Bitte waehle mindestens einen Ausbilder fuer diesen Azubi aus.</p> : null}
     </div>
   );
 }
@@ -166,6 +188,18 @@ function UserForm({ title, subtitle, form, setForm, trainers, educations, submit
           Berufsschule
           <input value={form.berufsschule} onChange={(event) => setForm({ ...form, berufsschule: event.target.value })} />
         </label>
+        {isTrainee ? (
+          <>
+            <label>
+              Ausbildungsbeginn
+              <input type="date" value={form.ausbildungsStart} onChange={(event) => setForm({ ...form, ausbildungsStart: event.target.value })} />
+            </label>
+            <label>
+              Ausbildungsende
+              <input type="date" value={form.ausbildungsEnde} onChange={(event) => setForm({ ...form, ausbildungsEnde: event.target.value })} />
+            </label>
+          </>
+        ) : null}
       </div>
       {isTrainee ? (
         <TrainerMultiSelect
@@ -173,6 +207,7 @@ function UserForm({ title, subtitle, form, setForm, trainers, educations, submit
           value={form.trainerIds}
           onChange={(trainerIds) => setForm({ ...form, trainerIds })}
           excludeUserId={editingUserId}
+          required={isTrainee}
         />
       ) : null}
       {error ? <div className="field-message error">{error}</div> : null}
@@ -345,6 +380,20 @@ function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
         <EmptyState title="Noch keine Vorschau" />
       )}
     </article>
+  );
+}
+
+function AdminSectionNav({ currentSection }) {
+  const items = getAdminSectionLinks();
+
+  return (
+    <nav className="admin-subnav" aria-label="Adminbereiche">
+      {items.map((item) => (
+        <NavLink key={item.key} to={item.to} className={({ isActive }) => `admin-section-tab${isActive || currentSection === item.key ? " active" : ""}`}>
+          {item.label}
+        </NavLink>
+      ))}
+    </nav>
   );
 }
 
@@ -596,7 +645,60 @@ function AdminAuditLogPanel({ users, onLoadAuditLogs }) {
   );
 }
 
-export function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUpdateUser, onDeleteUser, onPreviewUserImport, onImportUsers, onLoadAuditLogs }) {
+function AdminUserCard({ user, onEdit, onDelete }) {
+  const assignedTrainers = getAssignedTrainerItems(user);
+
+  return (
+    <article className={`admin-user-card admin-user-list-card${user.role === "trainee" && !assignedTrainers.length ? " invalid" : ""}`}>
+      <div className="admin-user-card-head">
+        <div className="admin-user-primary">
+          <strong>{user.name}</strong>
+          <p title={`${user.username} · ${user.email}`}>{user.username} · {user.email}</p>
+        </div>
+        <span className="admin-role-pill">{roleLabel(user.role)}</span>
+      </div>
+      <div className="admin-user-facts">
+        <span>Ausbildung: {user.ausbildung || "-"}</span>
+        <span>Betrieb: {user.betrieb || "-"}</span>
+        <span>Berufsschule: {user.berufsschule || "-"}</span>
+        <span>Ausbildungsbeginn: {user.ausbildungsStart || "-"}</span>
+        <span>Ausbildungsende: {user.ausbildungsEnde || "-"}</span>
+      </div>
+      <div className="admin-user-relations">
+        {user.role === "trainee" ? (
+          <>
+            <p>Ausbilderzuordnung</p>
+            <div className="admin-selected-trainers">
+              {assignedTrainers.length ? (
+                assignedTrainers.map((trainer) => (
+                  <span key={`${user.id}-${trainer.id}-${trainer.email || trainer.name}`} className="admin-role-pill">
+                    {trainer.email ? `Ausbilder: ${trainer.name} (${trainer.email})` : `Ausbilder: ${trainer.name}`}
+                  </span>
+                ))
+              ) : (
+                <span className="status-badge badge rounded-pill text-uppercase status-invalid">Kein Ausbilder</span>
+              )}
+            </div>
+          </>
+        ) : user.role === "trainer" ? (
+          <p>Betreut: {formatRelationshipList(user.assignedTrainees, "Keine Azubis zugeordnet")}</p>
+        ) : (
+          <p>Administrator ohne fachliche Zuordnung.</p>
+        )}
+      </div>
+      <div className="assignment-actions">
+        <PrimaryButton variant="secondary" onClick={() => onEdit(user)}>
+          Bearbeiten
+        </PrimaryButton>
+        <PrimaryButton variant="ghost" onClick={() => onDelete(user)}>
+          Loeschen
+        </PrimaryButton>
+      </div>
+    </article>
+  );
+}
+
+export function AdminUsersPage({ section = "users", users, educations, onCreateUser, onAssignTrainer, onUpdateUser, onDeleteUser, onPreviewUserImport, onImportUsers, onLoadAuditLogs }) {
   const [form, setForm] = useState(buildUserForm());
   const [editingUserId, setEditingUserId] = useState(null);
   const [editForm, setEditForm] = useState(null);
@@ -605,13 +707,45 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
   const [assignError, setAssignError] = useState("");
   const [deleteError, setDeleteError] = useState("");
   const [csvError, setCsvError] = useState("");
-  const [activeView, setActiveView] = useState("users");
+  const [userSearch, setUserSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
+  const [userSort, setUserSort] = useState("name-asc");
   const editPanelRef = useRef(null);
 
   const trainers = useMemo(() => users.filter((user) => user.role === "trainer"), [users]);
   const trainees = useMemo(() => users.filter((user) => user.role === "trainee"), [users]);
+  const traineesWithoutTrainer = useMemo(
+    () => trainees.filter((trainee) => !getAssignedTrainerItems(trainee).length),
+    [trainees]
+  );
   const managedEducations = useMemo(() => educations || [], [educations]);
   const editingUser = users.find((user) => user.id === editingUserId) || null;
+  const filteredUsers = useMemo(() => {
+    const needle = userSearch.trim().toLowerCase();
+    const nextUsers = users.filter((user) => {
+      const matchesRole = roleFilter === "all" ? true : user.role === roleFilter;
+      const matchesSearch = !needle
+        ? true
+        : [user.name, user.username, user.email, user.ausbildung, user.betrieb, user.berufsschule]
+          .join(" ")
+          .toLowerCase()
+          .includes(needle);
+
+      return matchesRole && matchesSearch;
+    });
+
+    return nextUsers.sort((left, right) => {
+      if (userSort === "role") {
+        return roleLabel(left.role).localeCompare(roleLabel(right.role), "de") || left.name.localeCompare(right.name, "de");
+      }
+
+      if (userSort === "name-desc") {
+        return right.name.localeCompare(left.name, "de");
+      }
+
+      return left.name.localeCompare(right.name, "de");
+    });
+  }, [roleFilter, userSearch, userSort, users]);
 
   useEffect(() => {
     if (editingUserId && editPanelRef.current) {
@@ -633,6 +767,10 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
 
   async function handleCreateUser() {
     setCreateError("");
+    if (form.role === "trainee" && !form.trainerIds.length) {
+      setCreateError("Bitte waehle mindestens einen Ausbilder fuer diesen Azubi aus.");
+      return;
+    }
     try {
       await onCreateUser(form);
       setForm(buildUserForm());
@@ -643,6 +781,10 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
 
   async function handleUpdateUser(userId) {
     setEditError("");
+    if (editForm?.role === "trainee" && !editForm.trainerIds.length) {
+      setEditError("Bitte waehle mindestens einen Ausbilder fuer diesen Azubi aus.");
+      return;
+    }
     try {
       await onUpdateUser(userId, editForm);
       stopEditing();
@@ -653,6 +795,10 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
 
   async function handleAssignTrainers(traineeId, trainerIds) {
     setAssignError("");
+    if (!trainerIds.length) {
+      setAssignError("Bitte waehle mindestens einen Ausbilder fuer diesen Azubi aus.");
+      return;
+    }
     try {
       await onAssignTrainer(traineeId, trainerIds);
     } catch (error) {
@@ -686,28 +832,7 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
         return;
       }
 
-      const response = await fetch(apiUrl("/api/admin/users/export.csv"), {
-        method: "GET",
-        credentials: "same-origin"
-      });
-
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type") || "";
-        const data = contentType.includes("application/json") ? await response.json() : null;
-        throw new Error(readErrorMessage(data, "CSV-Export konnte nicht gestartet werden."));
-      }
-
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const disposition = response.headers.get("content-disposition") || "";
-      const match = disposition.match(/filename="([^"]+)"/i);
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = match?.[1] || "verwaltung-benutzer.csv";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(downloadUrl);
+      await downloadCsvFromApi(apiUrl("/api/admin/users/export.csv"), "verwaltung-benutzer.csv");
     } catch (error) {
       setCsvError(error.message || "CSV-Export konnte nicht gestartet werden.");
     }
@@ -716,21 +841,24 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
   return (
     <div className="page-stack admin-users-page">
       <PageHeader
-        kicker="Verwaltung"
-        title="Benutzerverwaltung"
+        kicker="Administration"
+        title={
+          section === "create"
+            ? "Benutzer anlegen"
+            : section === "assignments"
+              ? "Azubi-Zuordnungen"
+              : section === "audit"
+                ? "Audit-Log"
+                : "Benutzerverwaltung"
+        }
         actions={<PrimaryButton onClick={handleExportCsv}>CSV exportieren</PrimaryButton>}
       />
       {csvError ? <div className="field-message error">{csvError}</div> : null}
-      <div className="admin-section-tabs">
-        <button type="button" className={`admin-section-tab${activeView === "users" ? " active" : ""}`} onClick={() => setActiveView("users")}>
-          Benutzerverwaltung
-        </button>
-        <button type="button" className={`admin-section-tab${activeView === "audit" ? " active" : ""}`} onClick={() => setActiveView("audit")}>
-          Audit-Log
-        </button>
-      </div>
+      <AdminSectionNav currentSection={section === "create" ? "admin-create-user" : section === "assignments" ? "admin-assignments" : section === "audit" ? "admin-audit-log" : "admin-users"} />
 
-      {activeView === "users" ? (
+      {section === "audit" ? (
+        <AdminAuditLogPanel users={users} onLoadAuditLogs={onLoadAuditLogs} />
+      ) : (
         <>
           {editingUserId && editForm ? (
             <section ref={editPanelRef}>
@@ -750,101 +878,118 @@ export function AdminUsersPage({ users, educations, onCreateUser, onAssignTraine
             </section>
           ) : null}
 
-          <section className="admin-users-layout">
-            <div className="page-stack">
-              <UserForm
-                title="Benutzer anlegen"
-                subtitle=""
-                form={form}
-                setForm={setForm}
-                trainers={trainers}
-                educations={managedEducations}
-                submitLabel="Nutzer speichern"
-                onSubmit={handleCreateUser}
-                error={createError}
-              />
-
-              <UserImportPanel onPreviewUserImport={onPreviewUserImport} onImportUsers={onImportUsers} />
-            </div>
-
-            <article className="panel-card admin-overview-card">
-              <PageHeader kicker="Übersicht" title="Benutzer" subtitle={`${users.length} Konten`} />
-              {deleteError ? <div className="field-message error">{deleteError}</div> : null}
-              <div className="admin-user-grid">
-                {users.map((user) => (
-                  <article key={user.id} className="admin-user-card">
-                    <div className="admin-user-card-head">
-                      <div>
-                        <strong>{user.name}</strong>
-                        <p>{user.username} · {user.email}</p>
-                      </div>
-                      <span className="admin-role-pill">{roleLabel(user.role)}</span>
-                    </div>
-                    <div className="admin-user-facts">
-                      <span>Rolle: {roleLabel(user.role)}</span>
-                      <span>Ausbildung: {user.ausbildung || "-"}</span>
-                      <span>Betrieb: {user.betrieb || "-"}</span>
-                    </div>
-                    <div className="admin-user-relations">
-                      {user.role === "trainee" ? (
-                        <p>Ausbilder: {formatRelationshipList(user.assignedTrainers, "Keine Ausbilder zugeordnet")}</p>
-                      ) : user.role === "trainer" ? (
-                        <p>Betreut: {formatRelationshipList(user.assignedTrainees, "Keine Azubis zugeordnet")}</p>
-                      ) : (
-                        <p>Administrator ohne fachliche Zuordnung.</p>
-                      )}
-                    </div>
-                    <div className="assignment-actions">
-                      <PrimaryButton variant="secondary" onClick={() => startEditing(user)}>
-                        Bearbeiten
-                      </PrimaryButton>
-                      <PrimaryButton variant="ghost" onClick={() => handleDeleteUser(user)}>
-                        Loeschen
-                      </PrimaryButton>
-                    </div>
-                  </article>
-                ))}
+          {section === "create" ? (
+            <section className="admin-users-layout">
+              <div className="page-stack">
+                <UserForm
+                  title="Benutzer anlegen"
+                  subtitle="Neue Konten für Azubis, Ausbilder und Admins"
+                  form={form}
+                  setForm={setForm}
+                  trainers={trainers}
+                  educations={managedEducations}
+                  submitLabel="Nutzer speichern"
+                  onSubmit={handleCreateUser}
+                  error={createError}
+                />
+                <UserImportPanel onPreviewUserImport={onPreviewUserImport} onImportUsers={onImportUsers} />
               </div>
-            </article>
-          </section>
-
-          <section className="panel-card admin-assignment-card">
-            <PageHeader
-              kicker="Zuordnungen"
-              title="Azubis mehreren Ausbildern zuordnen"
-            />
-            {assignError ? <div className="field-message error">{assignError}</div> : null}
-            <div className="admin-assignment-list">
-              {trainees.map((trainee) => (
-                <div key={trainee.id} className="admin-assignment-row">
-                  <div className="admin-assignment-copy">
-                    <strong>{trainee.name}</strong>
-                    <p>{trainee.ausbildung || trainee.email}</p>
-                    <small>{formatRelationshipList(trainee.assignedTrainers, "Keine Ausbilder zugeordnet")}</small>
+              <article className="panel-card admin-overview-card">
+                <PageHeader kicker="Hinweise" title="Pflegehinweise" />
+                <div className="list-stack">
+                  <div className="list-row">
+                    <div>
+                      <strong>Azubis brauchen einen Ausbilder</strong>
+                      <p>Neue und bearbeitete Azubi-Konten werden nur mit gültiger Zuordnung gespeichert.</p>
+                    </div>
                   </div>
-                  <div className="admin-chip-grid compact">
-                    {trainers.map((trainer) => {
-                      const checked = trainee.trainerIds.includes(trainer.id);
-                      return (
-                        <label key={`${trainee.id}-${trainer.id}`} className={`admin-choice-chip${checked ? " active" : ""}`}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => handleAssignTrainers(trainee.id, toggleId(trainee.trainerIds, trainer.id))}
-                          />
-                          <span>{trainer.name}</span>
-                        </label>
-                      );
-                    })}
+                  <div className="list-row">
+                    <div>
+                      <strong>CSV-Import erstellt nur neue Nutzer</strong>
+                      <p>Vor dem Import wird eine Vorschau mit Validierung und Ausbilderprüfung angezeigt.</p>
+                    </div>
+                  </div>
+                  <div className="list-row">
+                    <div>
+                      <strong>Altbestände ohne Zuordnung</strong>
+                      <p>{traineesWithoutTrainer.length ? `${traineesWithoutTrainer.length} Azubis benötigen noch eine Ausbilderzuordnung.` : "Alle Azubis sind aktuell zugeordnet."}</p>
+                    </div>
                   </div>
                 </div>
-              ))}
-              {!trainees.length ? <p className="field-message">Noch keine Azubis vorhanden.</p> : null}
-            </div>
-          </section>
+              </article>
+            </section>
+          ) : null}
+
+          {section === "users" ? (
+            <article className="panel-card admin-overview-card">
+              <PageHeader kicker="Übersicht" title="Benutzer" subtitle={`${filteredUsers.length} von ${users.length} Konten`} />
+              {deleteError ? <div className="field-message error">{deleteError}</div> : null}
+              {traineesWithoutTrainer.length ? (
+                <div className="field-message error">
+                  {traineesWithoutTrainer.length} Azubi{traineesWithoutTrainer.length === 1 ? "" : "s"} ohne Ausbilderzuordnung.
+                </div>
+              ) : null}
+              <FilterBar>
+                <input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Name, Benutzername, E-Mail oder Ausbildung" />
+                <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
+                  <option value="all">Alle Rollen</option>
+                  <option value="trainee">Azubi</option>
+                  <option value="trainer">Ausbilder</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <select value={userSort} onChange={(event) => setUserSort(event.target.value)}>
+                  <option value="name-asc">Name A-Z</option>
+                  <option value="name-desc">Name Z-A</option>
+                  <option value="role">Nach Rolle</option>
+                </select>
+              </FilterBar>
+              <div className="admin-user-grid">
+                {filteredUsers.map((user) => (
+                  <AdminUserCard key={user.id} user={user} onEdit={startEditing} onDelete={handleDeleteUser} />
+                ))}
+              </div>
+              {!filteredUsers.length ? <EmptyState title="Keine Benutzer zur aktuellen Auswahl gefunden" /> : null}
+            </article>
+          ) : null}
+
+          {section === "assignments" ? (
+            <section className="panel-card admin-assignment-card">
+              <PageHeader
+                kicker="Zuordnungen"
+                title="Azubis mehreren Ausbildern zuordnen"
+              />
+              {assignError ? <div className="field-message error">{assignError}</div> : null}
+              <div className="admin-assignment-list">
+                {trainees.map((trainee) => (
+                  <div key={trainee.id} className={`admin-assignment-row${getAssignedTrainerItems(trainee).length ? "" : " invalid"}`}>
+                    <div className="admin-assignment-copy">
+                      <strong>{trainee.name}</strong>
+                      <p title={trainee.email}>{trainee.ausbildung || trainee.email}</p>
+                      <small>{formatRelationshipList(trainee.assignedTrainers, "Keine Ausbilder zugeordnet")}</small>
+                      {!getAssignedTrainerItems(trainee).length ? <span className="status-badge badge rounded-pill text-uppercase status-invalid">Kein Ausbilder</span> : null}
+                    </div>
+                    <div className="admin-chip-grid compact">
+                      {trainers.map((trainer) => {
+                        const checked = trainee.trainerIds.includes(trainer.id);
+                        return (
+                          <label key={`${trainee.id}-${trainer.id}`} className={`admin-choice-chip${checked ? " active" : ""}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => handleAssignTrainers(trainee.id, toggleId(trainee.trainerIds, trainer.id))}
+                            />
+                            <span>{trainer.name}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {!trainees.length ? <p className="field-message">Noch keine Azubis vorhanden.</p> : null}
+              </div>
+            </section>
+          ) : null}
         </>
-      ) : (
-        <AdminAuditLogPanel users={users} onLoadAuditLogs={onLoadAuditLogs} />
       )}
     </div>
   );

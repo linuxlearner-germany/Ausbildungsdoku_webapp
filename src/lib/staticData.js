@@ -24,6 +24,8 @@ export function createSeedStore() {
         ausbildung: "",
         betrieb: "WIWEB",
         berufsschule: "",
+        ausbildungsStart: "",
+        ausbildungsEnde: "",
         trainerIds: [],
         themePreference: "system"
       },
@@ -37,6 +39,8 @@ export function createSeedStore() {
         ausbildung: "",
         betrieb: "WIWEB",
         berufsschule: "",
+        ausbildungsStart: "",
+        ausbildungsEnde: "",
         trainerIds: [],
         themePreference: "system"
       },
@@ -50,6 +54,8 @@ export function createSeedStore() {
         ausbildung: "Fachinformatiker Systemintegration",
         betrieb: "WIWEB",
         berufsschule: "BSZ Musterstadt",
+        ausbildungsStart: "2026-03-01",
+        ausbildungsEnde: "2029-02-28",
         trainerIds: [2],
         themePreference: "system"
       },
@@ -63,6 +69,8 @@ export function createSeedStore() {
         ausbildung: "Fachinformatiker Anwendungsentwicklung",
         betrieb: "WIWEB",
         berufsschule: "BSZ Musterstadt",
+        ausbildungsStart: "2026-03-15",
+        ausbildungsEnde: "2029-03-14",
         trainerIds: [2],
         themePreference: "system"
       },
@@ -76,6 +84,8 @@ export function createSeedStore() {
         ausbildung: "",
         betrieb: "WIWEB",
         berufsschule: "",
+        ausbildungsStart: "",
+        ausbildungsEnde: "",
         trainerIds: [],
         themePreference: "system"
       }

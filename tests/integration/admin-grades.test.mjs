@@ -58,10 +58,10 @@ await test("Admin kann Benutzer mit Benutzername anlegen", { concurrency: false 
     const adminCookie = extractCookie(adminLogin);
 
     const response = await postJson(
-      `${baseUrl}/api/admin/users`,
-      { name: "Neue Person", username: "neue-person", email: "neu@example.com", password: "Testkonto123", role: "trainer" },
-      adminCookie
-    );
+    `${baseUrl}/api/admin/users`,
+    { name: "Neue Person", username: "neue-person", email: "neu@example.com", password: "Testkonto123", role: "trainer" },
+    adminCookie
+  );
 
     assert.equal(response.status, 200);
   });
@@ -74,6 +74,12 @@ await test("Admin kann Benutzer bearbeiten und Bearbeitungsdaten speichern", { c
     password: "admin123"
   });
   const adminCookie = extractCookie(adminLogin);
+  const initialAdminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+    headers: { Cookie: adminCookie }
+  });
+  const initialAdminDashboard = await initialAdminDashboardResponse.json();
+  const defaultTrainer = initialAdminDashboard.users.find((user) => user.username === "trainer");
+  assert.ok(defaultTrainer);
 
   const createTraineeResponse = await postJson(
     `${baseUrl}/api/admin/users`,
@@ -86,7 +92,9 @@ await test("Admin kann Benutzer bearbeiten und Bearbeitungsdaten speichern", { c
       ausbildung: "Fachinformatiker Systemintegration",
       betrieb: "Muster GmbH",
       berufsschule: "BBS",
-      trainerIds: []
+      ausbildungsStart: "2026-03-01",
+      ausbildungsEnde: "2029-02-28",
+      trainerIds: [defaultTrainer.id]
     },
     adminCookie
   );
@@ -126,6 +134,8 @@ await test("Admin kann Benutzer bearbeiten und Bearbeitungsdaten speichern", { c
       ausbildung: "Fachinformatiker Daten und Prozessanalyse",
       betrieb: "Neue Muster GmbH",
       berufsschule: "Neue BBS",
+      ausbildungsStart: "2026-04-01",
+      ausbildungsEnde: "2029-03-31",
       trainerIds
     },
     adminCookie
@@ -141,7 +151,188 @@ await test("Admin kann Benutzer bearbeiten und Bearbeitungsdaten speichern", { c
   assert.equal(updatedTrainee.name, "Bearbeitungs Azubi Aktualisiert");
   assert.equal(updatedTrainee.ausbildung, "Fachinformatiker Daten und Prozessanalyse");
   assert.equal(updatedTrainee.betrieb, "Neue Muster GmbH");
+  assert.equal(updatedTrainee.ausbildungsStart, "2026-04-01");
+  assert.equal(updatedTrainee.ausbildungsEnde, "2029-03-31");
   assert.deepEqual(updatedTrainee.trainerIds.slice().sort((a, b) => a - b), trainerIds.slice().sort((a, b) => a - b));
+  });
+});
+
+await test("Azubi ohne Ausbilder kann nicht erstellt werden", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    const response = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "Ohne Ausbilder",
+        username: "ohne-ausbilder",
+        email: "ohne-ausbilder@example.com",
+        password: "Azubikonto123!",
+        role: "trainee",
+        ausbildung: "Fachinformatiker Systemintegration",
+        betrieb: "Muster GmbH",
+        berufsschule: "BBS"
+      },
+      adminCookie
+    );
+
+    assert.equal(response.status, 400);
+    const data = await response.json();
+    assert.match(data.error.message, /mindestens ein Ausbilder/i);
+  });
+});
+
+await test("Nicht-Azubi darf ohne Ausbilder gespeichert werden", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    const response = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "Trainer Ohne Zuordnung",
+        username: "trainer-ohne-zuordnung",
+        email: "trainer-ohne-zuordnung@example.com",
+        password: "Trainerkonto123!",
+        role: "trainer",
+        betrieb: "Muster GmbH"
+      },
+      adminCookie
+    );
+
+    assert.equal(response.status, 200);
+  });
+});
+
+await test("Azubi ohne Ausbilder kann nicht bearbeitet oder per Rollenwechsel gespeichert werden", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+
+    const createTrainerResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "Rollenwechsel Trainer",
+        username: "rollenwechsel-trainer",
+        email: "rollenwechsel-trainer@example.com",
+        password: "Trainerkonto123!",
+        role: "trainer",
+        betrieb: "Muster GmbH"
+      },
+      adminCookie
+    );
+    assert.equal(createTrainerResponse.status, 200);
+
+    const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const adminDashboard = await adminDashboardResponse.json();
+    const defaultTrainer = adminDashboard.users.find((user) => user.username === "trainer");
+    const createdTrainer = adminDashboard.users.find((user) => user.username === "rollenwechsel-trainer");
+    assert.ok(defaultTrainer);
+    assert.ok(createdTrainer);
+
+    const createTraineeResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "Bearbeitungs Azubi Pflicht",
+        username: "bearbeitungs-azubi-pflicht",
+        email: "bearbeitungs-azubi-pflicht@example.com",
+        password: "Azubikonto123!",
+        role: "trainee",
+        ausbildung: "Fachinformatiker Systemintegration",
+        trainerIds: [defaultTrainer.id]
+      },
+      adminCookie
+    );
+    assert.equal(createTraineeResponse.status, 200);
+
+    const refreshedDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const refreshedDashboard = await refreshedDashboardResponse.json();
+    const createdTrainee = refreshedDashboard.users.find((user) => user.username === "bearbeitungs-azubi-pflicht");
+    assert.ok(createdTrainee);
+
+    const invalidUpdateResponse = await postJson(
+      `${baseUrl}/api/admin/users/${createdTrainee.id}`,
+      {
+        name: createdTrainee.name,
+        username: createdTrainee.username,
+        email: createdTrainee.email,
+        role: "trainee",
+        password: "",
+        ausbildung: createdTrainee.ausbildung,
+        trainerIds: []
+      },
+      adminCookie
+    );
+    assert.equal(invalidUpdateResponse.status, 400);
+    const invalidUpdateData = await invalidUpdateResponse.json();
+    assert.match(invalidUpdateData.error.message, /mindestens ein Ausbilder/i);
+
+    const invalidRoleChangeResponse = await postJson(
+      `${baseUrl}/api/admin/users/${createdTrainer.id}`,
+      {
+        name: createdTrainer.name,
+        username: createdTrainer.username,
+        email: createdTrainer.email,
+        role: "trainee",
+        password: "",
+        ausbildung: "Fachinformatiker Systemintegration",
+        trainerIds: []
+      },
+      adminCookie
+    );
+    assert.equal(invalidRoleChangeResponse.status, 400);
+    const invalidRoleChangeData = await invalidRoleChangeResponse.json();
+    assert.match(invalidRoleChangeData.error.message, /mindestens ein Ausbilder/i);
+  });
+});
+
+await test("Admin-User-Anlage validiert den Ausbildungszeitraum fuer Azubis", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+    const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const adminDashboard = await adminDashboardResponse.json();
+    const defaultTrainer = adminDashboard.users.find((user) => user.username === "trainer");
+    assert.ok(defaultTrainer);
+
+    const invalidRangeResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "Zeitraum Azubi",
+        username: "zeitraum-azubi",
+        email: "zeitraum-azubi@example.com",
+        password: "Azubikonto123!",
+        role: "trainee",
+        ausbildung: "Fachinformatiker Systemintegration",
+        trainerIds: [defaultTrainer.id],
+        ausbildungsStart: "2026-05-01",
+        ausbildungsEnde: "2026-04-01"
+      },
+      adminCookie
+    );
+
+    assert.equal(invalidRangeResponse.status, 400);
+    const invalidRangeData = await invalidRangeResponse.json();
+    assert.match(invalidRangeData.error.message, /Ausbildungsbeginn darf nicht nach dem Ausbildungsende liegen/);
   });
 });
 
@@ -283,6 +474,13 @@ await test("Admin kann Azubi mit Berichten, Noten und Zuordnungen loeschen", { c
     });
     const adminCookie = extractCookie(adminLogin);
 
+    const initialAdminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const initialAdminDashboard = await initialAdminDashboardResponse.json();
+    const defaultTrainer = initialAdminDashboard.users.find((user) => user.username === "trainer");
+    assert.ok(defaultTrainer);
+
     const trainerCreateResponse = await postJson(
       `${baseUrl}/api/admin/users`,
       {
@@ -307,7 +505,7 @@ await test("Admin kann Azubi mit Berichten, Noten und Zuordnungen loeschen", { c
         ausbildung: "Fachinformatiker Systemintegration",
         betrieb: "LoeSch GmbH",
         berufsschule: "BBS Loesch",
-        trainerIds: []
+        trainerIds: [defaultTrainer.id]
       },
       adminCookie
     );

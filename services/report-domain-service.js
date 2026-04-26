@@ -1,3 +1,5 @@
+const { buildTrainingProgress } = require("../utils/training-progress");
+
 function createReportDomainService({
   reportRepository,
   sharedRepository,
@@ -318,16 +320,24 @@ function createReportDomainService({
   }
 
   async function getTraineeDashboard(user) {
+    const entries = await sharedRepository.listEntriesForTrainee(user.id);
     return {
       userId: user.id,
       trainee: {
         name: user.name,
         ausbildung: user.ausbildung,
         betrieb: user.betrieb,
-        berufsschule: user.berufsschule
+        berufsschule: user.berufsschule,
+        ausbildungsStart: user.ausbildungsStart || "",
+        ausbildungsEnde: user.ausbildungsEnde || ""
       },
-      entries: await sharedRepository.listEntriesForTrainee(user.id),
-      grades: await sharedRepository.listGradesForTrainee(user.id)
+      entries,
+      grades: await sharedRepository.listGradesForTrainee(user.id),
+      reportingProgress: buildTrainingProgress({
+        trainingStartDate: user.ausbildungsStart,
+        trainingEndDate: user.ausbildungsEnde,
+        entries
+      })
     };
   }
 

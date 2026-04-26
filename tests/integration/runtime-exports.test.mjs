@@ -87,6 +87,12 @@ await test("Azubi kann nur eigene Berichte als CSV exportieren", { concurrency: 
       password: "admin123"
     });
     const adminCookie = extractCookie(adminLogin);
+    const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const adminDashboard = await adminDashboardResponse.json();
+    const defaultTrainer = adminDashboard.users.find((user) => user.username === "trainer");
+    assert.ok(defaultTrainer);
 
     const createOtherTraineeResponse = await postJson(
       `${baseUrl}/api/admin/users`,
@@ -98,7 +104,8 @@ await test("Azubi kann nur eigene Berichte als CSV exportieren", { concurrency: 
         role: "trainee",
         ausbildung: "Fachinformatiker Systemintegration",
         betrieb: "Fremdbetrieb",
-        berufsschule: "BBS Fremd"
+        berufsschule: "BBS Fremd",
+        trainerIds: [defaultTrainer.id]
       },
       adminCookie
     );
@@ -167,6 +174,59 @@ await test("CSV-Export ist fuer Ausbilder ueber die Azubi-Route gesperrt", { con
     });
 
     assert.equal(response.status, 403);
+  });
+});
+
+await test("Leere Exporte liefern saubere Fehlermeldungen statt leerer Dateien", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const adminLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const adminCookie = extractCookie(adminLogin);
+    const adminDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: adminCookie }
+    });
+    const adminDashboard = await adminDashboardResponse.json();
+    const defaultTrainer = adminDashboard.users.find((user) => user.username === "trainer");
+    assert.ok(defaultTrainer);
+
+    const createTraineeResponse = await postJson(
+      `${baseUrl}/api/admin/users`,
+      {
+        name: "Leer Export Azubi",
+        username: "leer-export-azubi",
+        email: "leer-export-azubi@example.com",
+        password: "Passwort123!",
+        role: "trainee",
+        ausbildung: "Fachinformatiker Systemintegration",
+        betrieb: "Leer GmbH",
+        berufsschule: "BBS Leer",
+        trainerIds: [defaultTrainer.id]
+      },
+      adminCookie
+    );
+    assert.equal(createTraineeResponse.status, 200);
+
+    const traineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "leer-export-azubi",
+      password: "Passwort123!"
+    });
+    const traineeCookie = extractCookie(traineeLogin);
+
+    const csvResponse = await fetch(`${baseUrl}/api/report/csv`, {
+      headers: { Cookie: traineeCookie }
+    });
+    assert.equal(csvResponse.status, 400);
+    const csvData = await csvResponse.json();
+    assert.match(csvData.error.message, /Keine Berichte fuer den CSV-Export vorhanden/);
+
+    const pdfResponse = await fetch(`${baseUrl}/api/report/pdf`, {
+      headers: { Cookie: traineeCookie }
+    });
+    assert.equal(pdfResponse.status, 400);
+    const pdfData = await pdfResponse.json();
+    assert.match(pdfData.error.message, /Keine signierten Berichte fuer den PDF-Export vorhanden/);
   });
 });
 
@@ -249,6 +309,47 @@ await test("PDF-Export liefert fuer Azubi und Ausbilder gueltige Downloads", { c
       password: "Passwort123!"
     });
     const trainerCookie = extractCookie(trainerLogin);
+
+    const createdTraineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "pdf-test-azubi",
+      password: "Passwort123!"
+    });
+    const createdTraineeCookie = extractCookie(createdTraineeLogin);
+
+    const createDraftResponse = await postJson(
+      `${baseUrl}/api/report/draft`,
+      { dateFrom: "2026-04-14", dateTo: "2026-04-14", weekLabel: "PDF Freigabetest" },
+      createdTraineeCookie
+    );
+    assert.equal(createDraftResponse.status, 200);
+    const createDraftData = await createDraftResponse.json();
+
+    const updateDraftResponse = await postJson(
+      `${baseUrl}/api/report/entry/${createDraftData.entry.id}`,
+      {
+        weekLabel: "PDF Freigabetest",
+        dateFrom: "2026-04-14",
+        dateTo: "2026-04-14",
+        betrieb: "Dokumentation für PDF-Export",
+        schule: ""
+      },
+      createdTraineeCookie
+    );
+    assert.equal(updateDraftResponse.status, 200);
+
+    const submitDraftResponse = await postJson(
+      `${baseUrl}/api/report/submit`,
+      { entryId: createDraftData.entry.id },
+      createdTraineeCookie
+    );
+    assert.equal(submitDraftResponse.status, 200);
+
+    const signEntryResponse = await postJson(
+      `${baseUrl}/api/trainer/sign`,
+      { entryId: createDraftData.entry.id, trainerComment: "Freigegeben für PDF-Test" },
+      trainerCookie
+    );
+    assert.equal(signEntryResponse.status, 200);
 
     const traineePdfResponse = await fetch(`${baseUrl}/api/report/pdf/${traineeId}`, {
       headers: { Cookie: trainerCookie }

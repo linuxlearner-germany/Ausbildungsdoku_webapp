@@ -82,12 +82,14 @@ function createBootstrap({
       username: "trainer",
       email: "trainer@example.com",
       password_hash: hashPassword("trainer123"),
-      role: "trainer",
-      theme_preference: "system",
-      ausbildung: "",
-      betrieb: "Muster GmbH",
-      berufsschule: ""
-    });
+        role: "trainer",
+        theme_preference: "system",
+        ausbildung: "",
+        betrieb: "Muster GmbH",
+        berufsschule: "",
+        ausbildungs_start: null,
+        ausbildungs_ende: null
+      });
 
     const trainee = await ensureUser({
       name: "Max Mustermann",
@@ -98,7 +100,9 @@ function createBootstrap({
       theme_preference: "system",
       ausbildung: "Fachinformatiker/in Systemintegration",
       betrieb: "Muster GmbH",
-      berufsschule: "BBS"
+      berufsschule: "BBS",
+      ausbildungs_start: "2026-03-01",
+      ausbildungs_ende: "2029-02-28"
     });
 
     const assignment = await trx("trainee_trainers")

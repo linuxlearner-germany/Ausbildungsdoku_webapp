@@ -316,6 +316,8 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
     return VIEW_OPTIONS.some((view) => view.id === requested) ? requested : initialView === "editor" ? "write" : initialView;
   });
   const [statusFilter, setStatusFilter] = useState("all");
+  const [periodFilter, setPeriodFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("date-desc");
   const [query, setQuery] = useState("");
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const seed = parseLocalDate(defaultDate) || parseLocalDate(today);
@@ -345,15 +347,56 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
   const editorKey = `${selectedEntry?.id || "new"}:${selectedDate || "none"}`;
   const selectedPermissions = useMemo(() => getEntryPermissions(selectedEntry), [selectedEntry]);
 
+  const inSelectedPeriod = (dateValue) => {
+    if (periodFilter === "all" || !dateValue) {
+      return true;
+    }
+
+    const current = new Date(`${dateValue}T00:00:00`);
+    if (Number.isNaN(current.getTime())) {
+      return true;
+    }
+
+    const todayDate = parseLocalDate(today) || new Date();
+    const startOfToday = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate());
+    const startOfWeek = new Date(startOfToday);
+    const weekDay = startOfWeek.getDay() || 7;
+    startOfWeek.setDate(startOfWeek.getDate() - weekDay + 1);
+    const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
+
+    if (periodFilter === "today") return current.getTime() === startOfToday.getTime();
+    if (periodFilter === "week") return current >= startOfWeek;
+    if (periodFilter === "month") return current >= startOfMonth;
+    return true;
+  };
+
+  const sortEntries = (items) =>
+    [...items].sort((left, right) => {
+      if (sortBy === "date-asc") {
+        return String(left.dateFrom).localeCompare(String(right.dateFrom));
+      }
+
+      if (sortBy === "status") {
+        return String(left.status).localeCompare(String(right.status), "de") || String(right.dateFrom).localeCompare(String(left.dateFrom));
+      }
+
+      if (sortBy === "title") {
+        return String(left.weekLabel).localeCompare(String(right.weekLabel), "de") || String(right.dateFrom).localeCompare(String(left.dateFrom));
+      }
+
+      return String(right.dateFrom).localeCompare(String(left.dateFrom));
+    });
+
   const filteredEntries = useMemo(
     () =>
-      entries.filter((entry) => {
+      sortEntries(entries.filter((entry) => {
         const matchesStatus = statusFilter === "all" ? true : entry.status === statusFilter;
+        const matchesPeriod = inSelectedPeriod(entry.dateFrom);
         const needle = query.trim().toLowerCase();
         const matchesQuery = !needle ? true : [entry.weekLabel, entry.dateFrom, entry.betrieb, entry.schule].join(" ").toLowerCase().includes(needle);
-        return matchesStatus && matchesQuery;
-      }),
-    [entries, query, statusFilter]
+        return matchesStatus && matchesPeriod && matchesQuery;
+      })),
+    [entries, periodFilter, query, sortBy, statusFilter]
   );
 
   const weekDates = useMemo(() => buildWeekDates(selectedDate || today), [selectedDate, today]);
@@ -812,6 +855,18 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
               <option value="submitted">Eingereicht</option>
               <option value="signed">Signiert</option>
               <option value="rejected">Nachbearbeitung</option>
+            </select>
+            <select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)}>
+              <option value="all">Gesamter Zeitraum</option>
+              <option value="today">Heute</option>
+              <option value="week">Diese Woche</option>
+              <option value="month">Dieser Monat</option>
+            </select>
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+              <option value="date-desc">Neueste zuerst</option>
+              <option value="date-asc">Aelteste zuerst</option>
+              <option value="status">Nach Status</option>
+              <option value="title">Nach Titel</option>
             </select>
           </FilterBar>
           {filteredEntries.length ? (

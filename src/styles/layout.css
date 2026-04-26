@@ -2,6 +2,7 @@
   min-height: 100vh;
   display: flex;
   background: var(--app-bg);
+  overflow-x: clip;
 }
 
 .sidebar {
@@ -17,8 +18,7 @@
   display: flex;
   gap: 0.875rem;
   align-items: center;
-  padding: 1.25rem 1.25rem 1rem;
-  border-bottom: 1px solid var(--app-border);
+  padding: 1.25rem 1.25rem 0.9rem;
 }
 
 .sidebar-logo {
@@ -27,9 +27,17 @@
   object-fit: contain;
 }
 
+.sidebar-divider {
+  height: 1px;
+  margin: 0 1.25rem;
+  background: var(--app-border);
+  flex-shrink: 0;
+}
+
 .sidebar-nav {
   gap: 0.35rem;
   padding: 1rem;
+  min-width: 0;
 }
 
 .sidebar-link {
@@ -41,6 +49,7 @@
   padding: 0.65rem 0.8rem;
   color: var(--app-muted);
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .sidebar-link.active {
@@ -96,6 +105,7 @@
 
 .topbar-title {
   font-size: 1rem;
+  overflow-wrap: anywhere;
 }
 
 .topbar-theme-label {
@@ -127,6 +137,7 @@
   flex: 1;
   padding-top: 1.5rem;
   padding-bottom: 1.5rem;
+  overflow-x: clip;
 }
 
 .flash {
@@ -134,10 +145,18 @@
 }
 
 @media (max-width: 991px) {
+  body.nav-open {
+    overflow: hidden;
+  }
+
   .sidebar {
     position: fixed;
     inset: 0 auto 0 0;
     z-index: 40;
+    width: min(84vw, 320px);
+    max-width: 320px;
+    min-height: 100vh;
+    overflow-y: auto;
     transform: translateX(-100%);
     transition: transform 0.2s ease;
     box-shadow: var(--app-shadow-md);
@@ -172,6 +191,14 @@
     flex-wrap: wrap;
   }
 
+  .topbar-user {
+    align-items: stretch;
+  }
+
+  .user-pill {
+    flex: 1 1 260px;
+  }
+
   .page-content {
     padding-top: 1rem;
     padding-bottom: 1.25rem;
@@ -183,7 +210,40 @@
 }
 
 @media (max-width: 575px) {
+  .topbar {
+    gap: 0.75rem;
+  }
+
+  .topbar-main {
+    align-items: flex-start;
+  }
+
+  .topbar-copy {
+    flex: 1 1 0;
+  }
+
   .topbar-user > * {
     width: 100%;
+  }
+
+  .topbar-user .btn,
+  .mobile-nav-toggle {
+    white-space: normal;
+  }
+
+  .user-pill {
+    padding: 0.65rem 0.75rem;
+  }
+
+  .sidebar-brand {
+    padding: 1rem 1rem 0.9rem;
+  }
+
+  .sidebar-divider {
+    margin: 0 1rem;
+  }
+
+  .sidebar-nav {
+    padding: 0.8rem;
   }
 }
