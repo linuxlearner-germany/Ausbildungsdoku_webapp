@@ -1,5 +1,6 @@
 services:
   app:
+    # Produktionsnaher Modus: nur die App läuft im Container, MSSQL und Redis werden extern angebunden.
     build:
       context: .
       dockerfile: Dockerfile
@@ -8,6 +9,7 @@ services:
     restart: unless-stopped
     init: true
     environment:
+      # App-/Routing-Konfiguration.
       NODE_ENV: ${NODE_ENV:-production}
       HOST: ${HOST:-0.0.0.0}
       PORT: ${PORT:-3010}
@@ -16,11 +18,13 @@ services:
       API_BASE_URL: ${API_BASE_URL:-}
       TRUST_PROXY: ${TRUST_PROXY:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Server-Limits und Timeouts.
       REQUEST_BODY_LIMIT: ${REQUEST_BODY_LIMIT:-15mb}
       SERVER_REQUEST_TIMEOUT_MS: ${SERVER_REQUEST_TIMEOUT_MS:-30000}
       SERVER_HEADERS_TIMEOUT_MS: ${SERVER_HEADERS_TIMEOUT_MS:-35000}
       SERVER_KEEP_ALIVE_TIMEOUT_MS: ${SERVER_KEEP_ALIVE_TIMEOUT_MS:-5000}
       SHUTDOWN_TIMEOUT_MS: ${SHUTDOWN_TIMEOUT_MS:-10000}
+      # Session-/Cookie-Einstellungen; Sessions liegen in Redis.
       SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET must be set}
       SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-berichtsheft.sid}
       SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
@@ -28,6 +32,7 @@ services:
       SESSION_SAME_SITE: ${SESSION_SAME_SITE:-lax}
       SESSION_MAX_AGE_MS: ${SESSION_MAX_AGE_MS:-28800000}
       SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-28800}
+      # Externe Redis-Verbindung.
       REDIS_URL: ${REDIS_URL:-}
       REDIS_HOST: ${REDIS_HOST:-}
       REDIS_PORT: ${REDIS_PORT:-}
@@ -37,6 +42,7 @@ services:
       REDIS_COMMAND_TIMEOUT_MS: ${REDIS_COMMAND_TIMEOUT_MS:-5000}
       REDIS_MAX_RETRIES: ${REDIS_MAX_RETRIES:-4}
       REDIS_PING_INTERVAL_MS: ${REDIS_PING_INTERVAL_MS:-30000}
+      # Externe MSSQL-Verbindung.
       MSSQL_HOST: ${MSSQL_HOST:-}
       MSSQL_PORT: ${MSSQL_PORT:-1433}
       MSSQL_DATABASE: ${MSSQL_DATABASE:-}
@@ -48,6 +54,7 @@ services:
       MSSQL_POOL_MAX: ${MSSQL_POOL_MAX:-10}
       MSSQL_CONNECTION_TIMEOUT_MS: ${MSSQL_CONNECTION_TIMEOUT_MS:-15000}
       MSSQL_REQUEST_TIMEOUT_MS: ${MSSQL_REQUEST_TIMEOUT_MS:-15000}
+      # Startverhalten für Migrationen und Initial-Admin.
       APPLY_MIGRATIONS_ON_START: ${APPLY_MIGRATIONS_ON_START:-true}
       BOOTSTRAP_DATABASE_ON_START: ${BOOTSTRAP_DATABASE_ON_START:-true}
       RESET_DATABASE_ON_START: ${RESET_DATABASE_ON_START:-false}
@@ -56,6 +63,7 @@ services:
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@example.com}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?INITIAL_ADMIN_PASSWORD must be set}
     ports:
+      # Host-Port:Container-Port für die Webapp.
       - "${APP_PORT_MAPPING:-3010:3010}"
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:${PORT:-3010}${APP_BASE_PATH:-}/api/ready').then((res)=>process.exit(res.ok?0:1)).catch(()=>process.exit(1))\""]

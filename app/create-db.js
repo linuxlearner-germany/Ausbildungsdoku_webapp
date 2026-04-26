@@ -1,6 +1,7 @@
 const knex = require("knex");
 
 function createDb(config) {
+  // Eine einzige Knex-Instanz kapselt die MSSQL-Verbindung inklusive Migrationen und Pool-Konfiguration.
   return knex({
     client: "mssql",
     connection: {

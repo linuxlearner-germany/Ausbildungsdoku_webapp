@@ -6,6 +6,7 @@ function createSessionMiddleware({ config, redisClient }) {
     throw new Error("Redis-Client ist fuer Session-Middleware erforderlich.");
   }
 
+  // Session-Daten liegen ausschließlich in Redis; die App selbst bleibt zustandslos.
   const store = new RedisStore({
     client: redisClient,
     prefix: `${config.redis.keyPrefix}sess:`,

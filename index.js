@@ -8,6 +8,7 @@ const { createBootstrap } = require("./data/bootstrap-mssql");
 const { createLogger } = require("./utils/logger");
 
 async function createRuntime() {
+  // Zentrale Initialisierung: Konfiguration laden, Infra verbinden, Migrationen/Bootstrap ausführen.
   const config = createConfig();
   const logger = createLogger(config.app.logLevel, {
     service: "ausbildungsdoku-webapp",
@@ -90,6 +91,7 @@ async function startServer(runtime) {
   return new Promise((resolve, reject) => {
     const server = runtime.app.listen(runtime.config.server.port, runtime.config.server.host, () => resolve(server));
     server.once("error", reject);
+    // Timeouts werden nach dem Listen gesetzt, damit dieselben Werte in jedem Betriebsmodus gelten.
     server.requestTimeout = runtime.config.server.requestTimeoutMs;
     server.headersTimeout = runtime.config.server.headersTimeoutMs;
     server.keepAliveTimeout = runtime.config.server.keepAliveTimeoutMs;
@@ -108,6 +110,7 @@ if (require.main === module) {
       }
 
       shuttingDown = true;
+      // Readiness sofort zurücknehmen, bevor Verbindungen und HTTP-Server kontrolliert beendet werden.
       runtime.runtimeState.isShuttingDown = true;
       runtime.runtimeState.isReady = false;
       runtime.runtimeState.dependencies = {

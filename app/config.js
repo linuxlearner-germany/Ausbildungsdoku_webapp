@@ -166,6 +166,7 @@ function createConfig({ env = process.env } = {}) {
   const projectRoot = path.resolve(__dirname, "..");
   const publicDir = path.join(projectRoot, "public");
   const picturesDir = path.join(projectRoot, "Pictures");
+  // Alle ENV-Werte werden hier einmalig normalisiert und validiert, damit der Rest der App nur noch `config` nutzt.
   const parsedEnv = envSchema.safeParse({
     NODE_ENV: readStringEnv(env.NODE_ENV, "development"),
     HOST: readStringEnv(env.HOST, "0.0.0.0"),
@@ -326,6 +327,7 @@ function createConfig({ env = process.env } = {}) {
     throw new Error("SERVER_HEADERS_TIMEOUT_MS muss groesser als SERVER_KEEP_ALIVE_TIMEOUT_MS sein.");
   }
 
+  // Konsistenzregeln, die sich nicht direkt im Schema ausdrücken lassen.
   if (config.mssql.poolMin > config.mssql.poolMax) {
     throw new Error("MSSQL_POOL_MIN darf nicht groesser als MSSQL_POOL_MAX sein.");
   }

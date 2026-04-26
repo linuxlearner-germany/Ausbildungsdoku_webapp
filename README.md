@@ -1,54 +1,106 @@
 # Ausbildungsdoku Webapp
 
-Business-Webapp fuer digitale Ausbildungsnachweise mit `Express 5`, `React 19`, `Bootstrap 5`, `Knex`, `Microsoft SQL Server` und `Redis`.
+## Überblick
+
+Die Ausbildungsdoku Webapp ist eine Webanwendung für digitale Berichtshefte in der Ausbildung.  
+Sie richtet sich an Azubis, Ausbilder und Verwaltung und deckt die Pflege von Tagesberichten, Freigaben, Profilen, Noten sowie Exporte für PDF und CSV ab.
+
+Hauptfunktionen:
+
+- Tagesberichte erfassen, bearbeiten und einreichen
+- Berichte durch Ausbilder prüfen, kommentieren und signieren
+- Azubi-, Ausbilder- und Admin-Rollen mit getrennten Workflows
+- Profil- und Stammdatenpflege
+- Notenverwaltung
+- CSV-/PDF-Exporte
+
+## Tech Stack
+
+- Node.js
+- Express
+- React
+- Bootstrap 5
+- Microsoft SQL Server
+- Redis
+- Docker
 
 ## Architektur
 
-- Runtime-Datenbank: Microsoft SQL Server
-- Session-Store: Redis mit `express-session` und `connect-redis`
-- Backend: modulare Express-Anwendung mit `repositories -> services/domain-services -> controllers -> routes`
-- Frontend: React SPA, gebuendelt mit `esbuild`
-- Deployment-Ziel: App im Docker-Container, MSSQL und Redis extern angebunden
+Die Anwendung trennt HTTP-, Fach- und Datenzugriffsschichten bewusst:
 
-Es gibt keinen SQLite-Runtime-Pfad und keinen In-Memory-Session-Store fuer den Normalbetrieb.
+- `routes/` registriert HTTP-Endpunkte
+- `controllers/` validiert Requests und formt Responses
+- `services/` und `domain-services/` enthalten Fachlogik
+- `repositories/` kapseln Datenbankzugriffe
+- `app/config.js` liest und validiert die komplette Runtime-Konfiguration
+- Sessions werden über Redis gespeichert
+- MSSQL ist die einzige Runtime-Datenbank
+
+Wichtige Einstiegspunkte:
+
+- [index.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/index.js): Runtime-Initialisierung und HTTP-Serverstart
+- [app/create-app.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/app/create-app.js): Express-App und Middleware
+- [app/create-db.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/app/create-db.js): Knex-/MSSQL-Setup
+- [sessions/create-session-middleware.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/sessions/create-session-middleware.js): Session-Store mit Redis
 
 ## Betriebsmodi
 
-### 1. Host-based Entwicklung
+### 1. Host-basiert
 
-Voraussetzung: MSSQL und Redis laufen lokal oder extern erreichbar.
+Die App läuft lokal auf dem Host. MSSQL und Redis laufen extern oder bereits separat lokal.
+
+Verwendung:
+
+- App lokal mit `npm run dev` oder `npm start`
+- MSSQL und Redis über `.env` konfigurieren
+
+### 2. Lokaler Infra-Stack
+
+MSSQL und Redis laufen per Docker, die App selbst lokal auf dem Host.
+
+Verwendung:
+
+- ideal für tägliche Entwicklung
+- gleiche Datenbank-/Session-Richtung wie im späteren Betrieb
+
+### 3. Full Docker
+
+App, MSSQL und Redis laufen gemeinsam per Docker Compose.
+
+Verwendung:
+
+- vollständiger lokaler Stack
+- sinnvoll für reproduzierbare lokale Umgebungen
+
+## Setup
+
+### Standard-Setup mit lokalem Infra-Stack
 
 ```bash
 npm install
 cp .env.example .env
+npm run infra:up
 npm run db:migrate
 npm run db:bootstrap
 npm run dev
 ```
 
-Server ohne Watch:
+Standardports:
 
-```bash
-npm start
-```
+- App: `3010`
+- MSSQL: `1433`
+- Redis: `6379`
 
-### 2. Lokaler Infra-Stack
+### Host-basiert gegen externe MSSQL-/Redis-Instanzen
 
-Startet nur MSSQL und Redis fuer Host-based Entwicklung und Tests.
+1. `npm install`
+2. `cp .env.example .env`
+3. Verbindungsdaten in `.env` setzen
+4. `npm run db:migrate`
+5. `npm run db:bootstrap`
+6. `npm start`
 
-```bash
-npm run infra:up
-```
-
-Beenden:
-
-```bash
-npm run infra:down
-```
-
-### 3. Full Local Docker
-
-Startet App, MSSQL und Redis komplett lokal in Docker.
+### Full Docker
 
 ```bash
 npm run docker:local:up
@@ -60,109 +112,172 @@ Beenden:
 npm run docker:local:down
 ```
 
-### 4. Produktionsnah / App im Container
+## Docker
 
-`docker-compose.yml` startet nur die App. MSSQL und Redis werden per ENV extern angebunden.
+### Dockerfile
 
-```bash
-docker compose up --build -d
-```
+Das `Dockerfile` ist mehrstufig aufgebaut:
 
-## Konfiguration
+- `deps`: installiert Abhängigkeiten
+- `build`: baut das Frontend
+- `runtime`: enthält nur die Produktionslaufzeit
 
-Die gesamte Runtime-Konfiguration wird in [app/config.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/app/config.js) geladen, validiert und normalisiert. Ausserhalb dieser Datei greift die Anwendung nicht verteilt auf `process.env` zu.
+Ziel:
 
-Wichtige Bereiche:
+- kleines Runtime-Image
+- reproduzierbarer Frontend-Build
+- keine Dev-Dependencies im finalen Container
 
-- App / Server: `NODE_ENV`, `HOST`, `PORT`, `APP_BASE_URL`, `APP_BASE_PATH`, `API_BASE_URL`, `TRUST_PROXY`, `LOG_LEVEL`
-- Timeouts / Limits: `SERVER_REQUEST_TIMEOUT_MS`, `SERVER_HEADERS_TIMEOUT_MS`, `SERVER_KEEP_ALIVE_TIMEOUT_MS`, `SHUTDOWN_TIMEOUT_MS`, `REQUEST_BODY_LIMIT`
-- MSSQL: `MSSQL_HOST`, `MSSQL_PORT`, `MSSQL_DATABASE`, `MSSQL_USER`, `MSSQL_PASSWORD`, TLS-, Pool- und Timeout-Werte
-- Redis: `REDIS_URL` oder `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD`, dazu Prefix- und Timeout-Werte
-- Session / Cookies: `SESSION_SECRET`, `SESSION_COOKIE_NAME`, `SESSION_COOKIE_DOMAIN`, `SESSION_SECURE`, `SESSION_SAME_SITE`, `SESSION_MAX_AGE_MS`, `SESSION_TTL_SECONDS`
-- Bootstrap: `APPLY_MIGRATIONS_ON_START`, `BOOTSTRAP_DATABASE_ON_START`, `RESET_DATABASE_ON_START`, `ENABLE_DEMO_DATA`
-- Initial-Admin: `INITIAL_ADMIN_USERNAME`, `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD`
+### docker-compose.yml
 
-Pflichtwerte ohne Default:
+Produktionsnaher Modus:
+
+- startet nur die App
+- MSSQL und Redis werden extern angebunden
+- geeignet für Deployment-Szenarien mit vorhandener Infrastruktur
+
+### docker-compose.local.yml
+
+Vollständiger lokaler Stack:
+
+- `app`: Node-/Express-Anwendung
+- `mssql`: lokale MSSQL-Instanz
+- `mssql-init`: erzeugt Runtime- und Testdatenbank
+- `redis`: lokaler Session-Store
+
+## Wichtige Umgebungsvariablen
+
+### App / Server
+
+- `NODE_ENV`
+- `HOST`
+- `PORT`
+- `APP_BASE_URL`
+- `APP_BASE_PATH`
+- `API_BASE_URL`
+- `TRUST_PROXY`
+- `LOG_LEVEL`
+
+### Sessions / Cookies
 
 - `SESSION_SECRET`
-- `INITIAL_ADMIN_PASSWORD`
+- `SESSION_COOKIE_NAME`
+- `SESSION_COOKIE_DOMAIN`
+- `SESSION_SECURE`
+- `SESSION_SAME_SITE`
+- `SESSION_MAX_AGE_MS`
+- `SESSION_TTL_SECONDS`
+
+### Redis
+
+- `REDIS_URL`
+- `REDIS_HOST`
+- `REDIS_PORT`
+- `REDIS_PASSWORD`
+- `REDIS_KEY_PREFIX`
+
+### MSSQL
+
 - `MSSQL_HOST`
+- `MSSQL_PORT`
 - `MSSQL_DATABASE`
 - `MSSQL_USER`
 - `MSSQL_PASSWORD`
+- `MSSQL_ENCRYPT`
+- `MSSQL_TRUST_SERVER_CERTIFICATE`
+
+### Startverhalten
+
+- `APPLY_MIGRATIONS_ON_START`
+- `BOOTSTRAP_DATABASE_ON_START`
+- `RESET_DATABASE_ON_START`
+- `ENABLE_DEMO_DATA`
+- `INITIAL_ADMIN_USERNAME`
+- `INITIAL_ADMIN_EMAIL`
+- `INITIAL_ADMIN_PASSWORD`
 
 Siehe [.env.example](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/.env.example).
 
 ## Datenbank und Bootstrap
 
-Migrationen laufen ausschliesslich gegen MSSQL.
+Migrationen:
 
 ```bash
 npm run db:migrate
 ```
 
-Bootstrap legt den initialen Admin an und optional Demo-Daten.
+Initialdaten / Admin / optionale Demo-Daten:
 
 ```bash
 npm run db:bootstrap
 ```
 
-Testdatenbank hart zuruecksetzen:
+Testdatenbank zurücksetzen:
 
 ```bash
 npm run db:reset-test
 ```
 
-## Startverhalten
-
-Beim App-Start werden in dieser Reihenfolge ausgefuehrt:
-
-1. Konfiguration laden und validieren
-2. Redis verbinden
-3. MSSQL verbinden
-4. Migrationen ausfuehren
-5. Initial-Admin und optionale Demo-Daten bootstrapen
-6. HTTP-Server starten
-
-## Health-Endpunkte
-
-- `GET /api/live`: Prozess lebt
-- `GET /api/health`: Prozessstatus plus bekannter Abhaengigkeitsstatus
-- `GET /api/ready`: echte Readiness-Pruefung gegen MSSQL und Redis
-
 ## Tests
 
-Unit- und Service-Tests:
+Kompletter Testlauf:
+
+```bash
+npm test
+```
+
+Nur Unit-Tests:
 
 ```bash
 npm run test:unit
 ```
 
-Kompletter Testlauf gegen lokalen MSSQL/Redis-Stack:
+Nur Integrationstests:
+
+```bash
+npm run test:integration
+```
+
+Empfohlen für lokale Integrationstests:
 
 ```bash
 npm run infra:up
 npm test
 ```
 
-Nur Integration:
+## Build
+
+Frontend-Build:
 
 ```bash
-npm run test:integration
+npm run build
 ```
 
-## Wichtige Dateien
+## Health-Endpunkte
 
-- [app/config.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/app/config.js)
-- [index.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/index.js)
-- [app/create-app.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/app/create-app.js)
-- [data/migrations/20260421195500_initial_schema.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/data/migrations/20260421195500_initial_schema.js)
-- [docker-compose.yml](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docker-compose.yml)
-- [docker-compose.dev-infra.yml](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docker-compose.dev-infra.yml)
-- [docker-compose.local.yml](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docker-compose.local.yml)
+- `GET /api/live`: Prozess lebt
+- `GET /api/health`: Prozessstatus und bekannte Abhängigkeiten
+- `GET /api/ready`: echte Readiness-Prüfung gegen MSSQL und Redis
 
-## Weitere Doku
+## Projektstruktur
 
-- [Lokale Entwicklung](docs/LOCAL_DEVELOPMENT.md)
-- [Architektur](docs/ARCHITECTURE.md)
-- [Deployment](docs/DEPLOYMENT.md)
+```text
+app/           Laufzeitaufbau, Konfiguration, Express-Erstellung
+controllers/   HTTP-Controller
+data/          Migrationen und Bootstrap
+middleware/    Express-Middleware
+modules/       Modulgrenzen für Features
+repositories/  Datenzugriff
+routes/        API-Routen
+services/      Fachlogik
+sessions/      Session-Setup
+src/           React-Frontend
+tests/         Unit- und Integrationstests
+utils/         Querschnittsfunktionen
+```
+
+## Weitere Dokumentation
+
+- [docs/LOCAL_DEVELOPMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/LOCAL_DEVELOPMENT.md)
+- [docs/ARCHITECTURE.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/ARCHITECTURE.md)
+- [docs/DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/DEPLOYMENT.md)
