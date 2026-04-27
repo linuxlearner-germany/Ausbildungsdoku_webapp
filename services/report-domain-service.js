@@ -3,6 +3,7 @@ const { buildTrainingProgress } = require("../utils/training-progress");
 function createReportDomainService({
   reportRepository,
   sharedRepository,
+  reportingProgressToday,
   normalizeEntry,
   parseImportRows,
   detectImportColumns,
@@ -336,7 +337,8 @@ function createReportDomainService({
       reportingProgress: buildTrainingProgress({
         trainingStartDate: user.ausbildungsStart,
         trainingEndDate: user.ausbildungsEnde,
-        entries
+        entries,
+        today: reportingProgressToday || new Date()
       })
     };
   }

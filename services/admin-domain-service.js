@@ -19,7 +19,26 @@ function createAdminDomainService({
   }
 
   function isIsoDate(value) {
-    return /^\d{4}-\d{2}-\d{2}$/.test(value);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return false;
+    }
+
+    const [year, month, day] = String(value).split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  }
+
+  function parseImportedTrainingDate(value) {
+    if (value === undefined || value === null || value === "") {
+      return { value: "", provided: false };
+    }
+
+    const parsed = adminRepository.parseImportedDate(value);
+    if (!parsed) {
+      return { error: "ungueltig" };
+    }
+
+    return { value: parsed, provided: true };
   }
 
   function validateTrainingWindow(role, ausbildungsStart, ausbildungsEnde) {
@@ -147,10 +166,14 @@ function createAdminDomainService({
       const betrieb = String(mapping.betrieb !== undefined ? rawRow[mapping.betrieb] || "" : "").trim();
       const berufsschule = String(mapping.berufsschule !== undefined ? rawRow[mapping.berufsschule] || "" : "").trim();
       const trainerUsernames = parseTrainerUsernames(mapping.trainerUsernames !== undefined ? rawRow[mapping.trainerUsernames] || "" : "", normalizeUsername);
+      const parsedAusbildungsStart = parseImportedTrainingDate(mapping.ausbildungsStart !== undefined ? rawRow[mapping.ausbildungsStart] : "");
+      const parsedAusbildungsEnde = parseImportedTrainingDate(mapping.ausbildungsEnde !== undefined ? rawRow[mapping.ausbildungsEnde] : "");
+      const ausbildungsStart = parsedAusbildungsStart.value || "";
+      const ausbildungsEnde = parsedAusbildungsEnde.value || "";
       const errors = [];
       const warnings = [];
 
-      if (!name && !username && !email && !role && !password && !ausbildung && !betrieb && !berufsschule && !trainerUsernames.length) {
+      if (!name && !username && !email && !role && !password && !ausbildung && !betrieb && !berufsschule && !trainerUsernames.length && !ausbildungsStart && !ausbildungsEnde) {
         continue;
       }
 
@@ -163,6 +186,13 @@ function createAdminDomainService({
       if (role === "trainee" && !ausbildung) errors.push("Azubis benoetigen eine Ausbildung");
       if (role === "trainee" && !trainerUsernames.length) errors.push("Fuer Azubis muss mindestens ein Ausbilder zugeordnet werden");
       if (role !== "trainee" && trainerUsernames.length) errors.push("trainer_usernames ist nur fuer Azubis erlaubt");
+      if (parsedAusbildungsStart.error) errors.push("Ausbildungsbeginn ist ungueltig");
+      if (parsedAusbildungsEnde.error) errors.push("Ausbildungsende ist ungueltig");
+      if (role !== "trainee" && ausbildungsStart) errors.push("ausbildungsbeginn ist nur fuer Azubis erlaubt");
+      if (role !== "trainee" && ausbildungsEnde) errors.push("ausbildungsende ist nur fuer Azubis erlaubt");
+      if (role === "trainee" && ausbildungsStart && ausbildungsEnde && ausbildungsStart > ausbildungsEnde) {
+        errors.push("Ausbildungsbeginn darf nicht nach dem Ausbildungsende liegen");
+      }
 
       if (usernameRows.has(username)) {
         errors.push(`Benutzername doppelt in Datei (Zeile ${usernameRows.get(username)})`);
@@ -186,6 +216,9 @@ function createAdminDomainService({
       if (!password) {
         warnings.push("Kein Passwort angegeben: Beim Import wird ein zufaelliges Initialpasswort erzeugt.");
       }
+      if (role === "trainee" && !ausbildungsStart && !ausbildungsEnde) {
+        warnings.push("Kein Ausbildungszeitraum angegeben: Das Konto wird ohne Ausbildungsbeginn und Ausbildungsende importiert.");
+      }
 
       fileRows.push({
         rowNumber,
@@ -197,6 +230,8 @@ function createAdminDomainService({
         ausbildung,
         betrieb,
         berufsschule,
+        ausbildungsStart,
+        ausbildungsEnde,
         trainerUsernames,
         errors,
         warnings
@@ -266,6 +301,8 @@ function createAdminDomainService({
             ausbildung: row.ausbildung,
             betrieb: row.betrieb,
             berufsschule: row.berufsschule,
+            ausbildungs_start: row.role === "trainee" ? row.ausbildungsStart || null : null,
+            ausbildungs_ende: row.role === "trainee" ? row.ausbildungsEnde || null : null,
             theme_preference: "system"
           }, ["id"]);
 
@@ -291,7 +328,9 @@ function createAdminDomainService({
               username: row.username,
               email: row.email,
               role: row.role,
-              ausbildung: row.ausbildung || ""
+              ausbildung: row.ausbildung || "",
+              ausbildungsStart: row.ausbildungsStart || "",
+              ausbildungsEnde: row.ausbildungsEnde || ""
             },
             trx
           });

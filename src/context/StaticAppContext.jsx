@@ -46,7 +46,14 @@ function sanitizeUser(user) {
 }
 
 function isIsoDate(value) {
-  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "").trim());
+  const normalized = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return false;
+  }
+
+  const [year, month, day] = normalized.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 }
 
 function parseIsoDate(value) {
@@ -59,6 +66,37 @@ function parseIsoDate(value) {
 
 function formatIsoDate(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function parseImportedDateValue(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed?.y && parsed?.m && parsed?.d) {
+      const isoValue = `${String(parsed.y).padStart(4, "0")}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
+      if (!isIsoDate(isoValue)) {
+        return "";
+      }
+      return `${String(parsed.y).padStart(4, "0")}-${String(parsed.m).padStart(2, "0")}-${String(parsed.d).padStart(2, "0")}`;
+    }
+  }
+
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (isIsoDate(raw)) return raw;
+
+  const dotted = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if (dotted) {
+    const isoValue = `${String(Number(dotted[3])).padStart(4, "0")}-${String(Number(dotted[2])).padStart(2, "0")}-${String(Number(dotted[1])).padStart(2, "0")}`;
+    return isIsoDate(isoValue) ? isoValue : "";
+  }
+
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    const isoValue = formatIsoDate(parsed);
+    return isIsoDate(isoValue) ? isoValue : "";
+  }
+
+  return "";
 }
 
 function buildReportingProgress(trainee, entries, today = new Date()) {
@@ -346,10 +384,14 @@ function parseUserRows(payload, store) {
     const role = String(row.role || row.Rolle || "trainee").trim().toLowerCase();
     const username = normalizeUsername(row.username || row.Benutzername || "");
     const email = String(row.email || row["E-Mail"] || "").trim().toLowerCase();
+    const trainingStartRaw = row.ausbildungsbeginn ?? row.ausbildungsStart ?? row.training_start_date ?? row.trainingStartDate ?? row.Startdatum ?? "";
+    const trainingEndRaw = row.ausbildungsende ?? row.ausbildungsEnde ?? row.training_end_date ?? row.trainingEndDate ?? row.Enddatum ?? "";
     const trainerUsernames = String(row.trainerUsernames || row.Ausbilder || "")
       .split(/[|,]/)
       .map((item) => normalizeUsername(item))
       .filter(Boolean);
+    const ausbildungsStart = parseImportedDateValue(trainingStartRaw);
+    const ausbildungsEnde = parseImportedDateValue(trainingEndRaw);
     const errors = [];
     const warnings = [];
 
@@ -360,6 +402,16 @@ function parseUserRows(payload, store) {
     if (store.users.some((user) => user.username === username)) errors.push("Benutzername existiert bereits.");
     if (store.users.some((user) => user.email === email)) errors.push("E-Mail existiert bereits.");
     if (role === "trainee" && !trainerUsernames.length) errors.push("Fuer Azubis muss mindestens ein Ausbilder zugeordnet werden.");
+    if (trainingStartRaw && !ausbildungsStart) errors.push("Ausbildungsbeginn ist ungueltig.");
+    if (trainingEndRaw && !ausbildungsEnde) errors.push("Ausbildungsende ist ungueltig.");
+    if (role !== "trainee" && ausbildungsStart) errors.push("ausbildungsbeginn ist nur fuer Azubis erlaubt.");
+    if (role !== "trainee" && ausbildungsEnde) errors.push("ausbildungsende ist nur fuer Azubis erlaubt.");
+    if (role === "trainee" && ausbildungsStart && ausbildungsEnde && ausbildungsStart > ausbildungsEnde) {
+      errors.push("Ausbildungsbeginn darf nicht nach dem Ausbildungsende liegen.");
+    }
+    if (role === "trainee" && !ausbildungsStart && !ausbildungsEnde) {
+      warnings.push("Kein Ausbildungszeitraum angegeben.");
+    }
 
     const missingTrainers = trainerUsernames.filter((trainerUsername) => !knownTrainers.has(trainerUsername));
     if (missingTrainers.length) {
@@ -376,6 +428,8 @@ function parseUserRows(payload, store) {
       ausbildung: String(row.ausbildung || row.Ausbildung || "").trim(),
       betrieb: String(row.betrieb || row.Betrieb || "").trim(),
       berufsschule: String(row.berufsschule || row.Berufsschule || "").trim(),
+      ausbildungsStart,
+      ausbildungsEnde,
       trainerUsernames,
       canImport: errors.length === 0,
       errors,
@@ -986,8 +1040,8 @@ export function StaticAppProvider({ children }) {
           ausbildung: row.ausbildung,
           betrieb: row.betrieb,
           berufsschule: row.berufsschule,
-          ausbildungsStart: "",
-          ausbildungsEnde: "",
+          ausbildungsStart: row.role === "trainee" ? row.ausbildungsStart || "" : "",
+          ausbildungsEnde: row.role === "trainee" ? row.ausbildungsEnde || "" : "",
           trainerIds,
           themePreference: "system"
         });

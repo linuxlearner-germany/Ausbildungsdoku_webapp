@@ -11,6 +11,7 @@ function createAdminModule({ db, sharedRepository, auditHelpers, helpers, import
   const adminRepository = createAdminRepository({
     db,
     parseTrainerIds: sharedRepository.parseTrainerIds,
+    parseImportedDate: imports.parseImportedDate,
     saveEducation: sharedRepository.saveEducation,
     listUsersWithRelations: sharedRepository.listUsersWithRelations,
     listEducations: sharedRepository.listEducations,

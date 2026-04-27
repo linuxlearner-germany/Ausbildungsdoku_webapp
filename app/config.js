@@ -126,6 +126,7 @@ const envSchema = z.object({
   SERVER_KEEP_ALIVE_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(5_000),
   SHUTDOWN_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(10_000),
   REQUEST_BODY_LIMIT: z.string().trim().min(1).default("15mb"),
+  REPORTING_PROGRESS_TODAY: z.string().trim().optional().default(""),
   APPLY_MIGRATIONS_ON_START: z.union([z.string(), z.boolean()]).optional(),
   BOOTSTRAP_DATABASE_ON_START: z.union([z.string(), z.boolean()]).optional(),
   RESET_DATABASE_ON_START: z.union([z.string(), z.boolean()]).optional(),
@@ -181,6 +182,7 @@ function createConfig({ env = process.env } = {}) {
     SERVER_KEEP_ALIVE_TIMEOUT_MS: readNumberEnv(env.SERVER_KEEP_ALIVE_TIMEOUT_MS, 5_000),
     SHUTDOWN_TIMEOUT_MS: readNumberEnv(env.SHUTDOWN_TIMEOUT_MS, 10_000),
     REQUEST_BODY_LIMIT: readStringEnv(env.REQUEST_BODY_LIMIT, "15mb"),
+    REPORTING_PROGRESS_TODAY: readStringEnv(env.REPORTING_PROGRESS_TODAY, ""),
     APPLY_MIGRATIONS_ON_START: env.APPLY_MIGRATIONS_ON_START,
     BOOTSTRAP_DATABASE_ON_START: env.BOOTSTRAP_DATABASE_ON_START,
     RESET_DATABASE_ON_START: env.RESET_DATABASE_ON_START,
@@ -245,6 +247,13 @@ function createConfig({ env = process.env } = {}) {
   const trustProxy = readTrustProxy(values.TRUST_PROXY);
   const sessionTtlSeconds = values.SESSION_TTL_SECONDS || Math.ceil(values.SESSION_MAX_AGE_MS / 1000);
   const sessionCookieDomain = readStringEnv(values.SESSION_COOKIE_DOMAIN, "");
+  const reportingProgressToday = values.REPORTING_PROGRESS_TODAY
+    ? new Date(values.REPORTING_PROGRESS_TODAY)
+    : null;
+
+  if (reportingProgressToday && Number.isNaN(reportingProgressToday.getTime())) {
+    throw new Error("REPORTING_PROGRESS_TODAY muss ein gueltiges Datum oder ISO-Zeitstempel sein.");
+  }
 
   const config = {
     projectRoot,
@@ -275,6 +284,9 @@ function createConfig({ env = process.env } = {}) {
     security: {
       hstsEnabled: isProduction,
       requestBodyLimit: values.REQUEST_BODY_LIMIT
+    },
+    runtime: {
+      reportingProgressToday
     },
     bootstrap: {
       applyMigrationsOnStart,

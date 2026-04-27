@@ -413,10 +413,10 @@ await test("Admin kann Nutzer per CSV validieren und importieren", { concurrency
   const adminCookie = extractCookie(adminLogin);
 
   const previewCsv = [
-    "name,username,email,role,password,ausbildung,betrieb,berufsschule,trainer_usernames",
-    "CSV Ausbilder,csv-trainer,csv-trainer@example.com,trainer,Passwort123!,,,,",
-    "CSV Azubi,csv-azubi,csv-azubi@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,csv-trainer",
-    "Fehler Doppelung,azubi,azubi@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,trainer"
+    "name,username,email,role,password,ausbildung,betrieb,berufsschule,ausbildungsbeginn,ausbildungsende,trainer_usernames",
+    "CSV Ausbilder,csv-trainer,csv-trainer@example.com,trainer,Passwort123!,,,,,,",
+    "CSV Azubi,csv-azubi,csv-azubi@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,2026-09-01,2029-08-31,csv-trainer",
+    "Fehler Doppelung,azubi,azubi@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,2026-09-01,2029-08-31,trainer"
   ].join("\n");
 
   const previewResponse = await postJson(
@@ -433,12 +433,14 @@ await test("Admin kann Nutzer per CSV validieren und importieren", { concurrency
   assert.equal(preview.summary.validRows, 2);
   assert.equal(preview.summary.invalidRows, 1);
   assert.equal(preview.rows.find((row) => row.username === "csv-azubi").trainerUsernames.includes("csv-trainer"), true);
+  assert.equal(preview.rows.find((row) => row.username === "csv-azubi").ausbildungsStart, "2026-09-01");
+  assert.equal(preview.rows.find((row) => row.username === "csv-azubi").ausbildungsEnde, "2029-08-31");
   assert.equal(preview.rows.find((row) => row.username === "azubi").errors.some((error) => error.includes("existiert bereits")), true);
 
   const importCsv = [
-    "name,username,email,role,password,ausbildung,betrieb,berufsschule,trainer_usernames",
-    "CSV Import Ausbilder,csv-import-trainer,csv-import-trainer@example.com,trainer,Passwort123!,,,,",
-    "CSV Import Azubi,csv-import-azubi,csv-import-azubi@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,csv-import-trainer"
+    "name,username,email,role,password,ausbildung,betrieb,berufsschule,training_start_date,training_end_date,trainer_usernames",
+    "CSV Import Ausbilder,csv-import-trainer,csv-import-trainer@example.com,trainer,Passwort123!,,,,,,",
+    "CSV Import Azubi,csv-import-azubi,csv-import-azubi@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,2026-09-01,2029-08-31,csv-import-trainer"
   ].join("\n");
 
   const importResponse = await postJson(
@@ -463,6 +465,39 @@ await test("Admin kann Nutzer per CSV validieren und importieren", { concurrency
   assert.ok(importedTrainer);
   assert.ok(importedTrainee);
   assert.equal(importedTrainee.trainerIds.includes(importedTrainer.id), true);
+  assert.equal(importedTrainee.ausbildungsStart, "2026-09-01");
+  assert.equal(importedTrainee.ausbildungsEnde, "2029-08-31");
+  });
+});
+
+await test("Admin-CSV-Import markiert ungueltige Ausbildungsdaten klar", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+  const adminLogin = await postJson(`${baseUrl}/api/login`, {
+    identifier: "admin",
+    password: "admin123"
+  });
+  const adminCookie = extractCookie(adminLogin);
+
+  const previewCsv = [
+    "name,username,email,role,password,ausbildung,betrieb,berufsschule,ausbildungsbeginn,ausbildungsende,trainer_usernames",
+    "Ungueltiger Zeitraum,invalid-dates,invalid-dates@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,2029-08-31,2026-09-01,trainer",
+    "Ungueltiges Datum,invalid-date-format,invalid-date-format@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,31/31/2026,2029-08-31,trainer"
+  ].join("\n");
+
+  const previewResponse = await postJson(
+    `${baseUrl}/api/admin/users/import-preview`,
+    {
+      filename: "benutzer-invalid.csv",
+      contentBase64: Buffer.from(previewCsv, "utf8").toString("base64")
+    },
+    adminCookie
+  );
+  assert.equal(previewResponse.status, 200);
+  const preview = await previewResponse.json();
+  assert.equal(preview.summary.validRows, 0);
+  assert.equal(preview.summary.invalidRows, 2);
+  assert.equal(preview.rows.find((row) => row.username === "invalid-dates").errors.some((error) => error.includes("nicht nach dem Ausbildungsende")), true);
+  assert.equal(preview.rows.find((row) => row.username === "invalid-date-format").errors.some((error) => error.includes("Ausbildungsbeginn ist ungueltig")), true);
   });
 });
 

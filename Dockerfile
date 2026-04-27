@@ -1,49 +1,62 @@
 # syntax=docker/dockerfile:1.7
 
-# Schlankes Node-LTS-Image als gemeinsame Basis für Build und Runtime.
+# Gemeinsames Node-LTS-Basisimage fuer Build und Runtime.
 FROM node:20-bookworm-slim AS base
-# Einheitliches Arbeitsverzeichnis in allen Stages.
 WORKDIR /app
 
 FROM base AS deps
-# Nur Package-Metadaten kopieren, damit Dependency-Layer bei Code-Änderungen wiederverwendbar bleibt.
+# Abhaengigkeiten werden getrennt installiert, damit Build-Layer wiederverwendbar bleiben.
 COPY package*.json ./
 RUN npm ci --no-audit --fetch-retries=5 --fetch-retry-maxtimeout=120000
 
 FROM deps AS build
-# Vollständiger Quellcode wird nur in der Build-Stage benötigt.
+# Das Frontend wird einmalig gebaut und spaeter in die Runtime uebernommen.
 COPY . .
-# Baut das React-Frontend in `public/` für die Runtime.
 RUN npm run build
 
-FROM node:20-bookworm-slim AS runtime
-# Runtime bleibt getrennt von der Build-Stage und enthält nur Produktionsabhängigkeiten.
+FROM node:20-bookworm-slim AS runtime-base
+# Runtime-Basis mit PDF-Fonts und eigenem Non-Root-User fuer den App-Prozess.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates fonts-dejavu-core \
+  && rm -rf /var/lib/apt/lists/* \
+  && groupadd --system appuser \
+  && useradd --system --gid appuser --create-home --home-dir /home/appuser appuser
 WORKDIR /app
 ENV NODE_ENV=production
 
+FROM runtime-base AS local
+# Lokales Docker-Image enthaelt Quellcode, Tests und Dev-Dependencies fuer Docker-first Wartung.
+COPY --from=deps /app/node_modules ./node_modules
+COPY --chown=appuser:appuser . .
+COPY --from=build --chown=appuser:appuser /app/public ./public
+EXPOSE 3010
+USER appuser
+CMD ["node", "index.js"]
+
+FROM runtime-base AS runtime
+# Produktions-Runtime enthaelt nur benoetigte Produktionsabhaengigkeiten.
 COPY package*.json ./
-# Dev-Dependencies werden im finalen Image nicht installiert.
 RUN npm ci --omit=dev --no-audit --fetch-retries=5 --fetch-retry-maxtimeout=120000
 
-# Nur Laufzeitdateien aus der Build-Stage übernehmen.
-COPY --from=build /app/app ./app
-COPY --from=build /app/controllers ./controllers
-COPY --from=build /app/data ./data
-COPY --from=build /app/middleware ./middleware
-COPY --from=build /app/modules ./modules
-COPY --from=build /app/public ./public
-COPY --from=build /app/Pictures ./Pictures
-COPY --from=build /app/repositories ./repositories
-COPY --from=build /app/routes ./routes
-COPY --from=build /app/services ./services
-COPY --from=build /app/sessions ./sessions
-COPY --from=build /app/utils ./utils
-COPY --from=build /app/validation ./validation
-COPY --from=build /app/index.js ./index.js
-COPY --from=build /app/knexfile.js ./knexfile.js
+# Laufzeitdateien, Builds und Migrationsskripte werden aus der Build-Stage uebernommen.
+COPY --from=build --chown=appuser:appuser /app/app ./app
+COPY --from=build --chown=appuser:appuser /app/controllers ./controllers
+COPY --from=build --chown=appuser:appuser /app/data ./data
+COPY --from=build --chown=appuser:appuser /app/middleware ./middleware
+COPY --from=build --chown=appuser:appuser /app/modules ./modules
+COPY --from=build --chown=appuser:appuser /app/public ./public
+COPY --from=build --chown=appuser:appuser /app/Pictures ./Pictures
+COPY --from=build --chown=appuser:appuser /app/repositories ./repositories
+COPY --from=build --chown=appuser:appuser /app/routes ./routes
+COPY --from=build --chown=appuser:appuser /app/scripts ./scripts
+COPY --from=build --chown=appuser:appuser /app/services ./services
+COPY --from=build --chown=appuser:appuser /app/sessions ./sessions
+COPY --from=build --chown=appuser:appuser /app/utils ./utils
+COPY --from=build --chown=appuser:appuser /app/validation ./validation
+COPY --from=build --chown=appuser:appuser /app/index.js ./index.js
+COPY --from=build --chown=appuser:appuser /app/knexfile.js ./knexfile.js
+COPY --from=build --chown=appuser:appuser /app/package.json ./package.json
 
-# Standardport der HTTP-Anwendung.
 EXPOSE 3010
-
-# App-Start inklusive Runtime-Initialisierung, Migrationen und optionalem Bootstrap.
+USER appuser
 CMD ["node", "index.js"]

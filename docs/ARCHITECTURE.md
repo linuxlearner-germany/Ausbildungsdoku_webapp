@@ -1,41 +1,50 @@
-# Architektur
+# Architecture
 
-## Backend
+## Runtime
 
-Die Runtime wird in [index.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/index.js) zusammengesetzt:
+Die Runtime startet in [index.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/index.js):
 
 1. Konfiguration laden
 2. Redis verbinden
 3. MSSQL verbinden
-4. Migrationen ausfuehren
-5. Bootstrap ausfuehren
+4. Migrationen ausführen
+5. Bootstrap ausführen
 6. Express-App starten
 
-Die Express-Anwendung selbst entsteht in [app/create-app.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/app/create-app.js).
+## Backend-Schichten
 
-## Schichten
-
-- `modules/`: pro Fachbereich die verdrahtete Modulgrenze
-- `repositories/`: MSSQL-Zugriff ueber Knex
-- `services/`: Fachlogik und API-nahe Services
+- `app/`: Runtime-Zusammenbau, Config, DB/Redis-Setup
+- `routes/`: API-Routen
 - `controllers/`: Request-Validierung und Response-Mapping
-- `routes/`: Express-Routen
-- `middleware/`: Core-, Security- und Fehler-Middleware
+- `services/`: Fachlogik
+- `repositories/`: MSSQL-Zugriffe über Knex
+- `middleware/`: Core, Security, Fehlerbehandlung
+- `sessions/`: Session-Middleware mit RedisStore
 
-## Infrastruktur
+## Datenhaltung
 
-- MSSQL ist der einzige Datenbankpfad
+- MSSQL ist die einzige Datenbank
 - Redis ist der einzige Session-Store
-- Session-Middleware wird immer mit Redis-Store gebaut
-- Health-Endpunkte pruefen Readiness aktiv gegen MSSQL und Redis
+- Es gibt keinen SQLite-Pfad
+- Es gibt keinen In-Memory-Session-Fallback
 
 ## Frontend
 
-- React SPA mit Routing ueber `react-router-dom`
-- Styling ueber Bootstrap 5 plus projektbezogene CSS-Dateien
-- Layout mit fester Seitenleiste auf Desktop und mobilem Overlay-Menue auf kleineren Viewports
+- React SPA mit `react-router-dom`
+- Bootstrap als UI-Basis
+- zentrale Navigation über [src/navigation/menuConfig.mjs](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/src/navigation/menuConfig.mjs)
+- gemeinsames Layout über `AppShell`, `SidebarNavigation` und `Topbar`
 
-## Konfiguration
+## Routing
 
-Nur [app/config.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/app/config.js) liest `process.env`.
-Alle anderen Runtime-Pfade arbeiten mit dem normalisierten Config-Objekt.
+- Frontend unter `/`
+- API unter `/api`
+- `APP_BASE_PATH` und `API_BASE_URL` werden zentral aus der Runtime-Konfiguration abgeleitet
+- `/api/api`-Doppelungen werden clientseitig vermieden
+
+## Wichtige Fachregeln
+
+- PDF exportiert nur signierte Berichte
+- Trainer sehen nur zugeordnete Azubis
+- Admin-Funktionen bleiben auf Admin-Routen beschränkt
+- Audit-Logs bleiben serverseitig geführt

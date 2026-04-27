@@ -9,7 +9,7 @@ export function SidebarNavigation({ user, mobileNavOpen, onNavigate }) {
   return (
     <aside className={`sidebar${mobileNavOpen ? " is-open" : ""}`} aria-label="Seitenleiste">
       <div className="sidebar-brand">
-        <img src={assetUrl("/Pictures/wiweb-logo-kurz-blau_neu.png")} alt="WIWEB Logo" className="sidebar-logo" />
+        <img src={assetUrl("/Pictures/logo-short.png")} alt="Ausbildungsdoku Logo" className="sidebar-logo" />
         <div>
           <strong className="d-block">Ausbildungsdoku</strong>
           <small className="text-body-secondary">Digitales Berichtsheft</small>

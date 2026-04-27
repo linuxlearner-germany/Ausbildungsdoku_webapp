@@ -244,6 +244,10 @@ function UserImportRowPreview({ row }) {
         <span>{row.berufsschule || "-"}</span>
         <span>{row.trainerUsernames?.length ? row.trainerUsernames.join(" | ") : "-"}</span>
       </div>
+      <div className="import-row-grid">
+        <span>Beginn: {row.ausbildungsStart || "-"}</span>
+        <span>Ende: {row.ausbildungsEnde || "-"}</span>
+      </div>
       {row.errors?.length ? <p className="field-message error">{row.errors.join(" | ")}</p> : null}
       {row.warnings?.length ? <p className="field-message">{row.warnings.join(" | ")}</p> : null}
     </div>
@@ -849,9 +853,9 @@ export function AdminUsersPage({ section = "users", users, educations, onCreateU
               ? "Azubi-Zuordnungen"
               : section === "audit"
                 ? "Audit-Log"
-                : "Benutzerverwaltung"
+              : "Benutzerverwaltung"
         }
-        actions={<PrimaryButton onClick={handleExportCsv}>CSV exportieren</PrimaryButton>}
+        actions={section === "users" ? <PrimaryButton onClick={handleExportCsv}>CSV exportieren</PrimaryButton> : null}
       />
       {csvError ? <div className="field-message error">{csvError}</div> : null}
       <AdminSectionNav currentSection={section === "create" ? "admin-create-user" : section === "assignments" ? "admin-assignments" : section === "audit" ? "admin-audit-log" : "admin-users"} />
@@ -900,13 +904,13 @@ export function AdminUsersPage({ section = "users", users, educations, onCreateU
                   <div className="list-row">
                     <div>
                       <strong>Azubis brauchen einen Ausbilder</strong>
-                      <p>Neue und bearbeitete Azubi-Konten werden nur mit gültiger Zuordnung gespeichert.</p>
+                      <p>Azubi-Konten werden nur mit gueltiger Ausbilderzuordnung gespeichert oder importiert.</p>
                     </div>
                   </div>
                   <div className="list-row">
                     <div>
                       <strong>CSV-Import erstellt nur neue Nutzer</strong>
-                      <p>Vor dem Import wird eine Vorschau mit Validierung und Ausbilderprüfung angezeigt.</p>
+                      <p>Die Vorschau prueft Dubletten, Ausbilder und optional den Ausbildungszeitraum fuer Azubis.</p>
                     </div>
                   </div>
                   <div className="list-row">

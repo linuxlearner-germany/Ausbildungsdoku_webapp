@@ -1,10 +1,13 @@
 node_modules
 .env
 .idea
+backups/
 data/*.db
 data/*.db-*
 data/*.json
 public/app.js
 public/app.js.map
 public/app.css
+public/*.png
+*.bak
 *.log

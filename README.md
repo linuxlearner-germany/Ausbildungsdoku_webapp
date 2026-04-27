@@ -2,357 +2,261 @@
 
 ## Überblick
 
-Die Ausbildungsdoku Webapp ist eine Webanwendung für digitale Berichtshefte in der Ausbildung.  
-Sie richtet sich an Azubis, Ausbilder und Verwaltung und deckt die Pflege von Tagesberichten, Freigaben, Profilen, Noten sowie Exporte für PDF und CSV ab.
+Die Ausbildungsdoku Webapp ist ein digitales Berichtsheft mit getrennten Rollen für Azubis, Ausbilder und Admins. Die Anwendung deckt Berichte, Freigaben, Noten, Exporte, Benutzerverwaltung und Audit-Logs ab.
 
-Hauptfunktionen:
+## Hauptfunktionen
 
-- Tagesberichte erfassen, bearbeiten und einreichen
-- Berichte durch Ausbilder prüfen, kommentieren und signieren
-- Azubi-, Ausbilder- und Admin-Rollen mit getrennten Workflows
-- Profil- und Stammdatenpflege
+- Berichtsheft mit Entwurf, Einreichung, Signatur und Nachbearbeitung
+- Freigaben für Ausbilder
 - Notenverwaltung
-- CSV-/PDF-Exporte
-
-## Features
-
-- Tagesberichte mit Kalender-, Listen- und Schreibansicht
-- Freigabe-Workflow mit Entwurf, Einreichung, Signatur und Nachbearbeitung
-- Trainer- und Admin-Freigaben inklusive Kommentar- und Sammelaktionen
-- CSV-Importe für Berichte und Benutzer mit Vorschau und Validierung
-- PDF-Export ausschließlich für signierte Berichte
-- CSV-Export für eigene Berichte und Verwaltungsdaten
-- Theme-Umschaltung für Hell, Dunkel und System mit persistenter Speicherung
-- Audit-Log für Verwaltungsaktionen
+- CSV-Import und CSV-Export inklusive Ausbildungszeitraum fuer Azubis
+- PDF-Export
+- Adminbereich mit Benutzerverwaltung, Zuordnungen und Audit-Log
+- Rollenmodell für `admin`, `trainee`, `trainer`
 
 ## Tech Stack
 
-- Node.js
-- Express
+- Node.js / Express
 - React
 - Bootstrap 5
 - Microsoft SQL Server
 - Redis
 - Docker
 
-## Architektur
-
-Die Anwendung trennt HTTP-, Fach- und Datenzugriffsschichten bewusst:
-
-- `routes/` registriert HTTP-Endpunkte
-- `controllers/` validiert Requests und formt Responses
-- `services/` und `domain-services/` enthalten Fachlogik
-- `repositories/` kapseln Datenbankzugriffe
-- `app/config.js` liest und validiert die komplette Runtime-Konfiguration
-- Sessions werden über Redis gespeichert
-- MSSQL ist die einzige Runtime-Datenbank
-
-Wichtige Einstiegspunkte:
-
-- [index.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/index.js): Runtime-Initialisierung und HTTP-Serverstart
-- [app/create-app.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/app/create-app.js): Express-App und Middleware
-- [app/create-db.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/app/create-db.js): Knex-/MSSQL-Setup
-- [sessions/create-session-middleware.js](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/sessions/create-session-middleware.js): Session-Store mit Redis
-
-## Betriebsmodi
-
-### 1. Host-basiert
-
-Die App läuft lokal auf dem Host. MSSQL und Redis laufen extern oder bereits separat lokal.
-
-Verwendung:
-
-- App lokal mit `npm run dev` oder `npm start`
-- MSSQL und Redis über `.env` konfigurieren
-
-### 2. Lokaler Infra-Stack
-
-MSSQL und Redis laufen per Docker, die App selbst lokal auf dem Host.
-
-Verwendung:
-
-- ideal für tägliche Entwicklung
-- gleiche Datenbank-/Session-Richtung wie im späteren Betrieb
-
-### 3. Full Docker
-
-App, MSSQL und Redis laufen gemeinsam per Docker Compose.
-
-Verwendung:
-
-- vollständiger lokaler Stack
-- sinnvoll für reproduzierbare lokale Umgebungen
-- Standardstart über `make up`
-
-## Setup
-
-### Schnellstart
-
-Der klare Standard-Einstieg fuer die komplette lokale Anwendung ist:
+## Schnellstart lokal mit Docker
 
 ```bash
-make up
-```
-
-Das Ziel erledigt:
-
-- `.env` bei Bedarf aus `.env.example` erzeugen
-- Docker-Erreichbarkeit pruefen
-- Full-Docker-Stack mit App, MSSQL und Redis bauen und starten
-- auf den Healthy-Status der App warten
-
-Wichtige Begleitbefehle:
-
-```bash
-make down
-make logs
-make ps
-```
-
-### Standard-Setup mit lokalem Infra-Stack
-
-```bash
-npm install
+git clone https://github.com/linuxlearner-germany/Ausbildungsdoku_webapp.git
+cd Ausbildungsdoku_webapp
 cp .env.example .env
-npm run infra:up
-npm run db:migrate
-npm run db:bootstrap
-npm run dev
+docker compose -f docker-compose.local.yml up -d --build
 ```
 
-Standardports:
+URLs:
 
-- App: `3010`
-- MSSQL: `1433`
-- Redis: `6379`
+- App: http://localhost:3010
+- Ready: http://localhost:3010/api/ready
 
-### Host-basiert gegen externe MSSQL-/Redis-Instanzen
+## Standardnutzer / Initial Admin
 
-1. `npm install`
-2. `cp .env.example .env`
-3. Verbindungsdaten in `.env` setzen
-4. `npm run db:migrate`
-5. `npm run db:bootstrap`
-6. `npm start`
+Die App legt beim ersten Start den Initial-Admin aus `.env` an:
 
-### Full Docker
-
-```bash
-make up
-```
-
-Beenden:
-
-```bash
-make down
-```
-
-## Docker
-
-### Dockerfile
-
-Das `Dockerfile` ist mehrstufig aufgebaut:
-
-- `deps`: installiert Abhängigkeiten
-- `build`: baut das Frontend
-- `runtime`: enthält nur die Produktionslaufzeit
-
-Ziel:
-
-- kleines Runtime-Image
-- reproduzierbarer Frontend-Build
-- keine Dev-Dependencies im finalen Container
-
-### docker-compose.yml
-
-Produktionsnaher Modus:
-
-- startet nur die App
-- MSSQL und Redis werden extern angebunden
-- geeignet für Deployment-Szenarien mit vorhandener Infrastruktur
-
-### docker-compose.local.yml
-
-Vollständiger lokaler Stack:
-
-- `app`: Node-/Express-Anwendung
-- `mssql`: lokale MSSQL-Instanz
-- `mssql-init`: erzeugt Runtime- und Testdatenbank
-- `redis`: lokaler Session-Store
-
-Empfohlene Bedienung:
-
-- `make up` statt direkter `docker compose`- oder `npm`-Aufrufe
-- `make down` zum Stoppen
-- `make logs` fuer Diagnose
-
-## Wichtige Umgebungsvariablen
-
-### App / Server
-
-- `NODE_ENV`
-- `HOST`
-- `PORT`
-- `APP_BASE_URL`
-- `APP_BASE_PATH`
-- `API_BASE_URL`
-- `TRUST_PROXY`
-- `LOG_LEVEL`
-
-### Sessions / Cookies
-
-- `SESSION_SECRET`
-- `SESSION_COOKIE_NAME`
-- `SESSION_COOKIE_DOMAIN`
-- `SESSION_SECURE`
-- `SESSION_SAME_SITE`
-- `SESSION_MAX_AGE_MS`
-- `SESSION_TTL_SECONDS`
-
-### Redis
-
-- `REDIS_URL`
-- `REDIS_HOST`
-- `REDIS_PORT`
-- `REDIS_PASSWORD`
-- `REDIS_KEY_PREFIX`
-
-### MSSQL
-
-- `MSSQL_HOST`
-- `MSSQL_PORT`
-- `MSSQL_DATABASE`
-- `MSSQL_USER`
-- `MSSQL_PASSWORD`
-- `MSSQL_ENCRYPT`
-- `MSSQL_TRUST_SERVER_CERTIFICATE`
-
-### Startverhalten
-
-- `APPLY_MIGRATIONS_ON_START`
-- `BOOTSTRAP_DATABASE_ON_START`
-- `RESET_DATABASE_ON_START`
-- `ENABLE_DEMO_DATA`
 - `INITIAL_ADMIN_USERNAME`
 - `INITIAL_ADMIN_EMAIL`
 - `INITIAL_ADMIN_PASSWORD`
 
-Siehe [.env.example](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/.env.example).
+`ENABLE_DEMO_DATA=false` ist der sichere Standard für den lokalen Dauerbetrieb. Demo-Daten sollten nur bewusst für Test-/Demo-Zwecke aktiviert werden.
 
-## Datenbank und Bootstrap
+## Docker Services
 
-Migrationen:
+- `app`: Webanwendung
+- `mssql`: einzige Datenbank
+- `mssql-init`: erstellt Runtime- und Testdatenbank
+- `redis`: Session-Speicher
 
-```bash
-npm run db:migrate
-```
+## Datenpersistenz
 
-Initialdaten / Admin / optionale Demo-Daten:
+Named Volumes:
 
-```bash
-npm run db:bootstrap
-```
+- `mssql-data`: MSSQL-Daten unter `/var/opt/mssql`
+- `redis-data`: optionaler Redis-Datenpfad unter `/data`
 
-Testdatenbank zurücksetzen:
+Verhalten:
 
-```bash
-npm run db:reset-test
-```
+- `docker compose -f docker-compose.local.yml stop`
+  Container stoppen, Daten bleiben erhalten.
+- `docker compose -f docker-compose.local.yml down`
+  Container entfernen, Daten in Named Volumes bleiben erhalten.
+- `docker compose -f docker-compose.local.yml down -v`
+  Container und Volumes entfernen, Daten werden bewusst gelöscht.
+- `docker compose -f docker-compose.local.yml up -d --build`
+  Container neu bauen und starten, Volumes bleiben erhalten.
 
-## Tests
+## Standardbefehle
 
-Kompletter Testlauf:
-
-```bash
-npm test
-```
-
-Nur Unit-Tests:
-
-```bash
-npm run test:unit
-```
-
-Nur Integrationstests:
+Start:
 
 ```bash
-npm run test:integration
+docker compose -f docker-compose.local.yml up -d --build
 ```
 
-Empfohlen für lokale Integrationstests:
+Stop ohne Datenverlust:
 
 ```bash
-npm run infra:up
-npm test
+docker compose -f docker-compose.local.yml down
 ```
+
+Bewusst alles löschen:
+
+```bash
+docker compose -f docker-compose.local.yml down -v
+```
+
+Logs:
+
+```bash
+docker compose -f docker-compose.local.yml logs -f app
+```
+
+Status:
+
+```bash
+docker compose -f docker-compose.local.yml ps
+```
+
+Shell:
+
+```bash
+docker compose -f docker-compose.local.yml exec app sh
+```
+
+Migration manuell:
+
+```bash
+docker compose -f docker-compose.local.yml exec app npm run db:migrate
+```
+
+Tests Docker-first:
+
+```bash
+docker compose -f docker-compose.local.yml run --rm app npm test
+```
+
+Die Tests laufen dabei gegen `MSSQL_TEST_DATABASE`, nicht gegen die normale Runtime-Datenbank.
+
+Admin-Zugang wiederherstellen:
+
+```bash
+docker compose -f docker-compose.local.yml exec app npm run admin:reset
+```
+
+Das Kommando setzt das Passwort des konfigurierten Admins aus `.env` zurueck oder legt ihn neu an, ohne Volumes oder Fachdaten zu loeschen.
+
+Build Docker-first:
+
+```bash
+docker compose -f docker-compose.local.yml build
+```
+
+## Backup & Restore
+
+Backup:
+
+```bash
+./scripts/db-backup.sh
+```
+
+Restore:
+
+```bash
+./scripts/db-restore.sh backups/<datei>.bak
+```
+
+Backups landen lokal in `./backups` und sind per `.gitignore` vom Repository ausgeschlossen.
+
+## Updates ohne Datenverlust
+
+Manuell:
+
+```bash
+git pull
+docker compose -f docker-compose.local.yml down
+docker compose -f docker-compose.local.yml up -d --build
+```
+
+Wichtig:
+
+- `down` ohne `-v` behält Daten.
+- `down -v` löscht Daten.
+- Vor Updates ist ein Backup empfohlen.
+
+Optionales Hilfsskript:
+
+```bash
+./scripts/update-local-docker.sh
+```
+
+## ENV-Konfiguration
+
+Wichtige Variablen:
+
+- App: `NODE_ENV`, `PORT`, `HOST`, `APP_BASE_URL`, `APP_BASE_PATH`, `API_BASE_URL`, `TRUST_PROXY`
+- MSSQL: `MSSQL_HOST`, `MSSQL_PORT`, `MSSQL_DATABASE`, `MSSQL_USER`, `MSSQL_PASSWORD`, `MSSQL_ENCRYPT`, `MSSQL_TRUST_SERVER_CERTIFICATE`
+- Redis: `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
+- Sessions: `SESSION_SECRET`, `SESSION_SECURE`, `SESSION_SAME_SITE`, `SESSION_MAX_AGE_MS`
+- Bootstrap: `APPLY_MIGRATIONS_ON_START`, `BOOTSTRAP_DATABASE_ON_START`, `ENABLE_DEMO_DATA`, `RESET_DATABASE_ON_START`
+
+Mehr Details stehen in [docs/LOCAL_DOCKER.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/LOCAL_DOCKER.md).
+
+## DB-Verwaltung
+
+Empfohlene lokale Verwaltungswege:
+
+- DBeaver
+- Azure Data Studio
+
+Verbindungsdaten:
+
+- Host aus Host-Tools: `localhost`
+- interner Compose-Host: `mssql`
+- Port: `1433` bzw. `${MSSQL_LOCAL_PORT}`
+- Database: `ausbildungsdoku`
+- User: `sa`
+- Passwort: Wert aus `.env`
+
+## Redis einfach erklärt
+
+Redis speichert ausschließlich Login-Sessions. Berichte, Benutzer, Noten, Freigaben und Audit-Logs liegen nicht in Redis, sondern in MSSQL.
+
+Im lokalen Compose läuft Redis bewusst ohne Dateipersistenzmodus, weil der Fachdatenbestand ohnehin in MSSQL liegt und der stabile Session-Betrieb wichtiger ist als Redis-Disk-Backups.
+
+## MSSQL einfach erklärt
+
+MSSQL ist die Hauptdatenbank für Benutzer, Berichte, Noten, Freigaben, Zuordnungen und Audit-Logs. SQLite wird nicht verwendet.
 
 ## Rollenmodell
 
-- `trainee`: eigene Berichte, Exporte, Profilansicht und eigene Noten
-- `trainer`: Freigaben, Kommentare, PDF-Export für zugeordnete Azubis, Profilpflege für zugeordnete Azubis
-- `admin`: Benutzerverwaltung, Zuordnungen, Audit-Log, CSV-Import/-Export und Systempflege
+- `admin`: Dashboard, Benutzerverwaltung, Benutzer anlegen, Zuordnungen, Audit-Log, Profil
+- `trainee`: Dashboard, Berichte, Noten, Freigaben, Export, Archiv, Profil
+- `trainer`: Dashboard, Freigaben, Archiv, Profil
 
-Das Rollenmodell bleibt serverseitig erzwungen. Frontend-Sichten sind nur Ergänzung, nicht Sicherheitsgrenze.
+## Exportregeln
 
-## Build
+- PDF enthält ausschließlich signierte Berichte.
+- CSV bleibt für eigene Berichte verfügbar.
+- CSV wird als UTF-8 mit BOM exportiert.
+- PDF nutzt DejaVu-Fonts im Container, damit Umlaute korrekt bleiben.
 
-Frontend-Build:
+## Deployment
 
-```bash
-npm run build
-```
+Der produktionsnahe Containerbetrieb ist in [docs/DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/DEPLOYMENT.md) beschrieben.
 
-## Health-Endpunkte
+## Raspberry Pi
 
-- `GET /api/live`: Prozess lebt
-- `GET /api/health`: Prozessstatus und bekannte Abhängigkeiten
-- `GET /api/ready`: echte Readiness-Prüfung gegen MSSQL und Redis
+Der komplette Stack ist für Raspberry Pi nicht empfohlen:
 
-## Export
-
-- `GET /api/report/pdf`: PDF des eigenen Berichtshefts
-- `GET /api/report/pdf/:traineeId`: PDF für zugeordneten Azubi oder Admin-Sicht
-- `GET /api/report/csv`: CSV der eigenen Berichte
-- `GET /api/admin/users/export.csv`: Verwaltungs-CSV für Admins
-
-Fachliche Regeln:
-
-- PDF enthält ausschließlich signierte Berichte
-- PDF nutzt UTF-8-fähige Fonts, damit Umlaute korrekt bleiben
-- Leere Exporte werden mit sauberer Fehlermeldung abgewiesen
+- App und Redis können grundsätzlich auf ARM laufen.
+- Das offizielle MSSQL-Docker-Image ist auf Raspberry Pi/ARM in der Regel nicht der stabile Zielpfad.
+- Realistische Variante: App + Redis auf ARM, MSSQL extern auf x86_64.
+- Für den kompletten lokalen Stack ist ein x86_64-PC oder Server empfohlen.
 
 ## Troubleshooting
 
-- `ROUTE_NOT_FOUND` bei API-Aufrufen:
-  `APP_BASE_PATH` und `API_BASE_URL` prüfen. Der Frontend-Client baut API-Pfade zentral aus diesen Werten.
-- `503` bei `/api/ready`:
-  Erreichbarkeit von MSSQL und Redis prüfen. Sessions benötigen Redis zwingend.
-- Login schlägt lokal fehl:
-  `SESSION_SECRET`, `INITIAL_ADMIN_PASSWORD` und die MSSQL-/Redis-Verbindung in `.env` prüfen.
-- PDF leer oder nicht verfügbar:
-  Es werden nur signierte Berichte exportiert. Entwürfe, eingereichte oder zurückgegebene Berichte erscheinen nicht im PDF.
-- Tests schlagen gegen lokaler Infrastruktur fehl:
-  `npm run infra:up` ausführen und sicherstellen, dass die Testdatenbank vorhanden ist.
+- App nicht erreichbar: `docker compose -f docker-compose.local.yml ps` und `logs -f app`
+- Ready nicht grün: `curl http://localhost:3010/api/ready`
+- Port belegt: Port-Mapping in `.env` anpassen
+- DB startet nicht: `logs -f mssql`
+- Redis startet nicht: `logs -f redis`
+- Login funktioniert nicht: Redis prüfen, Session-Secret prüfen
+- Daten scheinen weg: prüfen, ob versehentlich `down -v` verwendet wurde
+- Docker startet nach Rechnerneustart nicht automatisch: Docker Desktop / Docker Engine muss selbst beim Systemstart laufen
 
-## Projektstruktur
+Weiterführende Doku:
 
-```text
-app/           Laufzeitaufbau, Konfiguration, Express-Erstellung
-controllers/   HTTP-Controller
-data/          Migrationen und Bootstrap
-middleware/    Express-Middleware
-modules/       Modulgrenzen für Features
-repositories/  Datenzugriff
-routes/        API-Routen
-services/      Fachlogik
-sessions/      Session-Setup
-src/           React-Frontend
-tests/         Unit- und Integrationstests
-utils/         Querschnittsfunktionen
-```
-
-## Weitere Dokumentation
-
-- [docs/LOCAL_DEVELOPMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/LOCAL_DEVELOPMENT.md)
-- [docs/ARCHITECTURE.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/ARCHITECTURE.md)
+- [docs/LOCAL_DOCKER.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/LOCAL_DOCKER.md)
+- [docs/BACKUP_RESTORE.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/BACKUP_RESTORE.md)
 - [docs/DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/DEPLOYMENT.md)
+- [docs/ARCHITECTURE.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/ARCHITECTURE.md)
+- [docs/SECURITY.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/SECURITY.md)
+- [docs/TROUBLESHOOTING.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/TROUBLESHOOTING.md)
+- [docs/FINAL_LOCAL_DOCKER_REPORT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/FINAL_LOCAL_DOCKER_REPORT.md)

@@ -12,6 +12,30 @@ function createApp({ config, db, redisClient, dependencies, runtimeState, logger
   const web = express.Router();
   const renderIndexHtml = createIndexHtmlRenderer(config);
 
+  async function getDependencyStatus() {
+    const dependencyState = {
+      database: "unknown",
+      redis: "unknown"
+    };
+
+    try {
+      await db.raw("SELECT 1 AS ok");
+      dependencyState.database = "up";
+    } catch (_error) {
+      dependencyState.database = "down";
+    }
+
+    try {
+      await redisClient.ping();
+      dependencyState.redis = "up";
+    } catch (_error) {
+      dependencyState.redis = "down";
+    }
+
+    runtimeState.dependencies = dependencyState;
+    return dependencyState;
+  }
+
   registerCoreMiddleware(web, {
     config,
     sessionMiddleware: createSessionMiddleware({ config, redisClient }),
@@ -53,32 +77,37 @@ function createApp({ config, db, redisClient, dependencies, runtimeState, logger
         });
       }
 
-      await db.raw("SELECT 1 AS ok");
-      await redisClient.ping();
-      runtimeState.dependencies = {
-        database: "up",
-        redis: "up"
-      };
+      const dependencyState = await getDependencyStatus();
+      if (dependencyState.database !== "up" || dependencyState.redis !== "up") {
+        throw new HttpError(503, "Abhaengigkeiten sind nicht bereit.", {
+          code: "DEPENDENCY_UNAVAILABLE",
+          details: {
+            dependencies: dependencyState
+          }
+        });
+      }
 
       res.json(createApiSuccess({
         status: "ready",
-        dependencies: runtimeState.dependencies
+        dependencies: dependencyState
       }));
     } catch (error) {
-      runtimeState.dependencies = {
-        database: "unknown",
-        redis: "unknown"
-      };
-
       if (error instanceof HttpError) {
         next(error);
         return;
       }
 
+      const dependencyState = await getDependencyStatus();
+      logger.error("Readiness-Pruefung fehlgeschlagen", {
+        error,
+        dependencies: dependencyState
+      });
+
       next(new HttpError(503, "Abhaengigkeiten sind nicht bereit.", {
         code: "DEPENDENCY_UNAVAILABLE",
         details: {
-          dependencyMessage: error.message
+          dependencyMessage: error.message,
+          dependencies: dependencyState
         }
       }));
     }

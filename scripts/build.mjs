@@ -15,6 +15,7 @@ const buildOptions = {
   format: "esm",
   sourcemap: true,
   outfile: path.join(publicDir, "app.js"),
+  external: ["/Pictures/*"],
   loader: {
     ".png": "file",
     ".jpg": "file",
