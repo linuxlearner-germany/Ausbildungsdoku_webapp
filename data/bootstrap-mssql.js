@@ -47,6 +47,69 @@ function createBootstrap({
     return { created: true, user: createdUser };
   }
 
+  async function resetInitialAdmin(trx = db) {
+    const username = config.initialAdmin.username;
+    const email = config.initialAdmin.email.toLowerCase();
+    const password = config.initialAdmin.password;
+
+    const existingByIdentity = await trx("users")
+      .where({ username })
+      .orWhere({ email })
+      .first("id", "username", "email", "role", "name", "theme_preference");
+
+    if (existingByIdentity) {
+      if (existingByIdentity.role !== "admin") {
+        throw new Error(`Konfigurierter Recovery-Admin kollidiert mit Nicht-Admin '${existingByIdentity.username}'.`);
+      }
+
+      await trx("users")
+        .where({ id: existingByIdentity.id })
+        .update({
+          username,
+          email,
+          password_hash: hashPassword(password),
+          role: "admin",
+          name: existingByIdentity.name || "Systemadministrator",
+          theme_preference: existingByIdentity.theme_preference || "system"
+        });
+
+      return {
+        created: false,
+        passwordReset: true,
+        user: {
+          id: existingByIdentity.id,
+          username,
+          email,
+          role: "admin"
+        }
+      };
+    }
+
+    const anyAdmin = await trx("users")
+      .where({ role: "admin" })
+      .first("id", "username", "email", "role");
+
+    const [createdUser] = await trx("users")
+      .insert({
+        name: "Systemadministrator",
+        username,
+        email,
+        password_hash: hashPassword(password),
+        role: "admin",
+        theme_preference: "system",
+        ausbildung: "",
+        betrieb: "Verwaltung",
+        berufsschule: ""
+      }, ["id", "username", "email", "role"]);
+
+    return {
+      created: true,
+      passwordReset: false,
+      recovered: Boolean(anyAdmin),
+      user: createdUser
+    };
+  }
+
   async function ensureDemoData(trx = db) {
     if (!config.bootstrap.enableDemoData) {
       return;
@@ -224,6 +287,7 @@ function createBootstrap({
     run,
     resetDatabase,
     ensureInitialAdmin,
+    resetInitialAdmin,
     ensureDemoData
   };
 }

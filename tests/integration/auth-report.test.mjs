@@ -37,6 +37,34 @@ await test("Login funktioniert mit Demo-User", { concurrency: false }, async () 
   });
 });
 
+await test("Login funktioniert mit gueltigem Admin", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const response = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const data = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(data.user.username, "admin");
+    assert.ok(extractCookie(response));
+  });
+});
+
+await test("Login mit falschem Admin-Passwort liefert klare Fehlermeldung", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const response = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "falsch"
+    });
+    const data = await response.json();
+
+    assert.equal(response.status, 401);
+    assert.equal(data.error.message, "E-Mail oder Passwort ist falsch.");
+    assert.equal(data.error.code, "HTTP_ERROR");
+  });
+});
+
 await test("Login-Rate-Limit greift", { concurrency: false }, async () => {
   await withIsolatedServer(async () => {
     for (let index = 0; index < 8; index += 1) {

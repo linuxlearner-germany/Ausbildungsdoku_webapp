@@ -1,6 +1,7 @@
 function createAdminRepository({
   db,
   parseTrainerIds,
+  parseImportedDate,
   saveEducation,
   listUsersWithRelations,
   listEducations,
@@ -10,6 +11,7 @@ function createAdminRepository({
 }) {
   return {
     parseTrainerIds,
+    parseImportedDate,
     saveEducation,
     listUsersWithRelations,
     listEducations,

@@ -122,3 +122,32 @@ export async function postJson(url, body, cookie = "") {
     body: JSON.stringify(body)
   });
 }
+
+export async function runNodeScript(scriptPath, envOverrides = {}) {
+  const child = spawn("node", [scriptPath], {
+    cwd: process.cwd(),
+    env: buildIntegrationTestEnv(envOverrides),
+    stdio: ["ignore", "pipe", "pipe"]
+  });
+
+  const stdout = [];
+  const stderr = [];
+
+  child.stdout.on("data", (data) => {
+    stdout.push(String(data));
+  });
+
+  child.stderr.on("data", (data) => {
+    stderr.push(String(data));
+  });
+
+  const exitCode = await new Promise((resolve) => {
+    child.once("exit", resolve);
+  });
+
+  return {
+    exitCode: Number(exitCode ?? 1),
+    stdout: stdout.join(""),
+    stderr: stderr.join("")
+  };
+}

@@ -4,7 +4,24 @@ const PDFDocument = require("pdfkit");
 
 function escapeCsvCell(value) {
   const normalized = String(value ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  return `"${normalized.replace(/"/g, "\"\"")}"`;
+  const sanitized = /^[=+\-@]/.test(normalized) ? `'${normalized}` : normalized;
+  return `"${sanitized.replace(/"/g, "\"\"")}"`;
+}
+
+function safePdfAssetPath(picturesDir, preferredFileName, fallbackFileName = "") {
+  const preferredPath = path.join(picturesDir, preferredFileName);
+  if (fs.existsSync(preferredPath)) {
+    return preferredPath;
+  }
+
+  if (fallbackFileName) {
+    const fallbackPath = path.join(picturesDir, fallbackFileName);
+    if (fs.existsSync(fallbackPath)) {
+      return fallbackPath;
+    }
+  }
+
+  return preferredPath;
 }
 
 function formatAdminCsvDateTime(value) {
@@ -174,7 +191,7 @@ function registerPdfFonts(doc) {
 }
 
 function renderPdf(res, trainee, entries, picturesDir) {
-  const logoPath = path.join(picturesDir, "WIWEB-waage-vektor_ohne_schrift.png");
+  const logoPath = safePdfAssetPath(picturesDir, "logo-mark.png", "WIWEB-waage-vektor_ohne_schrift.png");
   const fonts = registerPdfFonts(new PDFDocument({ autoFirstPage: false }));
   const sortedEntries = [...entries]
     .filter((entry) => entry.status === "signed")
@@ -400,7 +417,7 @@ function renderPdf(res, trainee, entries, picturesDir) {
 }
 
 function renderGradesPdf(res, trainee, grades, picturesDir) {
-  const logoPath = path.join(picturesDir, "WIWEB-waage-vektor_ohne_schrift.png");
+  const logoPath = safePdfAssetPath(picturesDir, "logo-mark.png", "WIWEB-waage-vektor_ohne_schrift.png");
   const sortedGrades = [...grades].sort((a, b) => String(a.fach).localeCompare(String(b.fach), "de") || String(a.datum).localeCompare(String(b.datum)));
   const doc = new PDFDocument({ size: "A4", margin: 50, autoFirstPage: true });
   const formatDate = (value) => formatCsvDate(value) || "-";

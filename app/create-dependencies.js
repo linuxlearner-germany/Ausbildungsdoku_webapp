@@ -56,6 +56,7 @@ function createDependencies({ config, db }) {
   });
 
   const reportModule = createReportModule({
+    config,
     db,
     sharedRepository,
     auditHelpers,

@@ -5,26 +5,40 @@ function toIsoDateParts(year, month, day) {
   return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function isValidDateParts(year, month, day) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
 function parseImportedDate(value) {
   if (typeof value === "number" && Number.isFinite(value)) {
     const parsed = XLSX.SSF.parse_date_code(value);
-    if (parsed?.y && parsed?.m && parsed?.d) {
+    if (parsed?.y && parsed?.m && parsed?.d && isValidDateParts(parsed.y, parsed.m, parsed.d)) {
       return toIsoDateParts(parsed.y, parsed.m, parsed.d);
     }
   }
 
   const raw = String(value || "").trim();
   if (!raw) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [year, month, day] = raw.split("-").map(Number);
+    return isValidDateParts(year, month, day) ? raw : "";
+  }
 
   const dotted = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
   if (dotted) {
-    return toIsoDateParts(Number(dotted[3]), Number(dotted[2]), Number(dotted[1]));
+    const year = Number(dotted[3]);
+    const month = Number(dotted[2]);
+    const day = Number(dotted[1]);
+    return isValidDateParts(year, month, day) ? toIsoDateParts(year, month, day) : "";
   }
 
   const parsed = new Date(raw);
   if (!Number.isNaN(parsed.getTime())) {
-    return toIsoDateParts(parsed.getFullYear(), parsed.getMonth() + 1, parsed.getDate());
+    const year = parsed.getFullYear();
+    const month = parsed.getMonth() + 1;
+    const day = parsed.getDate();
+    return isValidDateParts(year, month, day) ? toIsoDateParts(year, month, day) : "";
   }
 
   return "";
@@ -119,12 +133,15 @@ function detectUserImportColumns(headerRow) {
     ausbildung: ["ausbildung", "education", "training"],
     betrieb: ["betrieb", "company", "unternehmen"],
     berufsschule: ["berufsschule", "schule", "school"],
-    trainerUsernames: ["trainerusernames", "trainer", "ausbilder", "ausbilderusernames", "trainerusername"]
+    trainerUsernames: ["trainerusernames", "trainer", "ausbilder", "ausbilderusernames", "trainerusername"],
+    ausbildungsStart: ["ausbildungsbeginn", "ausbildungsstart", "trainingstartdate", "trainingstart", "startdate"],
+    ausbildungsEnde: ["ausbildungsende", "trainingenddate", "trainingend", "enddate"]
   });
 }
 
 module.exports = {
   toIsoDateParts,
+  isValidDateParts,
   parseImportedDate,
   normalizeImportedRole,
   parseTrainerUsernames,

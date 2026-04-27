@@ -16,6 +16,7 @@ await build({
   format: "esm",
   sourcemap: true,
   outfile: path.join(outputDir, "app.js"),
+  external: ["/Pictures/*"],
   loader: {
     ".png": "file",
     ".jpg": "file",
@@ -29,8 +30,8 @@ const html = `<!DOCTYPE html>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Berichtsheft Portal</title>
-    <link rel="icon" type="image/png" href="./Pictures/WIWEB-waage-vektor_ohne_schrift.png" />
+    <title>Ausbildungsdoku</title>
+    <link rel="icon" type="image/png" href="./Pictures/logo-mark.png" />
     <link rel="stylesheet" href="./app.css" />
   </head>
   <body>

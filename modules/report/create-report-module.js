@@ -7,7 +7,7 @@ const { createReportController } = require("../../controllers/report-controller"
 const { createReportRoutes } = require("../../routes/report-routes");
 const { renderPdf, buildEntriesCsv } = require("../../utils/exporters");
 
-function createReportModule({ db, sharedRepository, auditHelpers, helpers, imports, picturesDir }) {
+function createReportModule({ config, db, sharedRepository, auditHelpers, helpers, imports, picturesDir }) {
   const reportRepository = createReportRepository({
     db,
     listEntriesForTrainee: sharedRepository.listEntriesForTrainee,
@@ -20,6 +20,7 @@ function createReportModule({ db, sharedRepository, auditHelpers, helpers, impor
     db,
     reportRepository,
     sharedRepository,
+    reportingProgressToday: config.runtime.reportingProgressToday,
     normalizeEntry: helpers.normalizeEntry,
     parseImportRows: imports.parseImportRows,
     detectImportColumns: imports.detectImportColumns,

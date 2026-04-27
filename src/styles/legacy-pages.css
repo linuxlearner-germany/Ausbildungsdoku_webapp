@@ -200,66 +200,11 @@ button, input, textarea, select { font: inherit; }
   background: #f7fbff;
 }
 
-.screen-loading,
-.login-page {
+.screen-loading {
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 32px;
-}
-
-.login-page {
-  position: relative;
-  overflow: hidden;
-  background:
-    linear-gradient(180deg, var(--login-overlay-top), var(--login-overlay-bottom)),
-    url("../../Pictures/background.png");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-.login-page::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at top right, var(--login-sheen), transparent 32%),
-    linear-gradient(135deg, transparent, color-mix(in srgb, var(--primary-strong) 28%, transparent));
-  pointer-events: none;
-}
-
-.login-card {
-  position: relative;
-  z-index: 1;
-  width: min(980px, 100%);
-  display: grid;
-  gap: 24px;
-  padding: 32px;
-  border: 1px solid var(--line);
-  border-radius: 28px;
-  background: var(--login-card-bg);
-  color: var(--text);
-  box-shadow: var(--login-card-shadow);
-  backdrop-filter: blur(10px);
-}
-
-.login-brand {
-  display: flex;
-  gap: 18px;
-  align-items: center;
-}
-
-.login-brand h1 {
-  margin: 4px 0 8px;
-  font-size: clamp(2rem, 4vw, 3rem);
-  line-height: 1;
-  letter-spacing: -0.03em;
-}
-
-.login-form {
-  display: grid;
-  gap: 16px;
 }
 
 .demo-card,
@@ -2076,19 +2021,8 @@ textarea {
 }
 
 @media (max-width: 720px) {
-  .screen-loading,
-  .login-page {
+  .screen-loading {
     padding: 18px;
-  }
-
-  .login-card {
-    padding: 22px;
-    border-radius: 24px;
-  }
-
-  .login-brand {
-    align-items: flex-start;
-    flex-direction: column;
   }
 
   .page-content,
@@ -2236,8 +2170,7 @@ textarea {
   .sidebar,
   .topbar,
   .panel-card,
-  .stat-card,
-  .login-card {
+  .stat-card {
     border-radius: 18px;
   }
 

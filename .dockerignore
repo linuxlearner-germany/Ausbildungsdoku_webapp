@@ -3,6 +3,11 @@ npm-debug.log
 .git
 .idea
 github-pages
+backups
+tmp
+docs
+Anleitung
+mind.md
 public/app.js
 public/app.css
 public/app.js.map

@@ -42,9 +42,9 @@ await test("Admin-Audit-Log erfasst Benutzeranlage und CSV-Import", async () => 
   assert.equal(createUserResponse.status, 200);
 
   const importCsv = [
-    "name,username,email,role,password,ausbildung,betrieb,berufsschule,trainer_usernames",
-    "Audit Import Ausbilder,audit-import-trainer,audit-import-trainer@example.com,trainer,Passwort123!,,,,",
-    "Audit Import Azubi,audit-import-azubi,audit-import-azubi@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,audit-import-trainer"
+    "name,username,email,role,password,ausbildung,betrieb,berufsschule,ausbildungsbeginn,ausbildungsende,trainer_usernames",
+    "Audit Import Ausbilder,audit-import-trainer,audit-import-trainer@example.com,trainer,Passwort123!,,,,,,",
+    "Audit Import Azubi,audit-import-azubi,audit-import-azubi@example.com,trainee,Passwort123!,Fachinformatiker Systemintegration,Muster GmbH,BBS,2026-09-01,2029-08-31,audit-import-trainer"
   ].join("\n");
 
   const importResponse = await postJson(

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useAuthContext } from "../context/AppContext";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { assetUrl, isStaticDemo } from "../lib/runtime";
+import { isStaticDemo } from "../lib/runtime";
 
 export function LoginPage() {
   const { login, busy } = useAuthContext();
@@ -23,11 +23,9 @@ export function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-brand">
-          <img src={assetUrl("/Pictures/wiweb-logo-kurz-blau_neu.png")} alt="WIWEB Logo" className="sidebar-logo" />
+          <img src="/Pictures/logo-short.png" alt="Ausbildungsdoku Logo" className="sidebar-logo" />
           <div>
-            <p className="page-kicker mb-2">WIWEB</p>
             <h1>Ausbildungsdoku</h1>
-            <p className="text-body-secondary mb-0">Digitale Tagesberichte, Freigaben und Noten in einem durchgaengigen Arbeitsbereich.</p>
             {isStaticDemo() ? <small className="field-message">Demo-Logins: admin, trainer, azubi.</small> : null}
           </div>
         </div>

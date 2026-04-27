@@ -45138,9 +45138,24 @@ function SSF_load(fmt, idx) {
   table_fmt[idx] = fmt;
   return idx;
 }
+function SSF_load_table(tbl) {
+  for (var i3 = 0; i3 != 392; ++i3)
+    if (tbl[i3] !== void 0) SSF_load(tbl[i3], i3);
+}
 function make_ssf() {
   table_fmt = SSF_init_table();
 }
+var SSF = {
+  format: SSF_format,
+  load: SSF_load,
+  _table: table_fmt,
+  load_table: SSF_load_table,
+  parse_date_code: SSF_parse_date_code,
+  is_date: fmt_is_date,
+  get_table: function get_table() {
+    return SSF._table = table_fmt;
+  }
+};
 var SSFImplicit = {
   "5": '"$"#,##0_);\\("$"#,##0\\)',
   "6": '"$"#,##0_);[Red]\\("$"#,##0\\)',
@@ -70445,6 +70460,8 @@ function createSeedStore() {
         ausbildung: "",
         betrieb: "WIWEB",
         berufsschule: "",
+        ausbildungsStart: "",
+        ausbildungsEnde: "",
         trainerIds: [],
         themePreference: "system"
       },
@@ -70458,6 +70475,8 @@ function createSeedStore() {
         ausbildung: "",
         betrieb: "WIWEB",
         berufsschule: "",
+        ausbildungsStart: "",
+        ausbildungsEnde: "",
         trainerIds: [],
         themePreference: "system"
       },
@@ -70471,6 +70490,8 @@ function createSeedStore() {
         ausbildung: "Fachinformatiker Systemintegration",
         betrieb: "WIWEB",
         berufsschule: "BSZ Musterstadt",
+        ausbildungsStart: "2026-03-01",
+        ausbildungsEnde: "2029-02-28",
         trainerIds: [2],
         themePreference: "system"
       },
@@ -70484,6 +70505,8 @@ function createSeedStore() {
         ausbildung: "Fachinformatiker Anwendungsentwicklung",
         betrieb: "WIWEB",
         berufsschule: "BSZ Musterstadt",
+        ausbildungsStart: "2026-03-15",
+        ausbildungsEnde: "2029-03-14",
         trainerIds: [2],
         themePreference: "system"
       },
@@ -70497,6 +70520,8 @@ function createSeedStore() {
         ausbildung: "",
         betrieb: "WIWEB",
         berufsschule: "",
+        ausbildungsStart: "",
+        ausbildungsEnde: "",
         trainerIds: [],
         themePreference: "system"
       }
@@ -70684,6 +70709,130 @@ function sanitizeUser(user) {
     trainerIds: Array.isArray(user.trainerIds) ? user.trainerIds.map(Number) : []
   };
 }
+function isIsoDate(value) {
+  const normalized = String(value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+    return false;
+  }
+  const [year, month, day] = normalized.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+function parseIsoDate(value) {
+  if (!isIsoDate(value)) return null;
+  const [year, month, day] = String(value).split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+function formatIsoDate(date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+function parseImportedDateValue(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const parsed2 = SSF.parse_date_code(value);
+    if (parsed2?.y && parsed2?.m && parsed2?.d) {
+      const isoValue = `${String(parsed2.y).padStart(4, "0")}-${String(parsed2.m).padStart(2, "0")}-${String(parsed2.d).padStart(2, "0")}`;
+      if (!isIsoDate(isoValue)) {
+        return "";
+      }
+      return `${String(parsed2.y).padStart(4, "0")}-${String(parsed2.m).padStart(2, "0")}-${String(parsed2.d).padStart(2, "0")}`;
+    }
+  }
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  if (isIsoDate(raw)) return raw;
+  const dotted = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if (dotted) {
+    const isoValue = `${String(Number(dotted[3])).padStart(4, "0")}-${String(Number(dotted[2])).padStart(2, "0")}-${String(Number(dotted[1])).padStart(2, "0")}`;
+    return isIsoDate(isoValue) ? isoValue : "";
+  }
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    const isoValue = formatIsoDate(parsed);
+    return isIsoDate(isoValue) ? isoValue : "";
+  }
+  return "";
+}
+function buildReportingProgress(trainee, entries2, today = /* @__PURE__ */ new Date()) {
+  const trainingStartDate = String(trainee?.ausbildungsStart || "").trim();
+  const trainingEndDate = String(trainee?.ausbildungsEnde || "").trim();
+  const startDate = parseIsoDate(trainingStartDate);
+  const endDate = parseIsoDate(trainingEndDate);
+  if (!startDate) {
+    return {
+      available: false,
+      message: "Ausbildungsbeginn nicht hinterlegt.",
+      trainingStartDate,
+      trainingEndDate,
+      calculationUntil: "",
+      requiredWorkdays: 0,
+      existingReportDays: 0,
+      missingReportDays: 0
+    };
+  }
+  const normalizedToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const calculationUntilDate = endDate && endDate < normalizedToday ? endDate : normalizedToday;
+  if (startDate > calculationUntilDate) {
+    return {
+      available: true,
+      message: "",
+      trainingStartDate,
+      trainingEndDate,
+      calculationUntil: formatIsoDate(calculationUntilDate),
+      requiredWorkdays: 0,
+      existingReportDays: 0,
+      missingReportDays: 0
+    };
+  }
+  const existingDates = new Set((entries2 || []).map((entry) => String(entry.dateFrom || "").trim()).filter(isIsoDate));
+  let requiredWorkdays = 0;
+  let existingReportDays = 0;
+  for (const cursor = new Date(startDate); cursor <= calculationUntilDate; cursor.setDate(cursor.getDate() + 1)) {
+    const weekDay = cursor.getDay();
+    if (weekDay === 0 || weekDay === 6) continue;
+    requiredWorkdays += 1;
+    if (existingDates.has(formatIsoDate(cursor))) {
+      existingReportDays += 1;
+    }
+  }
+  return {
+    available: true,
+    message: "",
+    trainingStartDate,
+    trainingEndDate,
+    calculationUntil: formatIsoDate(calculationUntilDate),
+    requiredWorkdays,
+    existingReportDays,
+    missingReportDays: Math.max(0, requiredWorkdays - existingReportDays)
+  };
+}
+function validateTrainingDates(role, startDate, endDate) {
+  if (role !== "trainee") {
+    return { startDate: "", endDate: "" };
+  }
+  if (startDate && !isIsoDate(startDate)) {
+    throw new Error("Ausbildungsbeginn ist ung\xFCltig.");
+  }
+  if (endDate && !isIsoDate(endDate)) {
+    throw new Error("Ausbildungsende ist ung\xFCltig.");
+  }
+  if (startDate && endDate && startDate > endDate) {
+    throw new Error("Ausbildungsbeginn darf nicht nach dem Ausbildungsende liegen.");
+  }
+  return { startDate, endDate };
+}
+function normalizeTrainerIds(input) {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+  return [...new Set(input.map(Number).filter((value) => Number.isInteger(value) && value > 0))];
+}
+function ensureTraineeTrainerAssignment(role, trainerIds) {
+  if (role === "trainee" && !normalizeTrainerIds(trainerIds).length) {
+    throw new Error("Fuer Azubis muss mindestens ein Ausbilder zugeordnet werden.");
+  }
+}
 function validatePasswordStrength(password) {
   return /[A-Z]/.test(password) && /[a-z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password);
 }
@@ -70756,12 +70905,14 @@ function buildDashboard(store, currentUser) {
     return null;
   }
   if (currentUser.role === "trainee") {
+    const entries2 = getEntriesForTrainee(store, currentUser.id);
     return {
       role: "trainee",
       report: {
         trainee: sanitizeUser(currentUser),
-        entries: getEntriesForTrainee(store, currentUser.id),
-        grades: getGradesForTrainee(store, currentUser.id)
+        entries: entries2,
+        grades: getGradesForTrainee(store, currentUser.id),
+        reportingProgress: buildReportingProgress(currentUser, entries2)
       },
       trainees: [],
       users: [],
@@ -70831,7 +70982,11 @@ function parseUserRows(payload, store) {
     const role = String(row.role || row.Rolle || "trainee").trim().toLowerCase();
     const username = normalizeUsername(row.username || row.Benutzername || "");
     const email = String(row.email || row["E-Mail"] || "").trim().toLowerCase();
+    const trainingStartRaw = row.ausbildungsbeginn ?? row.ausbildungsStart ?? row.training_start_date ?? row.trainingStartDate ?? row.Startdatum ?? "";
+    const trainingEndRaw = row.ausbildungsende ?? row.ausbildungsEnde ?? row.training_end_date ?? row.trainingEndDate ?? row.Enddatum ?? "";
     const trainerUsernames = String(row.trainerUsernames || row.Ausbilder || "").split(/[|,]/).map((item) => normalizeUsername(item)).filter(Boolean);
+    const ausbildungsStart = parseImportedDateValue(trainingStartRaw);
+    const ausbildungsEnde = parseImportedDateValue(trainingEndRaw);
     const errors = [];
     const warnings = [];
     if (!String(row.name || row.Name || "").trim()) errors.push("Name fehlt.");
@@ -70840,9 +70995,20 @@ function parseUserRows(payload, store) {
     if (!["trainee", "trainer", "admin"].includes(role)) errors.push("Rolle ist ung\xFCltig.");
     if (store.users.some((user) => user.username === username)) errors.push("Benutzername existiert bereits.");
     if (store.users.some((user) => user.email === email)) errors.push("E-Mail existiert bereits.");
+    if (role === "trainee" && !trainerUsernames.length) errors.push("Fuer Azubis muss mindestens ein Ausbilder zugeordnet werden.");
+    if (trainingStartRaw && !ausbildungsStart) errors.push("Ausbildungsbeginn ist ungueltig.");
+    if (trainingEndRaw && !ausbildungsEnde) errors.push("Ausbildungsende ist ungueltig.");
+    if (role !== "trainee" && ausbildungsStart) errors.push("ausbildungsbeginn ist nur fuer Azubis erlaubt.");
+    if (role !== "trainee" && ausbildungsEnde) errors.push("ausbildungsende ist nur fuer Azubis erlaubt.");
+    if (role === "trainee" && ausbildungsStart && ausbildungsEnde && ausbildungsStart > ausbildungsEnde) {
+      errors.push("Ausbildungsbeginn darf nicht nach dem Ausbildungsende liegen.");
+    }
+    if (role === "trainee" && !ausbildungsStart && !ausbildungsEnde) {
+      warnings.push("Kein Ausbildungszeitraum angegeben.");
+    }
     const missingTrainers = trainerUsernames.filter((trainerUsername) => !knownTrainers.has(trainerUsername));
     if (missingTrainers.length) {
-      warnings.push(`Ausbilder unbekannt: ${missingTrainers.join(", ")}`);
+      errors.push(`Ausbilder unbekannt: ${missingTrainers.join(", ")}`);
     }
     return {
       rowNumber: index2 + 2,
@@ -70854,6 +71020,8 @@ function parseUserRows(payload, store) {
       ausbildung: String(row.ausbildung || row.Ausbildung || "").trim(),
       betrieb: String(row.betrieb || row.Betrieb || "").trim(),
       berufsschule: String(row.berufsschule || row.Berufsschule || "").trim(),
+      ausbildungsStart,
+      ausbildungsEnde,
       trainerUsernames,
       canImport: errors.length === 0,
       errors,
@@ -71208,6 +71376,13 @@ function StaticAppProvider({ children }) {
       throw new Error("E-Mail existiert bereits.");
     }
     const password = String(payload.password || "").trim() || "Start!12345";
+    const trainerIds = payload.role === "trainee" ? normalizeTrainerIds(payload.trainerIds) : [];
+    ensureTraineeTrainerAssignment(payload.role || "trainee", trainerIds);
+    const trainingDates = validateTrainingDates(
+      payload.role || "trainee",
+      String(payload.ausbildungsStart || "").trim(),
+      String(payload.ausbildungsEnde || "").trim()
+    );
     commit((draft) => {
       const newUser = {
         id: draft.nextUserId,
@@ -71219,7 +71394,9 @@ function StaticAppProvider({ children }) {
         ausbildung: String(payload.ausbildung || "").trim(),
         betrieb: String(payload.betrieb || "").trim(),
         berufsschule: String(payload.berufsschule || "").trim(),
-        trainerIds: payload.role === "trainee" ? (payload.trainerIds || []).map(Number) : [],
+        ausbildungsStart: trainingDates.startDate,
+        ausbildungsEnde: trainingDates.endDate,
+        trainerIds,
         themePreference: "system"
       };
       draft.users.push(newUser);
@@ -71244,10 +71421,11 @@ function StaticAppProvider({ children }) {
     if (!currentUser || currentUser.role !== "admin") {
       throw new Error("Nur Admins k\xF6nnen Ausbilder zuweisen.");
     }
+    ensureTraineeTrainerAssignment("trainee", trainerIds);
     commit((draft) => {
       const trainee = draft.users.find((user) => user.id === Number(traineeId) && user.role === "trainee");
       if (!trainee) throw new Error("Azubi nicht gefunden.");
-      trainee.trainerIds = (trainerIds || []).map(Number);
+      trainee.trainerIds = normalizeTrainerIds(trainerIds);
       addAuditLog(draft, {
         actorUserId: currentUser.id,
         actorName: currentUser.name,
@@ -71276,15 +71454,25 @@ function StaticAppProvider({ children }) {
       if (draft.users.some((candidate) => candidate.id !== user.id && candidate.email === nextEmail)) {
         throw new Error("E-Mail existiert bereits.");
       }
+      const nextRole = payload.role || user.role;
+      const trainerIds = nextRole === "trainee" ? normalizeTrainerIds(payload.trainerIds) : [];
+      ensureTraineeTrainerAssignment(nextRole, trainerIds);
+      const trainingDates = validateTrainingDates(
+        nextRole,
+        String(payload.ausbildungsStart || "").trim(),
+        String(payload.ausbildungsEnde || "").trim()
+      );
       Object.assign(user, {
         name: String(payload.name || "").trim(),
         username: nextUsername,
         email: nextEmail,
-        role: payload.role || user.role,
+        role: nextRole,
         ausbildung: String(payload.ausbildung || "").trim(),
         betrieb: String(payload.betrieb || "").trim(),
         berufsschule: String(payload.berufsschule || "").trim(),
-        trainerIds: (payload.role || user.role) === "trainee" ? (payload.trainerIds || []).map(Number) : []
+        ausbildungsStart: trainingDates.startDate,
+        ausbildungsEnde: trainingDates.endDate,
+        trainerIds
       });
       if (payload.password?.trim()) {
         user.password = payload.password.trim();
@@ -71365,6 +71553,8 @@ function StaticAppProvider({ children }) {
           ausbildung: row.ausbildung,
           betrieb: row.betrieb,
           berufsschule: row.berufsschule,
+          ausbildungsStart: row.role === "trainee" ? row.ausbildungsStart || "" : "",
+          ausbildungsEnde: row.role === "trainee" ? row.ausbildungsEnde || "" : "",
           trainerIds,
           themePreference: "system"
         });
@@ -71394,7 +71584,7 @@ function StaticAppProvider({ children }) {
     const page = Math.max(1, Number(filters.page || 1));
     const pageSize = Math.max(1, Number(filters.pageSize || 20));
     const search = String(filters.search || "").trim().toLowerCase();
-    const items2 = store.auditLogs.filter((log) => {
+    const items = store.auditLogs.filter((log) => {
       const matchesAction = !filters.actionType || log.actionType === filters.actionType;
       const matchesUser = !filters.userId || String(log.targetUserId || log.actorUserId || "") === String(filters.userId);
       const matchesFrom = !filters.from || String(log.createdAt).slice(0, 10) >= filters.from;
@@ -71403,11 +71593,11 @@ function StaticAppProvider({ children }) {
       const matchesSearch = !search || haystack.includes(search);
       return matchesAction && matchesUser && matchesFrom && matchesTo && matchesSearch;
     });
-    const total = items2.length;
+    const total = items.length;
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const start = (page - 1) * pageSize;
     return {
-      items: items2.slice(start, start + pageSize),
+      items: items.slice(start, start + pageSize),
       pagination: {
         page,
         pageSize,
@@ -71632,6 +71822,36 @@ var import_react3 = __toESM(require_react());
 function isStaticDemo() {
   return typeof window !== "undefined" && window.__APP_STATIC_DEMO__ === true;
 }
+function isAbsoluteUrl(value) {
+  return /^(?:[a-z]+:)?\/\//i.test(value) || value.startsWith("data:") || value.startsWith("#");
+}
+function trimTrailingSlash(value) {
+  return String(value || "").replace(/\/+$/, "");
+}
+function normalizePath(value) {
+  const path = String(value || "").trim();
+  if (!path || path === "/") {
+    return "";
+  }
+  return `/${path.replace(/^\/+/, "").replace(/\/+$/, "")}`;
+}
+function joinUrl(base, path) {
+  const normalizedBase = trimTrailingSlash(base);
+  const normalizedPath = normalizePath(path);
+  if (!normalizedPath) {
+    return normalizedBase || "/";
+  }
+  if (!normalizedBase) {
+    return normalizedPath;
+  }
+  if (normalizedBase.endsWith("/api") && normalizedPath === "/api") {
+    return normalizedBase;
+  }
+  if (normalizedBase.endsWith("/api") && normalizedPath.startsWith("/api/")) {
+    return `${normalizedBase}${normalizedPath.slice(4)}`;
+  }
+  return `${normalizedBase}${normalizedPath}`;
+}
 function getAppBasePath() {
   if (typeof window === "undefined") {
     return "";
@@ -71647,37 +71867,68 @@ function withBasePath(path) {
   if (!normalized) {
     return getAppBasePath() || "/";
   }
-  if (/^(?:[a-z]+:)?\/\//i.test(normalized) || normalized.startsWith("data:") || normalized.startsWith("#")) {
+  if (isAbsoluteUrl(normalized)) {
     return normalized;
   }
-  const basePath = getAppBasePath();
-  const cleanPath = normalized.startsWith("/") ? normalized : `/${normalized}`;
-  return `${basePath}${cleanPath}`;
+  return joinUrl(getAppBasePath(), normalized);
 }
 function assetUrl(path) {
   return withBasePath(path);
 }
 function apiUrl(path) {
+  if (typeof window !== "undefined" && window.__APP_API_BASE_URL__) {
+    const cleanPath = String(path || "").trim();
+    if (!cleanPath || cleanPath === "/") {
+      return trimTrailingSlash(window.__APP_API_BASE_URL__) || "/";
+    }
+    if (isAbsoluteUrl(cleanPath)) {
+      return cleanPath;
+    }
+    return joinUrl(window.__APP_API_BASE_URL__, cleanPath);
+  }
   return withBasePath(path);
 }
 
-// src/components/SidebarNavigation.jsx
-var items = [
-  { to: "/dashboard", label: "Dashboard", roles: ["trainee", "trainer", "admin"] },
-  { to: "/berichte", label: "Berichte", roles: ["trainee"] },
-  { to: "/noten", label: "Noten", roles: ["trainee", "trainer", "admin"] },
-  { to: "/freigaben", label: "Freigaben", roles: ["trainee", "trainer", "admin"] },
-  { to: "/profil", label: "Profil", roles: ["trainee", "trainer", "admin"] },
-  { to: "/export", label: "Export", roles: ["trainee"] },
-  { to: "/archiv", label: "Archiv", roles: ["trainee", "trainer", "admin"] },
-  { to: "/verwaltung", label: "Verwaltung", roles: ["admin"] }
+// src/navigation/menuConfig.mjs
+var MENU_ITEMS = [
+  { key: "dashboard", label: "Dashboard", to: "/dashboard", roles: ["trainee", "trainer", "admin"], group: "core" },
+  { key: "reports", label: "Berichte", to: "/berichte", roles: ["trainee"], group: "work" },
+  { key: "grades", label: "Noten", to: "/noten", roles: ["trainee"], group: "work" },
+  { key: "approvals", label: "Freigaben", to: "/freigaben", roles: ["trainee", "trainer"], group: "work" },
+  { key: "exports", label: "Export", to: "/export", roles: ["trainee"], group: "work" },
+  { key: "archive", label: "Archiv", to: "/archiv", roles: ["trainee", "trainer"], group: "work" },
+  { key: "admin-create-user", label: "Benutzer anlegen", to: "/admin/users/new", roles: ["admin"], group: "admin" },
+  { key: "admin-users", label: "Benutzerverwaltung", to: "/admin/users", roles: ["admin"], group: "admin" },
+  { key: "admin-assignments", label: "Zuordnungen", to: "/admin/assignments", roles: ["admin"], group: "admin" },
+  { key: "admin-audit-log", label: "Audit-Log", to: "/admin/audit-log", roles: ["admin"], group: "admin" },
+  { key: "profile", label: "Profil", to: "/profil", roles: ["trainee", "trainer", "admin"], group: "account" }
 ];
+function getMenuItemsForRole(role) {
+  return MENU_ITEMS.filter((item) => item.roles.includes(role));
+}
+function getMenuItem(key) {
+  return MENU_ITEMS.find((item) => item.key === key) || null;
+}
+function canAccessMenuItem(role, key) {
+  const item = getMenuItem(key);
+  return Boolean(item && item.roles.includes(role));
+}
+function getDefaultRouteForRole(role) {
+  if (role === "admin") return "/dashboard";
+  if (role === "trainer") return "/dashboard";
+  return "/dashboard";
+}
+function getAdminSectionLinks() {
+  return MENU_ITEMS.filter((item) => item.group === "admin");
+}
+
+// src/components/SidebarNavigation.jsx
 function SidebarNavigation({ user, mobileNavOpen, onNavigate }) {
-  const visibleItems = items.filter((item) => item.roles.includes(user?.role));
-  return /* @__PURE__ */ import_react3.default.createElement("aside", { className: `sidebar${mobileNavOpen ? " is-open" : ""}` }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "sidebar-brand border-bottom" }, /* @__PURE__ */ import_react3.default.createElement("img", { src: assetUrl("/Pictures/wiweb-logo-kurz-blau_neu.png"), alt: "WIWEB Logo", className: "sidebar-logo" }), /* @__PURE__ */ import_react3.default.createElement("div", null, /* @__PURE__ */ import_react3.default.createElement("p", { className: "page-kicker" }, "WIWEB"), /* @__PURE__ */ import_react3.default.createElement("strong", null, "Berichtsheft Portal"))), /* @__PURE__ */ import_react3.default.createElement("nav", { className: "sidebar-nav", "aria-label": "Hauptnavigation" }, visibleItems.map((item) => /* @__PURE__ */ import_react3.default.createElement(
+  const visibleItems = getMenuItemsForRole(user?.role);
+  return /* @__PURE__ */ import_react3.default.createElement("aside", { className: `sidebar${mobileNavOpen ? " is-open" : ""}`, "aria-label": "Seitenleiste" }, /* @__PURE__ */ import_react3.default.createElement("div", { className: "sidebar-brand" }, /* @__PURE__ */ import_react3.default.createElement("img", { src: assetUrl("/Pictures/logo-short.png"), alt: "Ausbildungsdoku Logo", className: "sidebar-logo" }), /* @__PURE__ */ import_react3.default.createElement("div", null, /* @__PURE__ */ import_react3.default.createElement("strong", { className: "d-block" }, "Ausbildungsdoku"), /* @__PURE__ */ import_react3.default.createElement("small", { className: "text-body-secondary" }, "Digitales Berichtsheft"))), /* @__PURE__ */ import_react3.default.createElement("div", { className: "sidebar-divider", "aria-hidden": "true" }), /* @__PURE__ */ import_react3.default.createElement("nav", { className: "sidebar-nav nav flex-column", "aria-label": "Hauptnavigation" }, visibleItems.map((item) => /* @__PURE__ */ import_react3.default.createElement(
     NavLink,
     {
-      key: item.to,
+      key: item.key,
       to: item.to,
       onClick: onNavigate,
       className: ({ isActive }) => `sidebar-link nav-link${isActive ? " active" : ""}`
@@ -71688,6 +71939,12 @@ function SidebarNavigation({ user, mobileNavOpen, onNavigate }) {
 
 // src/components/Topbar.jsx
 var import_react4 = __toESM(require_react());
+function roleLabel(role) {
+  if (role === "trainee") return "Azubi";
+  if (role === "trainer") return "Ausbilder";
+  if (role === "admin") return "Admin";
+  return role || "ohne Sitzung";
+}
 function themeLabel(themePreference, theme) {
   if (themePreference === "system") {
     return `System (${theme === "dark" ? "dunkel" : "hell"})`;
@@ -71695,7 +71952,7 @@ function themeLabel(themePreference, theme) {
   return theme === "dark" ? "Dunkel" : "Hell";
 }
 function Topbar({ user, theme, themePreference, onLogout, onToggleTheme, mobileNavOpen, onToggleNavigation }) {
-  return /* @__PURE__ */ import_react4.default.createElement("header", { className: "topbar border-bottom" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "topbar-main" }, /* @__PURE__ */ import_react4.default.createElement(
+  return /* @__PURE__ */ import_react4.default.createElement("header", { className: "topbar" }, /* @__PURE__ */ import_react4.default.createElement("div", { className: "topbar-main" }, /* @__PURE__ */ import_react4.default.createElement(
     "button",
     {
       type: "button",
@@ -71704,14 +71961,33 @@ function Topbar({ user, theme, themePreference, onLogout, onToggleTheme, mobileN
       "aria-expanded": mobileNavOpen,
       "aria-label": "Navigation umschalten"
     },
-    "Menue"
-  ), /* @__PURE__ */ import_react4.default.createElement("div", { className: "topbar-copy" }, /* @__PURE__ */ import_react4.default.createElement("p", { className: "page-kicker" }, "Berichtsheft Portal"), /* @__PURE__ */ import_react4.default.createElement("small", { className: "topbar-theme-label" }, "Ansicht: ", themeLabel(themePreference, theme)))), /* @__PURE__ */ import_react4.default.createElement("div", { className: "topbar-user" }, /* @__PURE__ */ import_react4.default.createElement("button", { className: "btn btn-outline-secondary", onClick: onToggleTheme, type: "button" }, theme === "dark" ? "Hell" : "Dunkel"), /* @__PURE__ */ import_react4.default.createElement("div", { className: "user-pill border rounded-3" }, /* @__PURE__ */ import_react4.default.createElement("span", null, user?.name || "Gast"), /* @__PURE__ */ import_react4.default.createElement("small", null, user?.username ? `@${user.username} \xB7 ${user.role}` : user?.role || "ohne Sitzung")), user ? /* @__PURE__ */ import_react4.default.createElement("button", { className: "btn btn-outline-secondary", onClick: onLogout, type: "button" }, "Abmelden") : null));
+    "Men\xFC"
+  ), /* @__PURE__ */ import_react4.default.createElement("div", { className: "topbar-copy" }, /* @__PURE__ */ import_react4.default.createElement("p", { className: "page-kicker mb-1" }, "Ausbildungsdoku"), /* @__PURE__ */ import_react4.default.createElement("div", { className: "topbar-meta" }, /* @__PURE__ */ import_react4.default.createElement("strong", { className: "topbar-title" }, "Digitales Berichtsheft"), /* @__PURE__ */ import_react4.default.createElement("small", { className: "topbar-theme-label" }, "Ansicht: ", themeLabel(themePreference, theme))))), /* @__PURE__ */ import_react4.default.createElement("div", { className: "topbar-user" }, /* @__PURE__ */ import_react4.default.createElement("button", { className: "btn btn-outline-secondary", onClick: onToggleTheme, type: "button" }, theme === "dark" ? "Hell" : "Dunkel"), /* @__PURE__ */ import_react4.default.createElement("div", { className: "user-pill" }, /* @__PURE__ */ import_react4.default.createElement("span", null, user?.name || "Gast"), /* @__PURE__ */ import_react4.default.createElement("small", null, user?.username ? `@${user.username} \xB7 ${roleLabel(user.role)}` : roleLabel(user?.role))), user ? /* @__PURE__ */ import_react4.default.createElement("button", { className: "btn btn-outline-secondary", onClick: onLogout, type: "button" }, "Abmelden") : null));
 }
 
 // src/components/AppShell.jsx
 function AppShell({ user, theme, themePreference, onLogout, onToggleTheme, flash, children }) {
   const [mobileNavOpen, setMobileNavOpen] = (0, import_react5.useState)(false);
-  return /* @__PURE__ */ import_react5.default.createElement("div", { className: "app-shell" }, /* @__PURE__ */ import_react5.default.createElement(SidebarNavigation, { user, mobileNavOpen, onNavigate: () => setMobileNavOpen(false) }), /* @__PURE__ */ import_react5.default.createElement("div", { className: "app-main" }, /* @__PURE__ */ import_react5.default.createElement(
+  (0, import_react5.useEffect)(() => {
+    if (typeof document === "undefined") {
+      return void 0;
+    }
+    document.body.classList.toggle("nav-open", mobileNavOpen);
+    return () => document.body.classList.remove("nav-open");
+  }, [mobileNavOpen]);
+  (0, import_react5.useEffect)(() => {
+    if (!mobileNavOpen || typeof window === "undefined") {
+      return void 0;
+    }
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setMobileNavOpen(false);
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mobileNavOpen]);
+  return /* @__PURE__ */ import_react5.default.createElement("div", { className: "app-shell" }, /* @__PURE__ */ import_react5.default.createElement(SidebarNavigation, { user, mobileNavOpen, onNavigate: () => setMobileNavOpen(false) }), mobileNavOpen ? /* @__PURE__ */ import_react5.default.createElement("button", { type: "button", className: "sidebar-backdrop", "aria-label": "Navigation schliessen", onClick: () => setMobileNavOpen(false) }) : null, /* @__PURE__ */ import_react5.default.createElement("div", { className: "app-main" }, /* @__PURE__ */ import_react5.default.createElement(
     Topbar,
     {
       user,
@@ -71722,7 +71998,7 @@ function AppShell({ user, theme, themePreference, onLogout, onToggleTheme, flash
       mobileNavOpen,
       onToggleNavigation: () => setMobileNavOpen((current) => !current)
     }
-  ), flash ? /* @__PURE__ */ import_react5.default.createElement("div", { className: `flash alert ${flash.type === "error" ? "alert-danger" : "alert-success"}` }, flash.message) : null, /* @__PURE__ */ import_react5.default.createElement("main", { className: "page-content container-fluid" }, children)));
+  ), flash ? /* @__PURE__ */ import_react5.default.createElement("div", { className: `flash alert ${flash.type === "error" ? "alert-danger" : "alert-success"}` }, flash.message) : null, /* @__PURE__ */ import_react5.default.createElement("main", { className: "page-content container-fluid px-3 px-lg-4" }, children)));
 }
 
 // src/pages/LoginPage.jsx
@@ -71777,7 +72053,7 @@ function LoginPage() {
       setError(err2.message);
     }
   }
-  return /* @__PURE__ */ import_react14.default.createElement("div", { className: "login-page" }, /* @__PURE__ */ import_react14.default.createElement("div", { className: "login-card" }, /* @__PURE__ */ import_react14.default.createElement("div", { className: "login-brand" }, /* @__PURE__ */ import_react14.default.createElement("img", { src: assetUrl("/Pictures/wiweb-logo-kurz-blau_neu.png"), alt: "WIWEB Logo", className: "sidebar-logo" }), /* @__PURE__ */ import_react14.default.createElement("div", null, /* @__PURE__ */ import_react14.default.createElement("p", { className: "page-kicker" }, "Berichtsheft Portal"), /* @__PURE__ */ import_react14.default.createElement("h1", null, "Willkommen im Ausbildungsportal"), isStaticDemo() ? /* @__PURE__ */ import_react14.default.createElement("small", { className: "field-message" }, "Demo-Logins: admin, trainer, azubi.") : null)), /* @__PURE__ */ import_react14.default.createElement("form", { className: "login-form", onSubmit: handleSubmit }, /* @__PURE__ */ import_react14.default.createElement("label", { className: "form-label" }, "E-Mail oder Benutzername", /* @__PURE__ */ import_react14.default.createElement("input", { className: "form-control", value: identifier, onChange: (event) => setIdentifier(event.target.value), type: "text", required: true })), /* @__PURE__ */ import_react14.default.createElement("label", { className: "form-label" }, "Passwort", /* @__PURE__ */ import_react14.default.createElement("input", { className: "form-control", value: password, onChange: (event) => setPassword(event.target.value), type: "password", required: true })), error ? /* @__PURE__ */ import_react14.default.createElement("div", { className: "field-message error" }, error) : null, /* @__PURE__ */ import_react14.default.createElement(PrimaryButton, { disabled: busy, type: "submit" }, busy ? "Anmeldung..." : "Anmelden"))));
+  return /* @__PURE__ */ import_react14.default.createElement("div", { className: "login-page" }, /* @__PURE__ */ import_react14.default.createElement("div", { className: "login-card" }, /* @__PURE__ */ import_react14.default.createElement("div", { className: "login-brand" }, /* @__PURE__ */ import_react14.default.createElement("img", { src: "/Pictures/logo-short.png", alt: "Ausbildungsdoku Logo", className: "sidebar-logo" }), /* @__PURE__ */ import_react14.default.createElement("div", null, /* @__PURE__ */ import_react14.default.createElement("h1", null, "Ausbildungsdoku"), isStaticDemo() ? /* @__PURE__ */ import_react14.default.createElement("small", { className: "field-message" }, "Demo-Logins: admin, trainer, azubi.") : null)), /* @__PURE__ */ import_react14.default.createElement("form", { className: "login-form", onSubmit: handleSubmit }, /* @__PURE__ */ import_react14.default.createElement("label", { className: "form-label" }, "E-Mail oder Benutzername", /* @__PURE__ */ import_react14.default.createElement("input", { className: "form-control", value: identifier, onChange: (event) => setIdentifier(event.target.value), type: "text", required: true })), /* @__PURE__ */ import_react14.default.createElement("label", { className: "form-label" }, "Passwort", /* @__PURE__ */ import_react14.default.createElement("input", { className: "form-control", value: password, onChange: (event) => setPassword(event.target.value), type: "password", required: true })), error ? /* @__PURE__ */ import_react14.default.createElement("div", { className: "field-message error" }, error) : null, /* @__PURE__ */ import_react14.default.createElement(PrimaryButton, { disabled: busy, type: "submit" }, busy ? "Anmeldung..." : "Anmelden"))));
 }
 
 // src/pages/DashboardPage.jsx
@@ -87295,6 +87571,36 @@ function escapeCsv(value) {
   }
   return text2;
 }
+function readErrorMessage(data2, fallbackMessage) {
+  if (typeof data2?.error === "string") {
+    return data2.error;
+  }
+  if (data2?.error?.message) {
+    return data2.error.message;
+  }
+  return fallbackMessage;
+}
+async function parseErrorResponse(response, fallbackMessage) {
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    return fallbackMessage;
+  }
+  try {
+    const data2 = await response.json();
+    return readErrorMessage(data2, fallbackMessage);
+  } catch (_error) {
+    return fallbackMessage;
+  }
+}
+function readFilename(response, fallbackFilename) {
+  const disposition = response.headers.get("content-disposition") || "";
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utf8Match?.[1]) {
+    return decodeURIComponent(utf8Match[1]);
+  }
+  const plainMatch = disposition.match(/filename="([^"]+)"/i);
+  return plainMatch?.[1] || fallbackFilename;
+}
 function formatDate(value) {
   if (!value) {
     return "-";
@@ -87348,6 +87654,27 @@ function downloadUsersCsv(users) {
   ]);
   const csv = [header, ...rows].map((row) => row.map(escapeCsv).join(";")).join("\n");
   downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "verwaltung-benutzer.csv");
+}
+async function downloadFileFromApi(url, fallbackFilename, { errorMessage, method = "GET" } = {}) {
+  const response = await fetch(url, {
+    method,
+    credentials: "same-origin"
+  });
+  if (!response.ok) {
+    throw new Error(await parseErrorResponse(response, errorMessage || "Datei konnte nicht geladen werden."));
+  }
+  const blob = await response.blob();
+  downloadBlob(blob, readFilename(response, fallbackFilename));
+}
+async function downloadPdfFromApi(url, fallbackFilename = "berichtsheft.pdf") {
+  return downloadFileFromApi(url, fallbackFilename, {
+    errorMessage: "PDF konnte nicht geladen werden."
+  });
+}
+async function downloadCsvFromApi(url, fallbackFilename = "berichtsheft.csv") {
+  return downloadFileFromApi(url, fallbackFilename, {
+    errorMessage: "CSV-Export konnte nicht gestartet werden."
+  });
 }
 function downloadReportPdf({ entries: entries2, traineeName, trainingTitle }) {
   const doc = new E({ format: "a4", unit: "mm" });
@@ -87417,9 +87744,46 @@ function trainerSummary(trainee) {
     latest: latestItems(entries2)[0] || null
   };
 }
-function DashboardPage({ role, report, trainees, users }) {
-  function openPdfForTrainee(trainee) {
+function summarizeAuditEvents(items) {
+  const summary = /* @__PURE__ */ new Map();
+  for (const item of items || []) {
+    summary.set(item.actionType, (summary.get(item.actionType) || 0) + 1);
+  }
+  return [...summary.entries()].sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "de")).slice(0, 5);
+}
+function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }) {
+  const [pdfError, setPdfError] = (0, import_react19.useState)("");
+  const [auditState, setAuditState] = (0, import_react19.useState)({ busy: false, error: "", items: [] });
+  const allEntries = (0, import_react19.useMemo)(() => trainees.flatMap((trainee) => trainee.entries || []), [trainees]);
+  const traineeUsers = (0, import_react19.useMemo)(() => users.filter((user) => user.role === "trainee"), [users]);
+  const orphanedTrainees = (0, import_react19.useMemo)(() => traineeUsers.filter((user) => !(user.trainerIds || []).length), [traineeUsers]);
+  const auditSummary = (0, import_react19.useMemo)(() => summarizeAuditEvents(auditState.items), [auditState.items]);
+  (0, import_react19.useEffect)(() => {
+    let cancelled = false;
+    if (role !== "admin" || typeof onLoadAuditLogs !== "function") {
+      return void 0;
+    }
+    async function loadAuditOverview() {
+      setAuditState({ busy: true, error: "", items: [] });
+      try {
+        const data2 = await onLoadAuditLogs({ page: 1, pageSize: 8 });
+        if (!cancelled) {
+          setAuditState({ busy: false, error: "", items: data2.items || [] });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setAuditState({ busy: false, error: error.message || "Audit-Log konnte nicht geladen werden.", items: [] });
+        }
+      }
+    }
+    loadAuditOverview();
+    return () => {
+      cancelled = true;
+    };
+  }, [onLoadAuditLogs, role]);
+  async function openPdfForTrainee(trainee) {
     if (isStaticDemo()) {
+      setPdfError("");
       downloadReportPdf({
         entries: trainee.entries || [],
         traineeName: trainee.name,
@@ -87427,11 +87791,17 @@ function DashboardPage({ role, report, trainees, users }) {
       });
       return;
     }
-    window.location.href = apiUrl(`/api/report/pdf/${trainee.id}`);
+    try {
+      setPdfError("");
+      await downloadPdfFromApi(apiUrl(`/api/report/pdf/${trainee.id}`), `berichtsheft-${trainee.name || "azubi"}.pdf`);
+    } catch (error) {
+      setPdfError(error.message || "PDF konnte nicht geladen werden.");
+    }
   }
   if (role === "trainee") {
     const entries2 = report?.entries || [];
     const grades = report?.grades || [];
+    const reportingProgress = report?.reportingProgress || null;
     const latest = latestItems(entries2);
     const openApprovals = entries2.filter((entry) => entry.status === "submitted").length;
     const gradeAverage = calculateWeightedAverage(grades);
@@ -87442,11 +87812,18 @@ function DashboardPage({ role, report, trainees, users }) {
         title: "Mein \xDCberblick",
         actions: /* @__PURE__ */ import_react19.default.createElement(Link, { className: "btn btn-primary app-btn", to: "/berichte?view=write" }, "Tagesbericht erstellen")
       }
-    ), /* @__PURE__ */ import_react19.default.createElement("section", { className: "stats-grid" }, /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Tagesberichte", value: entries2.length, note: "Gesamtzahl deiner Eintr\xE4ge" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "In Pr\xFCfung", value: openApprovals, note: "Warten auf Freigabe" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Signiert", value: entries2.filter((entry) => entry.status === "signed").length, note: "Freigegebene Tage" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Notenschnitt", value: gradeAverage ? formatGrade(gradeAverage) : "-", note: "Gewichteter Durchschnitt" })), /* @__PURE__ */ import_react19.default.createElement("section", { className: "two-column-grid" }, /* @__PURE__ */ import_react19.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Aktivit\xE4ten", title: "Letzte Eintr\xE4ge" }), latest.length ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-stack" }, latest.map((entry) => /* @__PURE__ */ import_react19.default.createElement("div", { key: entry.id, className: "list-row" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, entry.weekLabel || "Ohne Titel"), /* @__PURE__ */ import_react19.default.createElement("p", null, entry.dateFrom || "-")), /* @__PURE__ */ import_react19.default.createElement(StatusBadge, { status: entry.status })))) : /* @__PURE__ */ import_react19.default.createElement(EmptyState, { title: "Noch keine Aktivit\xE4ten" })), /* @__PURE__ */ import_react19.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Schnellzugriffe", title: "Direkte Aktionen" }), /* @__PURE__ */ import_react19.default.createElement("div", { className: "quick-actions" }, /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/berichte?view=write" }, "Berichte schreiben"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/berichte?view=calendar" }, "Kalenderansicht"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/noten" }, "Noten verwalten"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/freigaben" }, "Freigabestatus pr\xFCfen"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/profil" }, "Profil ansehen"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/archiv" }, "Archiv ansehen")))));
+    ), /* @__PURE__ */ import_react19.default.createElement("section", { className: "stats-grid" }, /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Tagesberichte", value: entries2.length, note: "Gesamtzahl deiner Eintr\xE4ge" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "In Pr\xFCfung", value: openApprovals, note: "Warten auf Freigabe" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Signiert", value: entries2.filter((entry) => entry.status === "signed").length, note: "Freigegebene Tage" }), /* @__PURE__ */ import_react19.default.createElement(
+      StatCard,
+      {
+        label: "Fehlende Berichtstage",
+        value: reportingProgress?.available ? reportingProgress.missingReportDays : "-",
+        note: reportingProgress?.available ? `Pflichtwerktage bis ${reportingProgress.calculationUntil}` : reportingProgress?.message || "Ausbildungsbeginn fehlt"
+      }
+    ), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Notenschnitt", value: gradeAverage ? formatGrade(gradeAverage) : "-", note: "Gewichteter Durchschnitt" })), /* @__PURE__ */ import_react19.default.createElement("section", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Berichtsheftpflicht", title: "Pflichtzeitraum" }), reportingProgress?.available ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-stack" }, /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-row" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, "Ausbildungsbeginn"), /* @__PURE__ */ import_react19.default.createElement("p", null, reportingProgress.trainingStartDate || "-"))), /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-row" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, "Ausbildungsende"), /* @__PURE__ */ import_react19.default.createElement("p", null, reportingProgress.trainingEndDate || "offen"))), /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-row" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, "Berechnet bis"), /* @__PURE__ */ import_react19.default.createElement("p", null, reportingProgress.calculationUntil || "-"))), /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-row" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, "Pflichtwerktage"), /* @__PURE__ */ import_react19.default.createElement("p", null, reportingProgress.requiredWorkdays)), /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, "Vorhandene Berichtstage"), /* @__PURE__ */ import_react19.default.createElement("p", null, reportingProgress.existingReportDays)))) : /* @__PURE__ */ import_react19.default.createElement(EmptyState, { title: reportingProgress?.message || "Ausbildungsbeginn nicht hinterlegt" })), /* @__PURE__ */ import_react19.default.createElement("section", { className: "two-column-grid" }, /* @__PURE__ */ import_react19.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Aktivit\xE4ten", title: "Letzte Eintr\xE4ge" }), latest.length ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-stack" }, latest.map((entry) => /* @__PURE__ */ import_react19.default.createElement("div", { key: entry.id, className: "list-row" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, entry.weekLabel || "Ohne Titel"), /* @__PURE__ */ import_react19.default.createElement("p", null, entry.dateFrom || "-")), /* @__PURE__ */ import_react19.default.createElement(StatusBadge, { status: entry.status })))) : /* @__PURE__ */ import_react19.default.createElement(EmptyState, { title: "Noch keine Aktivit\xE4ten" })), /* @__PURE__ */ import_react19.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Schnellzugriffe", title: "Direkte Aktionen" }), /* @__PURE__ */ import_react19.default.createElement("div", { className: "quick-actions" }, /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/berichte?view=write" }, "Berichte schreiben"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/berichte?view=calendar" }, "Kalenderansicht"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/noten" }, "Noten verwalten"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/freigaben" }, "Freigabestatus pr\xFCfen"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/profil" }, "Profil ansehen"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/archiv" }, "Archiv ansehen")))));
   }
   if (role === "trainer") {
-    const allEntries = trainees.flatMap((trainee) => trainee.entries);
-    const openEntries = allEntries.filter((entry) => entry.status === "submitted").sort((a3, b2) => String(a3.dateFrom).localeCompare(String(b2.dateFrom)));
+    const allEntries2 = trainees.flatMap((trainee) => trainee.entries);
+    const openEntries = allEntries2.filter((entry) => entry.status === "submitted").sort((a3, b2) => String(a3.dateFrom).localeCompare(String(b2.dateFrom)));
     return /* @__PURE__ */ import_react19.default.createElement("div", { className: "page-stack" }, /* @__PURE__ */ import_react19.default.createElement(
       PageHeader,
       {
@@ -87454,7 +87831,7 @@ function DashboardPage({ role, report, trainees, users }) {
         title: "Freigabe\xFCbersicht",
         actions: /* @__PURE__ */ import_react19.default.createElement(Link, { className: "btn btn-primary app-btn", to: "/freigaben" }, "Freigaben \xF6ffnen")
       }
-    ), /* @__PURE__ */ import_react19.default.createElement("section", { className: "stats-grid" }, /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Azubis", value: trainees.length, note: "Dir zugeordnete Personen" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Offene Pr\xFCfungen", value: allEntries.filter((entry) => entry.status === "submitted").length, note: "Zur Freigabe eingereicht" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Signiert", value: allEntries.filter((entry) => entry.status === "signed").length, note: "Freigegebene Berichte" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Abgelehnt", value: allEntries.filter((entry) => entry.status === "rejected").length, note: "Zur Nachbearbeitung zur\xFCckgegeben" })), /* @__PURE__ */ import_react19.default.createElement("section", { className: "two-column-grid" }, /* @__PURE__ */ import_react19.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Offene F\xE4lle", title: "Warten auf Freigabe" }), openEntries.length ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-stack" }, openEntries.slice(0, 6).map((entry) => {
+    ), pdfError ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "field-message error report-error-banner" }, pdfError) : null, /* @__PURE__ */ import_react19.default.createElement("section", { className: "stats-grid" }, /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Azubis", value: trainees.length, note: "Dir zugeordnete Personen" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Offene Pr\xFCfungen", value: allEntries2.filter((entry) => entry.status === "submitted").length, note: "Zur Freigabe eingereicht" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Signiert", value: allEntries2.filter((entry) => entry.status === "signed").length, note: "Freigegebene Berichte" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Abgelehnt", value: allEntries2.filter((entry) => entry.status === "rejected").length, note: "Zur Nachbearbeitung zur\xFCckgegeben" })), /* @__PURE__ */ import_react19.default.createElement("section", { className: "two-column-grid" }, /* @__PURE__ */ import_react19.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Offene F\xE4lle", title: "Warten auf Freigabe" }), openEntries.length ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-stack" }, openEntries.slice(0, 6).map((entry) => {
       const trainee = trainees.find((item) => item.entries.some((candidate) => candidate.id === entry.id));
       return /* @__PURE__ */ import_react19.default.createElement("div", { key: entry.id, className: "list-row" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, trainee?.name || "Azubi"), /* @__PURE__ */ import_react19.default.createElement("p", null, entry.weekLabel || "Ohne Titel", " \xB7 ", entry.dateFrom || "-")), /* @__PURE__ */ import_react19.default.createElement(StatusBadge, { status: entry.status }));
     })) : /* @__PURE__ */ import_react19.default.createElement(EmptyState, { title: "Keine offenen Freigaben" })), /* @__PURE__ */ import_react19.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Schnellzugriffe", title: "Arbeitsbereiche" }), /* @__PURE__ */ import_react19.default.createElement("div", { className: "quick-actions" }, /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/freigaben" }, "Freigaben bearbeiten"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/archiv" }, "Archiv \xF6ffnen"), trainees.slice(0, 2).map((trainee) => /* @__PURE__ */ import_react19.default.createElement("button", { key: trainee.id, type: "button", className: "quick-action-card", onClick: () => openPdfForTrainee(trainee) }, "PDF: ", trainee.name))))), /* @__PURE__ */ import_react19.default.createElement("section", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Azubi-Status", title: "Zugeordnete Auszubildende" }), trainees.length ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "trainer-overview-grid" }, trainees.map((trainee) => {
@@ -87462,7 +87839,7 @@ function DashboardPage({ role, report, trainees, users }) {
       return /* @__PURE__ */ import_react19.default.createElement("article", { key: trainee.id, className: "trainer-card" }, /* @__PURE__ */ import_react19.default.createElement("div", { className: "trainer-card-head" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, trainee.name), /* @__PURE__ */ import_react19.default.createElement("p", null, trainee.ausbildung || trainee.email)), /* @__PURE__ */ import_react19.default.createElement("button", { type: "button", className: "btn btn-outline-secondary trainer-pdf-button", onClick: () => openPdfForTrainee(trainee) }, "PDF")), /* @__PURE__ */ import_react19.default.createElement("div", { className: "trainer-card-stats" }, /* @__PURE__ */ import_react19.default.createElement("span", null, "Offen: ", summary.submitted), /* @__PURE__ */ import_react19.default.createElement("span", null, "Signiert: ", summary.signed), /* @__PURE__ */ import_react19.default.createElement("span", null, "Abgelehnt: ", summary.rejected)), summary.latest ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "trainer-card-latest" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, "Letzte Aktivit\xE4t"), /* @__PURE__ */ import_react19.default.createElement("p", null, summary.latest.weekLabel || "Ohne Titel", " \xB7 ", summary.latest.dateFrom || "-")), /* @__PURE__ */ import_react19.default.createElement(StatusBadge, { status: summary.latest.status })) : /* @__PURE__ */ import_react19.default.createElement(EmptyState, { title: "Noch keine Berichte" }));
     })) : /* @__PURE__ */ import_react19.default.createElement(EmptyState, { title: "Keine Azubis zugeordnet" })));
   }
-  return /* @__PURE__ */ import_react19.default.createElement("div", { className: "page-stack" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Dashboard", title: "Verwaltungs\xFCbersicht" }), /* @__PURE__ */ import_react19.default.createElement("section", { className: "stats-grid" }, /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Benutzer", value: users.length, note: "Alle registrierten Konten" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Azubis", value: users.filter((user) => user.role === "trainee").length, note: "Aktive Auszubildende" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Ausbilder", value: users.filter((user) => user.role === "trainer").length, note: "Pr\xFCfende Nutzer" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Admins", value: users.filter((user) => user.role === "admin").length, note: "Verwaltungszug\xE4nge" })));
+  return /* @__PURE__ */ import_react19.default.createElement("div", { className: "page-stack" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Dashboard", title: "Verwaltungs\xFCbersicht" }), pdfError ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "field-message error report-error-banner" }, pdfError) : null, /* @__PURE__ */ import_react19.default.createElement("section", { className: "stats-grid" }, /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Benutzer", value: users.length, note: "Alle registrierten Konten" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Azubis", value: traineeUsers.length, note: "Aktive Auszubildende" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Ausbilder", value: users.filter((user) => user.role === "trainer").length, note: "Pr\xFCfende Nutzer" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Admins", value: users.filter((user) => user.role === "admin").length, note: "Verwaltungszug\xE4nge" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Ohne Zuordnung", value: orphanedTrainees.length, note: "Azubis ohne Ausbilder" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Eingereicht", value: allEntries.filter((entry) => entry.status === "submitted").length, note: "Warten auf Pr\xFCfung" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Signiert", value: allEntries.filter((entry) => entry.status === "signed").length, note: "Abgeschlossene Berichte" }), /* @__PURE__ */ import_react19.default.createElement(StatCard, { label: "Nachbearbeitung", value: allEntries.filter((entry) => entry.status === "rejected").length, note: "Zur\xFCckgegebene Berichte" })), /* @__PURE__ */ import_react19.default.createElement("section", { className: "two-column-grid" }, /* @__PURE__ */ import_react19.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "System", title: "Admin-Arbeitsbereiche" }), /* @__PURE__ */ import_react19.default.createElement("div", { className: "quick-actions" }, /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/admin/users/new" }, "Benutzer anlegen"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/admin/users" }, "Benutzer verwalten"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/admin/assignments" }, "Zuordnungen pr\xFCfen"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/admin/audit-log" }, "Audit-Log \xF6ffnen"), /* @__PURE__ */ import_react19.default.createElement(Link, { className: "quick-action-card", to: "/profil" }, "Profil \xF6ffnen"))), /* @__PURE__ */ import_react19.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Pr\xFCfung", title: "Auff\xE4lligkeiten" }), orphanedTrainees.length ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-stack" }, orphanedTrainees.slice(0, 5).map((user) => /* @__PURE__ */ import_react19.default.createElement("div", { key: user.id, className: "list-row" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, user.name), /* @__PURE__ */ import_react19.default.createElement("p", null, user.email)), /* @__PURE__ */ import_react19.default.createElement("span", { className: "status-badge badge rounded-pill text-uppercase status-invalid" }, "Kein Ausbilder")))) : /* @__PURE__ */ import_react19.default.createElement(EmptyState, { title: "Keine offenen Zuordnungsprobleme" }))), /* @__PURE__ */ import_react19.default.createElement("section", { className: "two-column-grid" }, /* @__PURE__ */ import_react19.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Audit-Log", title: "Letzte Verwaltungsereignisse" }), auditState.error ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "field-message error" }, auditState.error) : null, auditState.busy ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "field-message" }, "Audit-Log wird geladen...") : null, !auditState.busy && !auditState.items.length ? /* @__PURE__ */ import_react19.default.createElement(EmptyState, { title: "Noch keine Audit-Eintr\xE4ge" }) : null, auditState.items.length ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-stack" }, auditState.items.map((item) => /* @__PURE__ */ import_react19.default.createElement("div", { key: item.id, className: "list-row" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, item.actionType), /* @__PURE__ */ import_react19.default.createElement("p", null, item.summary)), /* @__PURE__ */ import_react19.default.createElement("small", null, new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.createdAt)))))) : null), /* @__PURE__ */ import_react19.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react19.default.createElement(PageHeader, { kicker: "Verteilung", title: "Audit-Typen" }), auditSummary.length ? /* @__PURE__ */ import_react19.default.createElement("div", { className: "list-stack" }, auditSummary.map(([actionType, count]) => /* @__PURE__ */ import_react19.default.createElement("div", { key: actionType, className: "list-row" }, /* @__PURE__ */ import_react19.default.createElement("div", null, /* @__PURE__ */ import_react19.default.createElement("strong", null, actionType), /* @__PURE__ */ import_react19.default.createElement("p", null, "Vorkommen im aktuellen Ausschnitt")), /* @__PURE__ */ import_react19.default.createElement("span", null, count)))) : /* @__PURE__ */ import_react19.default.createElement(EmptyState, { title: "Keine Audit-Auswertung verf\xFCgbar" }))));
 }
 
 // src/pages/TagesberichtePage.jsx
@@ -87715,6 +88092,8 @@ function TagesberichtePage({ report, initialView = "calendar", onCreate, onSaveE
     return VIEW_OPTIONS.some((view) => view.id === requested) ? requested : initialView === "editor" ? "write" : initialView;
   });
   const [statusFilter, setStatusFilter] = (0, import_react22.useState)("all");
+  const [periodFilter, setPeriodFilter] = (0, import_react22.useState)("all");
+  const [sortBy, setSortBy] = (0, import_react22.useState)("date-desc");
   const [query, setQuery] = (0, import_react22.useState)("");
   const [visibleMonth, setVisibleMonth] = (0, import_react22.useState)(() => {
     const seed = parseLocalDate(defaultDate) || parseLocalDate(today);
@@ -87742,14 +88121,46 @@ function TagesberichtePage({ report, initialView = "calendar", onCreate, onSaveE
   }, [entries2, entryByDate, selectedDate, selectedId]);
   const editorKey = `${selectedEntry?.id || "new"}:${selectedDate || "none"}`;
   const selectedPermissions = (0, import_react22.useMemo)(() => getEntryPermissions(selectedEntry), [selectedEntry]);
+  const inSelectedPeriod = (dateValue) => {
+    if (periodFilter === "all" || !dateValue) {
+      return true;
+    }
+    const current = /* @__PURE__ */ new Date(`${dateValue}T00:00:00`);
+    if (Number.isNaN(current.getTime())) {
+      return true;
+    }
+    const todayDate = parseLocalDate(today) || /* @__PURE__ */ new Date();
+    const startOfToday = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate());
+    const startOfWeek = new Date(startOfToday);
+    const weekDay = startOfWeek.getDay() || 7;
+    startOfWeek.setDate(startOfWeek.getDate() - weekDay + 1);
+    const startOfMonth = new Date(startOfToday.getFullYear(), startOfToday.getMonth(), 1);
+    if (periodFilter === "today") return current.getTime() === startOfToday.getTime();
+    if (periodFilter === "week") return current >= startOfWeek;
+    if (periodFilter === "month") return current >= startOfMonth;
+    return true;
+  };
+  const sortEntries = (items) => [...items].sort((left, right) => {
+    if (sortBy === "date-asc") {
+      return String(left.dateFrom).localeCompare(String(right.dateFrom));
+    }
+    if (sortBy === "status") {
+      return String(left.status).localeCompare(String(right.status), "de") || String(right.dateFrom).localeCompare(String(left.dateFrom));
+    }
+    if (sortBy === "title") {
+      return String(left.weekLabel).localeCompare(String(right.weekLabel), "de") || String(right.dateFrom).localeCompare(String(left.dateFrom));
+    }
+    return String(right.dateFrom).localeCompare(String(left.dateFrom));
+  });
   const filteredEntries = (0, import_react22.useMemo)(
-    () => entries2.filter((entry) => {
+    () => sortEntries(entries2.filter((entry) => {
       const matchesStatus = statusFilter === "all" ? true : entry.status === statusFilter;
+      const matchesPeriod = inSelectedPeriod(entry.dateFrom);
       const needle = query.trim().toLowerCase();
       const matchesQuery = !needle ? true : [entry.weekLabel, entry.dateFrom, entry.betrieb, entry.schule].join(" ").toLowerCase().includes(needle);
-      return matchesStatus && matchesQuery;
-    }),
-    [entries2, query, statusFilter]
+      return matchesStatus && matchesPeriod && matchesQuery;
+    })),
+    [entries2, periodFilter, query, sortBy, statusFilter]
   );
   const weekDates = (0, import_react22.useMemo)(() => buildWeekDates(selectedDate || today), [selectedDate, today]);
   const selectableCalendarEntries = (0, import_react22.useMemo)(
@@ -88090,7 +88501,7 @@ function TagesberichtePage({ report, initialView = "calendar", onCreate, onSaveE
       kicker: "Listenansicht",
       title: "Berichte"
     }
-  ), /* @__PURE__ */ import_react22.default.createElement(FilterBar, null, /* @__PURE__ */ import_react22.default.createElement("input", { placeholder: "Nach Titel, Datum oder Inhalt suchen", value: query, onChange: (event) => setQuery(event.target.value) }), /* @__PURE__ */ import_react22.default.createElement("select", { value: statusFilter, onChange: (event) => setStatusFilter(event.target.value) }, /* @__PURE__ */ import_react22.default.createElement("option", { value: "all" }, "Alle Status"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "draft" }, "Entwurf"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "submitted" }, "Eingereicht"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "signed" }, "Signiert"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "rejected" }, "Nachbearbeitung"))), filteredEntries.length ? /* @__PURE__ */ import_react22.default.createElement("div", { className: "report-listing-rows" }, filteredEntries.map((entry) => /* @__PURE__ */ import_react22.default.createElement("button", { key: entry.id, type: "button", className: "report-list-row", onClick: () => openEditorForEntry(entry.id) }, /* @__PURE__ */ import_react22.default.createElement("div", { className: "report-list-summary" }, /* @__PURE__ */ import_react22.default.createElement("strong", null, entry.weekLabel || "Ohne Titel"), /* @__PURE__ */ import_react22.default.createElement(StatusBadge, { status: entry.status })), /* @__PURE__ */ import_react22.default.createElement("div", { className: "report-list-meta" }, /* @__PURE__ */ import_react22.default.createElement("span", null, entry.dateFrom || "-"), /* @__PURE__ */ import_react22.default.createElement("span", null, entry.betrieb && entry.schule ? "Betrieb + Schule" : entry.betrieb ? "Betrieb" : entry.schule ? "Berufsschule" : "Noch ohne Inhalt")), entry.trainerComment ? /* @__PURE__ */ import_react22.default.createElement("p", null, entry.trainerComment) : null))) : /* @__PURE__ */ import_react22.default.createElement(EmptyState, { title: "Keine Berichte gefunden" })) : null, activeView === "write" ? /* @__PURE__ */ import_react22.default.createElement("section", { className: "report-writing-view" }, /* @__PURE__ */ import_react22.default.createElement("div", { className: "panel-card writing-toolbar" }, /* @__PURE__ */ import_react22.default.createElement(
+  ), /* @__PURE__ */ import_react22.default.createElement(FilterBar, null, /* @__PURE__ */ import_react22.default.createElement("input", { placeholder: "Nach Titel, Datum oder Inhalt suchen", value: query, onChange: (event) => setQuery(event.target.value) }), /* @__PURE__ */ import_react22.default.createElement("select", { value: statusFilter, onChange: (event) => setStatusFilter(event.target.value) }, /* @__PURE__ */ import_react22.default.createElement("option", { value: "all" }, "Alle Status"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "draft" }, "Entwurf"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "submitted" }, "Eingereicht"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "signed" }, "Signiert"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "rejected" }, "Nachbearbeitung")), /* @__PURE__ */ import_react22.default.createElement("select", { value: periodFilter, onChange: (event) => setPeriodFilter(event.target.value) }, /* @__PURE__ */ import_react22.default.createElement("option", { value: "all" }, "Gesamter Zeitraum"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "today" }, "Heute"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "week" }, "Diese Woche"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "month" }, "Dieser Monat")), /* @__PURE__ */ import_react22.default.createElement("select", { value: sortBy, onChange: (event) => setSortBy(event.target.value) }, /* @__PURE__ */ import_react22.default.createElement("option", { value: "date-desc" }, "Neueste zuerst"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "date-asc" }, "Aelteste zuerst"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "status" }, "Nach Status"), /* @__PURE__ */ import_react22.default.createElement("option", { value: "title" }, "Nach Titel"))), filteredEntries.length ? /* @__PURE__ */ import_react22.default.createElement("div", { className: "report-listing-rows" }, filteredEntries.map((entry) => /* @__PURE__ */ import_react22.default.createElement("button", { key: entry.id, type: "button", className: "report-list-row", onClick: () => openEditorForEntry(entry.id) }, /* @__PURE__ */ import_react22.default.createElement("div", { className: "report-list-summary" }, /* @__PURE__ */ import_react22.default.createElement("strong", null, entry.weekLabel || "Ohne Titel"), /* @__PURE__ */ import_react22.default.createElement(StatusBadge, { status: entry.status })), /* @__PURE__ */ import_react22.default.createElement("div", { className: "report-list-meta" }, /* @__PURE__ */ import_react22.default.createElement("span", null, entry.dateFrom || "-"), /* @__PURE__ */ import_react22.default.createElement("span", null, entry.betrieb && entry.schule ? "Betrieb + Schule" : entry.betrieb ? "Betrieb" : entry.schule ? "Berufsschule" : "Noch ohne Inhalt")), entry.trainerComment ? /* @__PURE__ */ import_react22.default.createElement("p", null, entry.trainerComment) : null))) : /* @__PURE__ */ import_react22.default.createElement(EmptyState, { title: "Keine Berichte gefunden" })) : null, activeView === "write" ? /* @__PURE__ */ import_react22.default.createElement("section", { className: "report-writing-view" }, /* @__PURE__ */ import_react22.default.createElement("div", { className: "panel-card writing-toolbar" }, /* @__PURE__ */ import_react22.default.createElement(
     PageHeader,
     {
       kicker: "Schreibansicht",
@@ -88131,7 +88542,7 @@ function DataTable({ columns, rows, rowKey, onRowClick }) {
   if (!rows.length) {
     return /* @__PURE__ */ import_react23.default.createElement("div", { className: "empty-table" }, "Keine Eintr\xE4ge vorhanden.");
   }
-  return /* @__PURE__ */ import_react23.default.createElement("div", { className: "table-responsive table-shell border rounded-3 bg-white" }, /* @__PURE__ */ import_react23.default.createElement("table", { className: "table table-hover align-middle mb-0 data-table" }, /* @__PURE__ */ import_react23.default.createElement("thead", null, /* @__PURE__ */ import_react23.default.createElement("tr", null, columns.map((column) => /* @__PURE__ */ import_react23.default.createElement("th", { key: column.key }, column.label)))), /* @__PURE__ */ import_react23.default.createElement("tbody", null, rows.map((row) => /* @__PURE__ */ import_react23.default.createElement("tr", { key: row[rowKey], onClick: onRowClick ? () => onRowClick(row) : void 0, className: onRowClick ? "is-clickable" : "" }, columns.map((column) => /* @__PURE__ */ import_react23.default.createElement("td", { key: column.key }, column.render ? column.render(row) : row[column.key])))))));
+  return /* @__PURE__ */ import_react23.default.createElement("div", { className: "table-responsive table-shell" }, /* @__PURE__ */ import_react23.default.createElement("table", { className: "table table-hover align-middle mb-0 data-table" }, /* @__PURE__ */ import_react23.default.createElement("thead", null, /* @__PURE__ */ import_react23.default.createElement("tr", null, columns.map((column) => /* @__PURE__ */ import_react23.default.createElement("th", { key: column.key }, column.label)))), /* @__PURE__ */ import_react23.default.createElement("tbody", null, rows.map((row) => /* @__PURE__ */ import_react23.default.createElement("tr", { key: row[rowKey], onClick: onRowClick ? () => onRowClick(row) : void 0, className: onRowClick ? "is-clickable" : "" }, columns.map((column) => /* @__PURE__ */ import_react23.default.createElement("td", { key: column.key }, column.render ? column.render(row) : row[column.key])))))));
 }
 
 // src/pages/FreigabenPage.jsx
@@ -88169,6 +88580,7 @@ function FreigabenPage({ role, report, trainees, onSign, onReject, onComment, on
   const [sortBy, setSortBy] = (0, import_react24.useState)("date-desc");
   const [busyAction, setBusyAction] = (0, import_react24.useState)("");
   const [actionError, setActionError] = (0, import_react24.useState)("");
+  const [pdfError, setPdfError] = (0, import_react24.useState)("");
   if (role === "trainee") {
     const entries2 = report?.entries || [];
     const formatSignature = (entry) => {
@@ -88228,7 +88640,7 @@ function FreigabenPage({ role, report, trainees, onSign, onReject, onComment, on
     if (periodFilter === "month") return current >= startOfMonth;
     return true;
   };
-  const sortRows = (items2) => [...items2].sort((a3, b2) => {
+  const sortRows = (items) => [...items].sort((a3, b2) => {
     if (sortBy === "date-asc") {
       return String(a3.dateFrom).localeCompare(String(b2.dateFrom));
     }
@@ -88328,7 +88740,7 @@ function FreigabenPage({ role, report, trainees, onSign, onReject, onComment, on
       (current) => current.includes(entryId) ? current.filter((value) => value !== entryId) : [...current, entryId]
     );
   }
-  function handlePdfExport() {
+  async function handlePdfExport() {
     if (!selectedEntry) {
       return;
     }
@@ -88337,6 +88749,7 @@ function FreigabenPage({ role, report, trainees, onSign, onReject, onComment, on
       return;
     }
     if (isStaticDemo()) {
+      setPdfError("");
       downloadReportPdf({
         entries: trainee.entries || [],
         traineeName: trainee.name,
@@ -88344,7 +88757,12 @@ function FreigabenPage({ role, report, trainees, onSign, onReject, onComment, on
       });
       return;
     }
-    window.location.href = apiUrl(`/api/report/pdf/${selectedEntry.traineeId}`);
+    try {
+      setPdfError("");
+      await downloadPdfFromApi(apiUrl(`/api/report/pdf/${selectedEntry.traineeId}`), `berichtsheft-${trainee.name || "azubi"}.pdf`);
+    } catch (error) {
+      setPdfError(error.message || "PDF konnte nicht geladen werden.");
+    }
   }
   return /* @__PURE__ */ import_react24.default.createElement("div", { className: "page-stack" }, /* @__PURE__ */ import_react24.default.createElement(
     PageHeader,
@@ -88352,7 +88770,7 @@ function FreigabenPage({ role, report, trainees, onSign, onReject, onComment, on
       kicker: "Freigaben",
       title: "Pr\xFCfungen und Freigaben"
     }
-  ), /* @__PURE__ */ import_react24.default.createElement("section", { className: "approval-summary" }, /* @__PURE__ */ import_react24.default.createElement("article", { className: "approval-summary-item" }, /* @__PURE__ */ import_react24.default.createElement("span", null, "Offen eingereicht"), /* @__PURE__ */ import_react24.default.createElement("strong", null, pendingCount), /* @__PURE__ */ import_react24.default.createElement("small", null, "Berichte mit Status Eingereicht")), /* @__PURE__ */ import_react24.default.createElement("article", { className: "approval-summary-item" }, /* @__PURE__ */ import_react24.default.createElement("span", null, "Aktuelle Treffer"), /* @__PURE__ */ import_react24.default.createElement("strong", null, filteredRows.length))), /* @__PURE__ */ import_react24.default.createElement("section", { className: "approval-layout" }, /* @__PURE__ */ import_react24.default.createElement("article", { className: "panel-card approval-list-panel" }, /* @__PURE__ */ import_react24.default.createElement("div", { className: "approval-list-head" }, /* @__PURE__ */ import_react24.default.createElement("div", null, /* @__PURE__ */ import_react24.default.createElement("p", { className: "page-kicker" }, "Queue"), /* @__PURE__ */ import_react24.default.createElement("h3", null, "Berichte zur Pr\xFCfung")), /* @__PURE__ */ import_react24.default.createElement("span", { className: "approval-count" }, filteredRows.length)), /* @__PURE__ */ import_react24.default.createElement(FilterBar, null, /* @__PURE__ */ import_react24.default.createElement("input", { placeholder: "Suche nach Azubi, Titel oder Inhalt", value: query, onChange: (event) => setQuery(event.target.value) }), /* @__PURE__ */ import_react24.default.createElement("select", { value: traineeFilter, onChange: (event) => setTraineeFilter(event.target.value) }, /* @__PURE__ */ import_react24.default.createElement("option", { value: "all" }, "Alle Azubis"), traineeOptions.map((trainee) => /* @__PURE__ */ import_react24.default.createElement("option", { key: trainee.id, value: trainee.id }, trainee.name))), /* @__PURE__ */ import_react24.default.createElement("select", { value: statusFilter, onChange: (event) => setStatusFilter(event.target.value) }, /* @__PURE__ */ import_react24.default.createElement("option", { value: "submitted" }, "Eingereicht"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "rejected" }, "Nachbearbeitung"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "signed" }, "Signiert"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "draft" }, "Entwurf"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "all" }, "Alle Status")), /* @__PURE__ */ import_react24.default.createElement("select", { value: periodFilter, onChange: (event) => setPeriodFilter(event.target.value) }, /* @__PURE__ */ import_react24.default.createElement("option", { value: "all" }, "Alle Zeitraeume"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "today" }, "Heute"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "week" }, "Diese Woche"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "month" }, "Dieser Monat")), /* @__PURE__ */ import_react24.default.createElement("select", { value: sortBy, onChange: (event) => setSortBy(event.target.value) }, /* @__PURE__ */ import_react24.default.createElement("option", { value: "date-desc" }, "Neueste zuerst"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "date-asc" }, "Aelteste zuerst"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "trainee-asc" }, "Azubi A-Z"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "trainee-desc" }, "Azubi Z-A"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "status" }, "Nach Status")), /* @__PURE__ */ import_react24.default.createElement(
+  ), pdfError ? /* @__PURE__ */ import_react24.default.createElement("div", { className: "field-message error report-error-banner" }, pdfError) : null, /* @__PURE__ */ import_react24.default.createElement("section", { className: "approval-summary" }, /* @__PURE__ */ import_react24.default.createElement("article", { className: "approval-summary-item" }, /* @__PURE__ */ import_react24.default.createElement("span", null, "Offen eingereicht"), /* @__PURE__ */ import_react24.default.createElement("strong", null, pendingCount), /* @__PURE__ */ import_react24.default.createElement("small", null, "Berichte mit Status Eingereicht")), /* @__PURE__ */ import_react24.default.createElement("article", { className: "approval-summary-item" }, /* @__PURE__ */ import_react24.default.createElement("span", null, "Aktuelle Treffer"), /* @__PURE__ */ import_react24.default.createElement("strong", null, filteredRows.length))), /* @__PURE__ */ import_react24.default.createElement("section", { className: "approval-layout" }, /* @__PURE__ */ import_react24.default.createElement("article", { className: "panel-card approval-list-panel" }, /* @__PURE__ */ import_react24.default.createElement("div", { className: "approval-list-head" }, /* @__PURE__ */ import_react24.default.createElement("div", null, /* @__PURE__ */ import_react24.default.createElement("p", { className: "page-kicker" }, "Queue"), /* @__PURE__ */ import_react24.default.createElement("h3", null, "Berichte zur Pr\xFCfung")), /* @__PURE__ */ import_react24.default.createElement("span", { className: "approval-count" }, filteredRows.length)), /* @__PURE__ */ import_react24.default.createElement(FilterBar, null, /* @__PURE__ */ import_react24.default.createElement("input", { placeholder: "Suche nach Azubi, Titel oder Inhalt", value: query, onChange: (event) => setQuery(event.target.value) }), /* @__PURE__ */ import_react24.default.createElement("select", { value: traineeFilter, onChange: (event) => setTraineeFilter(event.target.value) }, /* @__PURE__ */ import_react24.default.createElement("option", { value: "all" }, "Alle Azubis"), traineeOptions.map((trainee) => /* @__PURE__ */ import_react24.default.createElement("option", { key: trainee.id, value: trainee.id }, trainee.name))), /* @__PURE__ */ import_react24.default.createElement("select", { value: statusFilter, onChange: (event) => setStatusFilter(event.target.value) }, /* @__PURE__ */ import_react24.default.createElement("option", { value: "submitted" }, "Eingereicht"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "rejected" }, "Nachbearbeitung"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "signed" }, "Signiert"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "draft" }, "Entwurf"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "all" }, "Alle Status")), /* @__PURE__ */ import_react24.default.createElement("select", { value: periodFilter, onChange: (event) => setPeriodFilter(event.target.value) }, /* @__PURE__ */ import_react24.default.createElement("option", { value: "all" }, "Alle Zeitraeume"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "today" }, "Heute"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "week" }, "Diese Woche"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "month" }, "Dieser Monat")), /* @__PURE__ */ import_react24.default.createElement("select", { value: sortBy, onChange: (event) => setSortBy(event.target.value) }, /* @__PURE__ */ import_react24.default.createElement("option", { value: "date-desc" }, "Neueste zuerst"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "date-asc" }, "Aelteste zuerst"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "trainee-asc" }, "Azubi A-Z"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "trainee-desc" }, "Azubi Z-A"), /* @__PURE__ */ import_react24.default.createElement("option", { value: "status" }, "Nach Status")), /* @__PURE__ */ import_react24.default.createElement(
     PrimaryButton,
     {
       variant: "ghost",
@@ -88480,13 +88898,13 @@ function buildProfileForm(profile) {
   };
 }
 function ProfileDetailGrid({ profile }) {
-  const items2 = [
+  const items = [
     { label: "Name", value: profile?.name || "-" },
     { label: "Ausbildung", value: profile?.ausbildung || "-" },
     { label: "Betrieb", value: profile?.betrieb || "-" },
     { label: "Berufsschule", value: profile?.berufsschule || "-" }
   ];
-  return /* @__PURE__ */ import_react25.default.createElement("div", { className: "read-only-grid" }, items2.map((item) => /* @__PURE__ */ import_react25.default.createElement("div", { key: item.label, className: "read-only-card" }, /* @__PURE__ */ import_react25.default.createElement("span", null, item.label), /* @__PURE__ */ import_react25.default.createElement("strong", null, item.value))));
+  return /* @__PURE__ */ import_react25.default.createElement("div", { className: "read-only-grid" }, items.map((item) => /* @__PURE__ */ import_react25.default.createElement("div", { key: item.label, className: "read-only-card" }, /* @__PURE__ */ import_react25.default.createElement("span", null, item.label), /* @__PURE__ */ import_react25.default.createElement("strong", null, item.value))));
 }
 function ThemeSettingsPanel({ theme, themePreference, onToggleTheme, onSaveThemePreference }) {
   return /* @__PURE__ */ import_react25.default.createElement("section", { className: "panel-card" }, /* @__PURE__ */ import_react25.default.createElement(
@@ -88594,6 +89012,7 @@ function ProfilPage({ role, report, trainees, users, theme, themePreference, onT
   const [selectedId, setSelectedId] = (0, import_react25.useState)(() => targets[0]?.id || null);
   const selectedProfile = targets.find((target) => target.id === selectedId) || null;
   const [form, setForm] = (0, import_react25.useState)(buildProfileForm(selectedProfile));
+  const [pdfError, setPdfError] = (0, import_react25.useState)("");
   (0, import_react25.useEffect)(() => {
     if (!targets.length) {
       setSelectedId(null);
@@ -88606,8 +89025,9 @@ function ProfilPage({ role, report, trainees, users, theme, themePreference, onT
   (0, import_react25.useEffect)(() => {
     setForm(buildProfileForm(selectedProfile));
   }, [selectedProfile]);
-  function handlePdfExport(profile, entries2) {
+  async function handlePdfExport(profile, entries2) {
     if (isStaticDemo()) {
+      setPdfError("");
       downloadReportPdf({
         entries: entries2,
         traineeName: profile?.name || "",
@@ -88615,7 +89035,12 @@ function ProfilPage({ role, report, trainees, users, theme, themePreference, onT
       });
       return;
     }
-    window.location.href = profile?.id ? apiUrl(`/api/report/pdf/${profile.id}`) : apiUrl("/api/report/pdf");
+    try {
+      setPdfError("");
+      await downloadPdfFromApi(profile?.id ? apiUrl(`/api/report/pdf/${profile.id}`) : apiUrl("/api/report/pdf"), `berichtsheft-${profile?.name || "azubi"}.pdf`);
+    } catch (error) {
+      setPdfError(error.message || "PDF konnte nicht geladen werden.");
+    }
   }
   if (role === "trainee") {
     return /* @__PURE__ */ import_react25.default.createElement("div", { className: "page-stack" }, /* @__PURE__ */ import_react25.default.createElement(
@@ -88625,7 +89050,7 @@ function ProfilPage({ role, report, trainees, users, theme, themePreference, onT
         title: "Pers\xF6nliche und betriebliche Daten",
         actions: /* @__PURE__ */ import_react25.default.createElement("button", { type: "button", className: "button button-secondary", onClick: () => handlePdfExport(report?.trainee, report?.entries || []) }, "PDF exportieren")
       }
-    ), /* @__PURE__ */ import_react25.default.createElement("section", { className: "panel-card" }, /* @__PURE__ */ import_react25.default.createElement(ProfileDetailGrid, { profile: report?.trainee })), /* @__PURE__ */ import_react25.default.createElement(
+    ), pdfError ? /* @__PURE__ */ import_react25.default.createElement("div", { className: "field-message error report-error-banner" }, pdfError) : null, /* @__PURE__ */ import_react25.default.createElement("section", { className: "panel-card" }, /* @__PURE__ */ import_react25.default.createElement(ProfileDetailGrid, { profile: report?.trainee })), /* @__PURE__ */ import_react25.default.createElement(
       ThemeSettingsPanel,
       {
         theme,
@@ -88642,7 +89067,7 @@ function ProfilPage({ role, report, trainees, users, theme, themePreference, onT
       title: role === "trainer" ? "Azubi-Stammdaten pflegen" : "Stammdaten verwalten",
       actions: selectedProfile ? /* @__PURE__ */ import_react25.default.createElement("button", { type: "button", className: "button button-secondary", onClick: () => handlePdfExport(selectedProfile, trainees.find((target) => target.id === selectedProfile.id)?.entries || []) }, "PDF f\xFCr Auswahl") : null
     }
-  ), /* @__PURE__ */ import_react25.default.createElement("section", { className: "profile-manager-layout" }, /* @__PURE__ */ import_react25.default.createElement("article", { className: "panel-card profile-picker" }, /* @__PURE__ */ import_react25.default.createElement(
+  ), pdfError ? /* @__PURE__ */ import_react25.default.createElement("div", { className: "field-message error report-error-banner" }, pdfError) : null, /* @__PURE__ */ import_react25.default.createElement("section", { className: "profile-manager-layout" }, /* @__PURE__ */ import_react25.default.createElement("article", { className: "panel-card profile-picker" }, /* @__PURE__ */ import_react25.default.createElement(
     PageHeader,
     {
       kicker: "Auswahl",
@@ -88684,8 +89109,10 @@ function ProfilPage({ role, report, trainees, users, theme, themePreference, onT
 // src/pages/ArchivPage.jsx
 var import_react26 = __toESM(require_react());
 function ArchivPage({ role, report, trainees }) {
-  function exportPdf(trainee) {
+  const [pdfError, setPdfError] = (0, import_react26.useState)("");
+  async function exportPdf(trainee) {
     if (isStaticDemo()) {
+      setPdfError("");
       downloadReportPdf({
         entries: trainee.entries || [],
         traineeName: trainee.name,
@@ -88693,7 +89120,29 @@ function ArchivPage({ role, report, trainees }) {
       });
       return;
     }
-    window.location.href = apiUrl(`/api/report/pdf/${trainee.id}`);
+    try {
+      setPdfError("");
+      await downloadPdfFromApi(apiUrl(`/api/report/pdf/${trainee.id}`), `berichtsheft-${trainee.name || "azubi"}.pdf`);
+    } catch (error) {
+      setPdfError(error.message || "PDF konnte nicht geladen werden.");
+    }
+  }
+  async function exportOwnPdf() {
+    if (isStaticDemo()) {
+      setPdfError("");
+      downloadReportPdf({
+        entries: report?.entries || [],
+        traineeName: report?.trainee?.name || "",
+        trainingTitle: report?.trainee?.ausbildung || ""
+      });
+      return;
+    }
+    try {
+      setPdfError("");
+      await downloadPdfFromApi(apiUrl("/api/report/pdf"), "berichtsheft.pdf");
+    } catch (error) {
+      setPdfError(error.message || "PDF konnte nicht geladen werden.");
+    }
   }
   const rows = role === "trainee" ? (report?.entries || []).filter((entry) => entry.status === "signed") : trainees.flatMap(
     (trainee) => trainee.entries.filter((entry) => entry.status === "signed").map((entry) => ({ ...entry, traineeName: trainee.name, traineeId: trainee.id }))
@@ -88704,18 +89153,10 @@ function ArchivPage({ role, report, trainees }) {
       kicker: "Archiv",
       title: "Freigegebene Berichte und PDF-Archiv",
       actions: role === "trainee" ? /* @__PURE__ */ import_react26.default.createElement("button", { type: "button", className: "button button-primary", onClick: () => {
-        if (isStaticDemo()) {
-          downloadReportPdf({
-            entries: report?.entries || [],
-            traineeName: report?.trainee?.name || "",
-            trainingTitle: report?.trainee?.ausbildung || ""
-          });
-          return;
-        }
-        window.location.href = apiUrl("/api/report/pdf");
+        exportOwnPdf();
       } }, "Gesamtes PDF laden") : trainees.length ? /* @__PURE__ */ import_react26.default.createElement("div", { className: "page-actions" }, trainees.slice(0, 2).map((trainee) => /* @__PURE__ */ import_react26.default.createElement("button", { key: trainee.id, type: "button", className: "button button-primary", onClick: () => exportPdf(trainee) }, "PDF ", trainee.name))) : null
     }
-  ), /* @__PURE__ */ import_react26.default.createElement("section", { className: "panel-card" }, /* @__PURE__ */ import_react26.default.createElement("div", { className: "mobile-records" }, rows.length ? rows.map((row) => /* @__PURE__ */ import_react26.default.createElement("article", { key: row.id, className: "mobile-record-card mobile-record-card-static" }, /* @__PURE__ */ import_react26.default.createElement("div", { className: "mobile-record-head" }, /* @__PURE__ */ import_react26.default.createElement("strong", null, row.weekLabel || "Ohne Titel"), /* @__PURE__ */ import_react26.default.createElement(StatusBadge, { status: row.status })), /* @__PURE__ */ import_react26.default.createElement("div", { className: "mobile-record-body" }, role === "trainee" ? null : /* @__PURE__ */ import_react26.default.createElement("small", null, "Azubi: ", row.traineeName), /* @__PURE__ */ import_react26.default.createElement("span", null, row.dateFrom || "-"), /* @__PURE__ */ import_react26.default.createElement("small", null, "Freigabe durch: ", row.signerName || "-"), role === "trainee" ? null : /* @__PURE__ */ import_react26.default.createElement(
+  ), pdfError ? /* @__PURE__ */ import_react26.default.createElement("div", { className: "field-message error report-error-banner" }, pdfError) : null, /* @__PURE__ */ import_react26.default.createElement("section", { className: "panel-card" }, /* @__PURE__ */ import_react26.default.createElement("div", { className: "mobile-records" }, rows.length ? rows.map((row) => /* @__PURE__ */ import_react26.default.createElement("article", { key: row.id, className: "mobile-record-card mobile-record-card-static" }, /* @__PURE__ */ import_react26.default.createElement("div", { className: "mobile-record-head" }, /* @__PURE__ */ import_react26.default.createElement("strong", null, row.weekLabel || "Ohne Titel"), /* @__PURE__ */ import_react26.default.createElement(StatusBadge, { status: row.status })), /* @__PURE__ */ import_react26.default.createElement("div", { className: "mobile-record-body" }, role === "trainee" ? null : /* @__PURE__ */ import_react26.default.createElement("small", null, "Azubi: ", row.traineeName), /* @__PURE__ */ import_react26.default.createElement("span", null, row.dateFrom || "-"), /* @__PURE__ */ import_react26.default.createElement("small", null, "Freigabe durch: ", row.signerName || "-"), role === "trainee" ? null : /* @__PURE__ */ import_react26.default.createElement(
     "button",
     {
       type: "button",
@@ -88751,10 +89192,12 @@ function buildUserForm(user = null) {
     ausbildung: user?.ausbildung || "",
     betrieb: user?.betrieb || "",
     berufsschule: user?.berufsschule || "",
+    ausbildungsStart: user?.ausbildungsStart || "",
+    ausbildungsEnde: user?.ausbildungsEnde || "",
     trainerIds: Array.isArray(user?.trainerIds) ? user.trainerIds.map(Number) : []
   };
 }
-function roleLabel(role) {
+function roleLabel2(role) {
   if (role === "trainee") return "Azubi";
   if (role === "trainer") return "Ausbilder";
   if (role === "system") return "System";
@@ -88763,9 +89206,18 @@ function roleLabel(role) {
 function toggleId(list, id) {
   return list.includes(id) ? list.filter((value) => value !== id) : [...list, id];
 }
-function formatRelationshipList(items2, emptyLabel) {
-  if (!items2?.length) return emptyLabel;
-  return items2.map((item) => item.name).join(", ");
+function formatRelationshipList(items, emptyLabel) {
+  if (!items?.length) return emptyLabel;
+  return items.map((item) => item.name).join(", ");
+}
+function getAssignedTrainerItems(user) {
+  if (Array.isArray(user?.assignedTrainers) && user.assignedTrainers.length) {
+    return user.assignedTrainers;
+  }
+  if (Array.isArray(user?.trainerNames) && user.trainerNames.length) {
+    return user.trainerNames.map((name, index2) => ({ id: `static-${index2}`, name, email: "" }));
+  }
+  return [];
 }
 function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
@@ -88781,9 +89233,11 @@ function readFileAsBase64(file) {
 function EducationField({ value, educations, onChange, listId }) {
   return /* @__PURE__ */ import_react27.default.createElement("label", null, "Ausbildung", /* @__PURE__ */ import_react27.default.createElement("input", { list: listId, value, onChange: (event) => onChange(event.target.value), placeholder: "z. B. Fachinformatiker Systemintegration" }), /* @__PURE__ */ import_react27.default.createElement("datalist", { id: listId }, educations.map((education) => /* @__PURE__ */ import_react27.default.createElement("option", { key: education.id || education.name, value: education.name }))));
 }
-function TrainerMultiSelect({ trainers, value, onChange, excludeUserId }) {
+function TrainerMultiSelect({ trainers, value, onChange, excludeUserId, required = false }) {
   const availableTrainers = trainers.filter((trainer) => trainer.id !== excludeUserId);
-  return /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-trainer-selector" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-section-label" }, /* @__PURE__ */ import_react27.default.createElement("strong", null, "Zugeordnete Ausbilder")), availableTrainers.length ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-chip-grid" }, availableTrainers.map((trainer) => {
+  const selectedTrainers = availableTrainers.filter((trainer) => value.includes(trainer.id));
+  const showError = required && !value.length;
+  return /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-trainer-selector" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-section-label" }, /* @__PURE__ */ import_react27.default.createElement("strong", null, "Zugeordneter Ausbilder"), /* @__PURE__ */ import_react27.default.createElement("small", null, "Pflichtfeld fuer Azubis")), availableTrainers.length ? /* @__PURE__ */ import_react27.default.createElement(import_react27.default.Fragment, null, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-chip-grid" }, availableTrainers.map((trainer) => {
     const checked = value.includes(trainer.id);
     return /* @__PURE__ */ import_react27.default.createElement("label", { key: trainer.id, className: `admin-choice-chip${checked ? " active" : ""}` }, /* @__PURE__ */ import_react27.default.createElement(
       "input",
@@ -88793,7 +89247,7 @@ function TrainerMultiSelect({ trainers, value, onChange, excludeUserId }) {
         onChange: () => onChange(toggleId(value, trainer.id))
       }
     ), /* @__PURE__ */ import_react27.default.createElement("span", null, trainer.name), /* @__PURE__ */ import_react27.default.createElement("small", null, trainer.email));
-  })) : /* @__PURE__ */ import_react27.default.createElement("p", { className: "field-message" }, "Noch keine Ausbilder vorhanden."));
+  })), /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-selected-trainers" }, selectedTrainers.length ? selectedTrainers.map((trainer) => /* @__PURE__ */ import_react27.default.createElement("span", { key: `selected-${trainer.id}`, className: "admin-role-pill" }, trainer.name)) : /* @__PURE__ */ import_react27.default.createElement("span", { className: "field-message" }, "Noch kein Ausbilder ausgewaehlt."))) : /* @__PURE__ */ import_react27.default.createElement("p", { className: "field-message" }, "Noch keine Ausbilder vorhanden."), showError ? /* @__PURE__ */ import_react27.default.createElement("p", { className: "field-message error" }, "Bitte waehle mindestens einen Ausbilder fuer diesen Azubi aus.") : null);
 }
 function UserForm({ title, subtitle, form, setForm, trainers, educations, submitLabel, onSubmit, onCancel, error, editingUserId = null }) {
   const isTrainee = form.role === "trainee";
@@ -88829,19 +89283,20 @@ function UserForm({ title, subtitle, form, setForm, trainers, educations, submit
       onChange: (ausbildung) => setForm({ ...form, ausbildung }),
       listId: editingUserId ? `admin-education-options-${editingUserId}` : "admin-education-options-create"
     }
-  ), /* @__PURE__ */ import_react27.default.createElement("label", null, "Betrieb", /* @__PURE__ */ import_react27.default.createElement("input", { value: form.betrieb, onChange: (event) => setForm({ ...form, betrieb: event.target.value }) })), /* @__PURE__ */ import_react27.default.createElement("label", null, "Berufsschule", /* @__PURE__ */ import_react27.default.createElement("input", { value: form.berufsschule, onChange: (event) => setForm({ ...form, berufsschule: event.target.value }) }))), isTrainee ? /* @__PURE__ */ import_react27.default.createElement(
+  ), /* @__PURE__ */ import_react27.default.createElement("label", null, "Betrieb", /* @__PURE__ */ import_react27.default.createElement("input", { value: form.betrieb, onChange: (event) => setForm({ ...form, betrieb: event.target.value }) })), /* @__PURE__ */ import_react27.default.createElement("label", null, "Berufsschule", /* @__PURE__ */ import_react27.default.createElement("input", { value: form.berufsschule, onChange: (event) => setForm({ ...form, berufsschule: event.target.value }) })), isTrainee ? /* @__PURE__ */ import_react27.default.createElement(import_react27.default.Fragment, null, /* @__PURE__ */ import_react27.default.createElement("label", null, "Ausbildungsbeginn", /* @__PURE__ */ import_react27.default.createElement("input", { type: "date", value: form.ausbildungsStart, onChange: (event) => setForm({ ...form, ausbildungsStart: event.target.value }) })), /* @__PURE__ */ import_react27.default.createElement("label", null, "Ausbildungsende", /* @__PURE__ */ import_react27.default.createElement("input", { type: "date", value: form.ausbildungsEnde, onChange: (event) => setForm({ ...form, ausbildungsEnde: event.target.value }) }))) : null), isTrainee ? /* @__PURE__ */ import_react27.default.createElement(
     TrainerMultiSelect,
     {
       trainers,
       value: form.trainerIds,
       onChange: (trainerIds) => setForm({ ...form, trainerIds }),
-      excludeUserId: editingUserId
+      excludeUserId: editingUserId,
+      required: isTrainee
     }
   ) : null, error ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message error" }, error) : null, /* @__PURE__ */ import_react27.default.createElement("div", { className: "editor-footer" }, /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { onClick: onSubmit }, submitLabel), onCancel ? /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { variant: "ghost", onClick: onCancel }, "Abbrechen") : null));
 }
 function UserImportRowPreview({ row }) {
   const canImport = row.canImport;
-  return /* @__PURE__ */ import_react27.default.createElement("div", { className: `import-row-card${canImport ? "" : " invalid"}` }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "import-row-head" }, /* @__PURE__ */ import_react27.default.createElement("strong", null, "Zeile ", row.rowNumber), /* @__PURE__ */ import_react27.default.createElement(StatusBadge, { status: canImport ? "signed" : "invalid" })), /* @__PURE__ */ import_react27.default.createElement("div", { className: "import-row-grid" }, /* @__PURE__ */ import_react27.default.createElement("span", null, row.name || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, row.username || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, row.email || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, roleLabel(row.role || "-"))), /* @__PURE__ */ import_react27.default.createElement("div", { className: "import-row-grid" }, /* @__PURE__ */ import_react27.default.createElement("span", null, row.ausbildung || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, row.betrieb || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, row.berufsschule || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, row.trainerUsernames?.length ? row.trainerUsernames.join(" | ") : "-")), row.errors?.length ? /* @__PURE__ */ import_react27.default.createElement("p", { className: "field-message error" }, row.errors.join(" | ")) : null, row.warnings?.length ? /* @__PURE__ */ import_react27.default.createElement("p", { className: "field-message" }, row.warnings.join(" | ")) : null);
+  return /* @__PURE__ */ import_react27.default.createElement("div", { className: `import-row-card${canImport ? "" : " invalid"}` }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "import-row-head" }, /* @__PURE__ */ import_react27.default.createElement("strong", null, "Zeile ", row.rowNumber), /* @__PURE__ */ import_react27.default.createElement(StatusBadge, { status: canImport ? "signed" : "invalid" })), /* @__PURE__ */ import_react27.default.createElement("div", { className: "import-row-grid" }, /* @__PURE__ */ import_react27.default.createElement("span", null, row.name || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, row.username || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, row.email || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, roleLabel2(row.role || "-"))), /* @__PURE__ */ import_react27.default.createElement("div", { className: "import-row-grid" }, /* @__PURE__ */ import_react27.default.createElement("span", null, row.ausbildung || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, row.betrieb || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, row.berufsschule || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, row.trainerUsernames?.length ? row.trainerUsernames.join(" | ") : "-")), /* @__PURE__ */ import_react27.default.createElement("div", { className: "import-row-grid" }, /* @__PURE__ */ import_react27.default.createElement("span", null, "Beginn: ", row.ausbildungsStart || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, "Ende: ", row.ausbildungsEnde || "-")), row.errors?.length ? /* @__PURE__ */ import_react27.default.createElement("p", { className: "field-message error" }, row.errors.join(" | ")) : null, row.warnings?.length ? /* @__PURE__ */ import_react27.default.createElement("p", { className: "field-message" }, row.warnings.join(" | ")) : null);
 }
 function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
   const [selectedFile, setSelectedFile] = (0, import_react27.useState)(null);
@@ -88916,6 +89371,10 @@ function UserImportPanel({ onPreviewUserImport, onImportUsers }) {
     }
   )), /* @__PURE__ */ import_react27.default.createElement("div", { className: "page-actions" }, /* @__PURE__ */ import_react27.default.createElement("a", { className: "button button-secondary", href: assetUrl("/benutzer_import_vorlage.csv"), download: true }, "Beispiel-CSV herunterladen"), /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { onClick: handlePreview, disabled: busy }, "Vorschau laden")), selectedFile ? /* @__PURE__ */ import_react27.default.createElement("p", null, "Ausgew\xE4hlt: ", selectedFile.name) : null, error ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message error" }, error) : null, result?.generatedCredentials?.length ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "inline-notice" }, /* @__PURE__ */ import_react27.default.createElement("strong", null, "Zuf\xE4llige Initialpassw\xF6rter:"), " ", result.generatedCredentials.map((entry) => `${entry.username}: ${entry.generatedPassword}`).join(" | ")) : null), preview ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "page-stack" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "import-summary-grid" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "read-only-card" }, /* @__PURE__ */ import_react27.default.createElement("span", null, "Erkannte Zeilen"), /* @__PURE__ */ import_react27.default.createElement("strong", null, summary.totalRows)), /* @__PURE__ */ import_react27.default.createElement("div", { className: "read-only-card" }, /* @__PURE__ */ import_react27.default.createElement("span", null, "G\xFCltig"), /* @__PURE__ */ import_react27.default.createElement("strong", null, summary.validRows)), /* @__PURE__ */ import_react27.default.createElement("div", { className: "read-only-card" }, /* @__PURE__ */ import_react27.default.createElement("span", null, "Fehlerhaft"), /* @__PURE__ */ import_react27.default.createElement("strong", null, summary.invalidRows)), /* @__PURE__ */ import_react27.default.createElement("div", { className: "read-only-card" }, /* @__PURE__ */ import_react27.default.createElement("span", null, "Importmodus"), /* @__PURE__ */ import_react27.default.createElement("strong", null, "Nur neue Nutzer"))), /* @__PURE__ */ import_react27.default.createElement("div", { className: "editor-footer" }, /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { onClick: handleImport, disabled: busy || !summary.validRows }, summary.validRows, " Nutzer importieren")), /* @__PURE__ */ import_react27.default.createElement("div", { className: "import-row-list" }, preview.rows.length ? preview.rows.map((row) => /* @__PURE__ */ import_react27.default.createElement(UserImportRowPreview, { key: `${row.rowNumber}-${row.username}-${row.email}`, row })) : null)) : /* @__PURE__ */ import_react27.default.createElement(EmptyState, { title: "Noch keine Vorschau" }));
 }
+function AdminSectionNav({ currentSection }) {
+  const items = getAdminSectionLinks();
+  return /* @__PURE__ */ import_react27.default.createElement("nav", { className: "admin-subnav", "aria-label": "Adminbereiche" }, items.map((item) => /* @__PURE__ */ import_react27.default.createElement(NavLink, { key: item.key, to: item.to, className: ({ isActive }) => `admin-section-tab${isActive || currentSection === item.key ? " active" : ""}` }, item.label)));
+}
 var AUDIT_ACTION_OPTIONS = [
   "USER_CREATED",
   "USER_UPDATED",
@@ -88967,7 +89426,7 @@ function getAuditTargetLabel(log, usersById) {
 }
 function AuditLogRow({ log, usersById }) {
   const targetLabel = getAuditTargetLabel(log, usersById);
-  return /* @__PURE__ */ import_react27.default.createElement("article", { className: "audit-log-row" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "audit-log-row-head" }, /* @__PURE__ */ import_react27.default.createElement("div", null, /* @__PURE__ */ import_react27.default.createElement("strong", null, formatDateTime3(log.createdAt)), /* @__PURE__ */ import_react27.default.createElement("p", null, actionLabel(log.actionType))), /* @__PURE__ */ import_react27.default.createElement("span", { className: "audit-log-action-pill" }, log.actionType)), /* @__PURE__ */ import_react27.default.createElement("div", { className: "audit-log-grid" }, /* @__PURE__ */ import_react27.default.createElement("span", null, /* @__PURE__ */ import_react27.default.createElement("strong", null, "Ausgef\xFChrt von:"), " ", log.actorName, " (", roleLabel(log.actorRole), ")"), /* @__PURE__ */ import_react27.default.createElement("span", null, /* @__PURE__ */ import_react27.default.createElement("strong", null, "Betroffen:"), " ", targetLabel)), /* @__PURE__ */ import_react27.default.createElement("p", { className: "audit-log-summary" }, log.summary), log.changes || log.metadata ? /* @__PURE__ */ import_react27.default.createElement("details", { className: "audit-log-details" }, /* @__PURE__ */ import_react27.default.createElement("summary", null, "Details"), /* @__PURE__ */ import_react27.default.createElement("pre", null, JSON.stringify({ changes: log.changes, metadata: log.metadata }, null, 2))) : null);
+  return /* @__PURE__ */ import_react27.default.createElement("article", { className: "audit-log-row" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "audit-log-row-head" }, /* @__PURE__ */ import_react27.default.createElement("div", null, /* @__PURE__ */ import_react27.default.createElement("strong", null, formatDateTime3(log.createdAt)), /* @__PURE__ */ import_react27.default.createElement("p", null, actionLabel(log.actionType))), /* @__PURE__ */ import_react27.default.createElement("span", { className: "audit-log-action-pill" }, log.actionType)), /* @__PURE__ */ import_react27.default.createElement("div", { className: "audit-log-grid" }, /* @__PURE__ */ import_react27.default.createElement("span", null, /* @__PURE__ */ import_react27.default.createElement("strong", null, "Ausgef\xFChrt von:"), " ", log.actorName, " (", roleLabel2(log.actorRole), ")"), /* @__PURE__ */ import_react27.default.createElement("span", null, /* @__PURE__ */ import_react27.default.createElement("strong", null, "Betroffen:"), " ", targetLabel)), /* @__PURE__ */ import_react27.default.createElement("p", { className: "audit-log-summary" }, log.summary), log.changes || log.metadata ? /* @__PURE__ */ import_react27.default.createElement("details", { className: "audit-log-details" }, /* @__PURE__ */ import_react27.default.createElement("summary", null, "Details"), /* @__PURE__ */ import_react27.default.createElement("pre", null, JSON.stringify({ changes: log.changes, metadata: log.metadata }, null, 2))) : null);
 }
 function AdminAuditLogPanel({ users, onLoadAuditLogs }) {
   const [filters, setFilters] = (0, import_react27.useState)({
@@ -89050,7 +89509,11 @@ function AdminAuditLogPanel({ users, onLoadAuditLogs }) {
     }
   ), /* @__PURE__ */ import_react27.default.createElement("div", { className: "audit-log-toolbar" }, /* @__PURE__ */ import_react27.default.createElement("label", null, "Suche", /* @__PURE__ */ import_react27.default.createElement("input", { value: filters.search, onChange: (event) => setFilters({ ...filters, search: event.target.value }), placeholder: "Aktion, Benutzer oder Beschreibung" })), /* @__PURE__ */ import_react27.default.createElement("label", null, "Aktion", /* @__PURE__ */ import_react27.default.createElement("select", { value: filters.actionType, onChange: (event) => setFilters({ ...filters, actionType: event.target.value }) }, /* @__PURE__ */ import_react27.default.createElement("option", { value: "" }, "Alle Aktionen"), AUDIT_ACTION_OPTIONS.map((actionType) => /* @__PURE__ */ import_react27.default.createElement("option", { key: actionType, value: actionType }, actionType)))), /* @__PURE__ */ import_react27.default.createElement("label", null, "Benutzer", /* @__PURE__ */ import_react27.default.createElement("select", { value: filters.userId, onChange: (event) => setFilters({ ...filters, userId: event.target.value }) }, /* @__PURE__ */ import_react27.default.createElement("option", { value: "" }, "Alle Benutzer"), users.map((user) => /* @__PURE__ */ import_react27.default.createElement("option", { key: user.id, value: user.id }, user.name, " (", user.username, ")")))), /* @__PURE__ */ import_react27.default.createElement("label", null, "Von", /* @__PURE__ */ import_react27.default.createElement("input", { type: "date", value: filters.from, onChange: (event) => setFilters({ ...filters, from: event.target.value }) })), /* @__PURE__ */ import_react27.default.createElement("label", null, "Bis", /* @__PURE__ */ import_react27.default.createElement("input", { type: "date", value: filters.to, onChange: (event) => setFilters({ ...filters, to: event.target.value }) }))), /* @__PURE__ */ import_react27.default.createElement("div", { className: "page-actions" }, /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { onClick: applyFilters, disabled: busy }, "Filter anwenden"), /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { variant: "ghost", onClick: resetFilters, disabled: busy }, "Zur\xFCcksetzen")), error ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message error" }, error) : null, /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message" }, "Seite ", result.pagination.page, " von ", result.pagination.totalPages)), busy ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message" }, "Audit-Log wird geladen...") : null, !busy && !result.items.length ? /* @__PURE__ */ import_react27.default.createElement(EmptyState, { title: "Keine Logeintr\xE4ge gefunden" }) : null, result.items.length ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "audit-log-list" }, result.items.map((log) => /* @__PURE__ */ import_react27.default.createElement(AuditLogRow, { key: log.id, log, usersById }))) : null, /* @__PURE__ */ import_react27.default.createElement("div", { className: "editor-footer" }, /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { variant: "ghost", onClick: () => setPage((current) => Math.max(1, current - 1)), disabled: busy || result.pagination.page <= 1 }, "Vorherige Seite"), /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { onClick: () => setPage((current) => Math.min(result.pagination.totalPages, current + 1)), disabled: busy || result.pagination.page >= result.pagination.totalPages }, "N\xE4chste Seite")));
 }
-function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUpdateUser, onDeleteUser, onPreviewUserImport, onImportUsers, onLoadAuditLogs }) {
+function AdminUserCard({ user, onEdit, onDelete }) {
+  const assignedTrainers = getAssignedTrainerItems(user);
+  return /* @__PURE__ */ import_react27.default.createElement("article", { className: `admin-user-card admin-user-list-card${user.role === "trainee" && !assignedTrainers.length ? " invalid" : ""}` }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-user-card-head" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-user-primary" }, /* @__PURE__ */ import_react27.default.createElement("strong", null, user.name), /* @__PURE__ */ import_react27.default.createElement("p", { title: `${user.username} \xB7 ${user.email}` }, user.username, " \xB7 ", user.email)), /* @__PURE__ */ import_react27.default.createElement("span", { className: "admin-role-pill" }, roleLabel2(user.role))), /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-user-facts" }, /* @__PURE__ */ import_react27.default.createElement("span", null, "Ausbildung: ", user.ausbildung || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, "Betrieb: ", user.betrieb || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, "Berufsschule: ", user.berufsschule || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, "Ausbildungsbeginn: ", user.ausbildungsStart || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, "Ausbildungsende: ", user.ausbildungsEnde || "-")), /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-user-relations" }, user.role === "trainee" ? /* @__PURE__ */ import_react27.default.createElement(import_react27.default.Fragment, null, /* @__PURE__ */ import_react27.default.createElement("p", null, "Ausbilderzuordnung"), /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-selected-trainers" }, assignedTrainers.length ? assignedTrainers.map((trainer) => /* @__PURE__ */ import_react27.default.createElement("span", { key: `${user.id}-${trainer.id}-${trainer.email || trainer.name}`, className: "admin-role-pill" }, trainer.email ? `Ausbilder: ${trainer.name} (${trainer.email})` : `Ausbilder: ${trainer.name}`)) : /* @__PURE__ */ import_react27.default.createElement("span", { className: "status-badge badge rounded-pill text-uppercase status-invalid" }, "Kein Ausbilder"))) : user.role === "trainer" ? /* @__PURE__ */ import_react27.default.createElement("p", null, "Betreut: ", formatRelationshipList(user.assignedTrainees, "Keine Azubis zugeordnet")) : /* @__PURE__ */ import_react27.default.createElement("p", null, "Administrator ohne fachliche Zuordnung.")), /* @__PURE__ */ import_react27.default.createElement("div", { className: "assignment-actions" }, /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { variant: "secondary", onClick: () => onEdit(user) }, "Bearbeiten"), /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { variant: "ghost", onClick: () => onDelete(user) }, "Loeschen")));
+}
+function AdminUsersPage({ section = "users", users, educations, onCreateUser, onAssignTrainer, onUpdateUser, onDeleteUser, onPreviewUserImport, onImportUsers, onLoadAuditLogs }) {
   const [form, setForm] = (0, import_react27.useState)(buildUserForm());
   const [editingUserId, setEditingUserId] = (0, import_react27.useState)(null);
   const [editForm, setEditForm] = (0, import_react27.useState)(null);
@@ -89059,12 +89522,35 @@ function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUp
   const [assignError, setAssignError] = (0, import_react27.useState)("");
   const [deleteError, setDeleteError] = (0, import_react27.useState)("");
   const [csvError, setCsvError] = (0, import_react27.useState)("");
-  const [activeView, setActiveView] = (0, import_react27.useState)("users");
+  const [userSearch, setUserSearch] = (0, import_react27.useState)("");
+  const [roleFilter, setRoleFilter] = (0, import_react27.useState)("all");
+  const [userSort, setUserSort] = (0, import_react27.useState)("name-asc");
   const editPanelRef = (0, import_react27.useRef)(null);
   const trainers = (0, import_react27.useMemo)(() => users.filter((user) => user.role === "trainer"), [users]);
   const trainees = (0, import_react27.useMemo)(() => users.filter((user) => user.role === "trainee"), [users]);
+  const traineesWithoutTrainer = (0, import_react27.useMemo)(
+    () => trainees.filter((trainee) => !getAssignedTrainerItems(trainee).length),
+    [trainees]
+  );
   const managedEducations = (0, import_react27.useMemo)(() => educations || [], [educations]);
   const editingUser = users.find((user) => user.id === editingUserId) || null;
+  const filteredUsers = (0, import_react27.useMemo)(() => {
+    const needle = userSearch.trim().toLowerCase();
+    const nextUsers = users.filter((user) => {
+      const matchesRole = roleFilter === "all" ? true : user.role === roleFilter;
+      const matchesSearch = !needle ? true : [user.name, user.username, user.email, user.ausbildung, user.betrieb, user.berufsschule].join(" ").toLowerCase().includes(needle);
+      return matchesRole && matchesSearch;
+    });
+    return nextUsers.sort((left, right) => {
+      if (userSort === "role") {
+        return roleLabel2(left.role).localeCompare(roleLabel2(right.role), "de") || left.name.localeCompare(right.name, "de");
+      }
+      if (userSort === "name-desc") {
+        return right.name.localeCompare(left.name, "de");
+      }
+      return left.name.localeCompare(right.name, "de");
+    });
+  }, [roleFilter, userSearch, userSort, users]);
   (0, import_react27.useEffect)(() => {
     if (editingUserId && editPanelRef.current) {
       editPanelRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -89082,6 +89568,10 @@ function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUp
   }
   async function handleCreateUser() {
     setCreateError("");
+    if (form.role === "trainee" && !form.trainerIds.length) {
+      setCreateError("Bitte waehle mindestens einen Ausbilder fuer diesen Azubi aus.");
+      return;
+    }
     try {
       await onCreateUser(form);
       setForm(buildUserForm());
@@ -89091,6 +89581,10 @@ function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUp
   }
   async function handleUpdateUser(userId) {
     setEditError("");
+    if (editForm?.role === "trainee" && !editForm.trainerIds.length) {
+      setEditError("Bitte waehle mindestens einen Ausbilder fuer diesen Azubi aus.");
+      return;
+    }
     try {
       await onUpdateUser(userId, editForm);
       stopEditing();
@@ -89100,6 +89594,10 @@ function AdminUsersPage({ users, educations, onCreateUser, onAssignTrainer, onUp
   }
   async function handleAssignTrainers(traineeId, trainerIds) {
     setAssignError("");
+    if (!trainerIds.length) {
+      setAssignError("Bitte waehle mindestens einen Ausbilder fuer diesen Azubi aus.");
+      return;
+    }
     try {
       await onAssignTrainer(traineeId, trainerIds);
     } catch (error) {
@@ -89130,26 +89628,7 @@ Dabei werden auch zugehoerige Berichte, Noten und Zuordnungen entfernt.`);
         downloadUsersCsv(users);
         return;
       }
-      const response = await fetch(apiUrl("/api/admin/users/export.csv"), {
-        method: "GET",
-        credentials: "same-origin"
-      });
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type") || "";
-        const data2 = contentType.includes("application/json") ? await response.json() : null;
-        throw new Error(data2?.error || "CSV-Export konnte nicht gestartet werden.");
-      }
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const disposition = response.headers.get("content-disposition") || "";
-      const match = disposition.match(/filename="([^"]+)"/i);
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = match?.[1] || "verwaltung-benutzer.csv";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(downloadUrl);
+      await downloadCsvFromApi(apiUrl("/api/admin/users/export.csv"), "verwaltung-benutzer.csv");
     } catch (error) {
       setCsvError(error.message || "CSV-Export konnte nicht gestartet werden.");
     }
@@ -89157,11 +89636,11 @@ Dabei werden auch zugehoerige Berichte, Noten und Zuordnungen entfernt.`);
   return /* @__PURE__ */ import_react27.default.createElement("div", { className: "page-stack admin-users-page" }, /* @__PURE__ */ import_react27.default.createElement(
     PageHeader,
     {
-      kicker: "Verwaltung",
-      title: "Benutzerverwaltung",
-      actions: /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { onClick: handleExportCsv }, "CSV exportieren")
+      kicker: "Administration",
+      title: section === "create" ? "Benutzer anlegen" : section === "assignments" ? "Azubi-Zuordnungen" : section === "audit" ? "Audit-Log" : "Benutzerverwaltung",
+      actions: section === "users" ? /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { onClick: handleExportCsv }, "CSV exportieren") : null
     }
-  ), csvError ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message error" }, csvError) : null, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-section-tabs" }, /* @__PURE__ */ import_react27.default.createElement("button", { type: "button", className: `admin-section-tab${activeView === "users" ? " active" : ""}`, onClick: () => setActiveView("users") }, "Benutzerverwaltung"), /* @__PURE__ */ import_react27.default.createElement("button", { type: "button", className: `admin-section-tab${activeView === "audit" ? " active" : ""}`, onClick: () => setActiveView("audit") }, "Audit-Log")), activeView === "users" ? /* @__PURE__ */ import_react27.default.createElement(import_react27.default.Fragment, null, editingUserId && editForm ? /* @__PURE__ */ import_react27.default.createElement("section", { ref: editPanelRef }, /* @__PURE__ */ import_react27.default.createElement(
+  ), csvError ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message error" }, csvError) : null, /* @__PURE__ */ import_react27.default.createElement(AdminSectionNav, { currentSection: section === "create" ? "admin-create-user" : section === "assignments" ? "admin-assignments" : section === "audit" ? "admin-audit-log" : "admin-users" }), section === "audit" ? /* @__PURE__ */ import_react27.default.createElement(AdminAuditLogPanel, { users, onLoadAuditLogs }) : /* @__PURE__ */ import_react27.default.createElement(import_react27.default.Fragment, null, editingUserId && editForm ? /* @__PURE__ */ import_react27.default.createElement("section", { ref: editPanelRef }, /* @__PURE__ */ import_react27.default.createElement(
     UserForm,
     {
       title: `Benutzer bearbeiten${editingUser ? `: ${editingUser.name}` : ""}`,
@@ -89176,11 +89655,11 @@ Dabei werden auch zugehoerige Berichte, Noten und Zuordnungen entfernt.`);
       error: editError,
       editingUserId
     }
-  )) : null, /* @__PURE__ */ import_react27.default.createElement("section", { className: "admin-users-layout" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "page-stack" }, /* @__PURE__ */ import_react27.default.createElement(
+  )) : null, section === "create" ? /* @__PURE__ */ import_react27.default.createElement("section", { className: "admin-users-layout" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "page-stack" }, /* @__PURE__ */ import_react27.default.createElement(
     UserForm,
     {
       title: "Benutzer anlegen",
-      subtitle: "",
+      subtitle: "Neue Konten f\xFCr Azubis, Ausbilder und Admins",
       form,
       setForm,
       trainers,
@@ -89189,13 +89668,13 @@ Dabei werden auch zugehoerige Berichte, Noten und Zuordnungen entfernt.`);
       onSubmit: handleCreateUser,
       error: createError
     }
-  ), /* @__PURE__ */ import_react27.default.createElement(UserImportPanel, { onPreviewUserImport, onImportUsers })), /* @__PURE__ */ import_react27.default.createElement("article", { className: "panel-card admin-overview-card" }, /* @__PURE__ */ import_react27.default.createElement(PageHeader, { kicker: "\xDCbersicht", title: "Benutzer", subtitle: `${users.length} Konten` }), deleteError ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message error" }, deleteError) : null, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-user-grid" }, users.map((user) => /* @__PURE__ */ import_react27.default.createElement("article", { key: user.id, className: "admin-user-card" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-user-card-head" }, /* @__PURE__ */ import_react27.default.createElement("div", null, /* @__PURE__ */ import_react27.default.createElement("strong", null, user.name), /* @__PURE__ */ import_react27.default.createElement("p", null, user.username, " \xB7 ", user.email)), /* @__PURE__ */ import_react27.default.createElement("span", { className: "admin-role-pill" }, roleLabel(user.role))), /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-user-facts" }, /* @__PURE__ */ import_react27.default.createElement("span", null, "Rolle: ", roleLabel(user.role)), /* @__PURE__ */ import_react27.default.createElement("span", null, "Ausbildung: ", user.ausbildung || "-"), /* @__PURE__ */ import_react27.default.createElement("span", null, "Betrieb: ", user.betrieb || "-")), /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-user-relations" }, user.role === "trainee" ? /* @__PURE__ */ import_react27.default.createElement("p", null, "Ausbilder: ", formatRelationshipList(user.assignedTrainers, "Keine Ausbilder zugeordnet")) : user.role === "trainer" ? /* @__PURE__ */ import_react27.default.createElement("p", null, "Betreut: ", formatRelationshipList(user.assignedTrainees, "Keine Azubis zugeordnet")) : /* @__PURE__ */ import_react27.default.createElement("p", null, "Administrator ohne fachliche Zuordnung.")), /* @__PURE__ */ import_react27.default.createElement("div", { className: "assignment-actions" }, /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { variant: "secondary", onClick: () => startEditing(user) }, "Bearbeiten"), /* @__PURE__ */ import_react27.default.createElement(PrimaryButton, { variant: "ghost", onClick: () => handleDeleteUser(user) }, "Loeschen"))))))), /* @__PURE__ */ import_react27.default.createElement("section", { className: "panel-card admin-assignment-card" }, /* @__PURE__ */ import_react27.default.createElement(
+  ), /* @__PURE__ */ import_react27.default.createElement(UserImportPanel, { onPreviewUserImport, onImportUsers })), /* @__PURE__ */ import_react27.default.createElement("article", { className: "panel-card admin-overview-card" }, /* @__PURE__ */ import_react27.default.createElement(PageHeader, { kicker: "Hinweise", title: "Pflegehinweise" }), /* @__PURE__ */ import_react27.default.createElement("div", { className: "list-stack" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "list-row" }, /* @__PURE__ */ import_react27.default.createElement("div", null, /* @__PURE__ */ import_react27.default.createElement("strong", null, "Azubis brauchen einen Ausbilder"), /* @__PURE__ */ import_react27.default.createElement("p", null, "Azubi-Konten werden nur mit gueltiger Ausbilderzuordnung gespeichert oder importiert."))), /* @__PURE__ */ import_react27.default.createElement("div", { className: "list-row" }, /* @__PURE__ */ import_react27.default.createElement("div", null, /* @__PURE__ */ import_react27.default.createElement("strong", null, "CSV-Import erstellt nur neue Nutzer"), /* @__PURE__ */ import_react27.default.createElement("p", null, "Die Vorschau prueft Dubletten, Ausbilder und optional den Ausbildungszeitraum fuer Azubis."))), /* @__PURE__ */ import_react27.default.createElement("div", { className: "list-row" }, /* @__PURE__ */ import_react27.default.createElement("div", null, /* @__PURE__ */ import_react27.default.createElement("strong", null, "Altbest\xE4nde ohne Zuordnung"), /* @__PURE__ */ import_react27.default.createElement("p", null, traineesWithoutTrainer.length ? `${traineesWithoutTrainer.length} Azubis ben\xF6tigen noch eine Ausbilderzuordnung.` : "Alle Azubis sind aktuell zugeordnet.")))))) : null, section === "users" ? /* @__PURE__ */ import_react27.default.createElement("article", { className: "panel-card admin-overview-card" }, /* @__PURE__ */ import_react27.default.createElement(PageHeader, { kicker: "\xDCbersicht", title: "Benutzer", subtitle: `${filteredUsers.length} von ${users.length} Konten` }), deleteError ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message error" }, deleteError) : null, traineesWithoutTrainer.length ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message error" }, traineesWithoutTrainer.length, " Azubi", traineesWithoutTrainer.length === 1 ? "" : "s", " ohne Ausbilderzuordnung.") : null, /* @__PURE__ */ import_react27.default.createElement(FilterBar, null, /* @__PURE__ */ import_react27.default.createElement("input", { value: userSearch, onChange: (event) => setUserSearch(event.target.value), placeholder: "Name, Benutzername, E-Mail oder Ausbildung" }), /* @__PURE__ */ import_react27.default.createElement("select", { value: roleFilter, onChange: (event) => setRoleFilter(event.target.value) }, /* @__PURE__ */ import_react27.default.createElement("option", { value: "all" }, "Alle Rollen"), /* @__PURE__ */ import_react27.default.createElement("option", { value: "trainee" }, "Azubi"), /* @__PURE__ */ import_react27.default.createElement("option", { value: "trainer" }, "Ausbilder"), /* @__PURE__ */ import_react27.default.createElement("option", { value: "admin" }, "Admin")), /* @__PURE__ */ import_react27.default.createElement("select", { value: userSort, onChange: (event) => setUserSort(event.target.value) }, /* @__PURE__ */ import_react27.default.createElement("option", { value: "name-asc" }, "Name A-Z"), /* @__PURE__ */ import_react27.default.createElement("option", { value: "name-desc" }, "Name Z-A"), /* @__PURE__ */ import_react27.default.createElement("option", { value: "role" }, "Nach Rolle"))), /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-user-grid" }, filteredUsers.map((user) => /* @__PURE__ */ import_react27.default.createElement(AdminUserCard, { key: user.id, user, onEdit: startEditing, onDelete: handleDeleteUser }))), !filteredUsers.length ? /* @__PURE__ */ import_react27.default.createElement(EmptyState, { title: "Keine Benutzer zur aktuellen Auswahl gefunden" }) : null) : null, section === "assignments" ? /* @__PURE__ */ import_react27.default.createElement("section", { className: "panel-card admin-assignment-card" }, /* @__PURE__ */ import_react27.default.createElement(
     PageHeader,
     {
       kicker: "Zuordnungen",
       title: "Azubis mehreren Ausbildern zuordnen"
     }
-  ), assignError ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message error" }, assignError) : null, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-assignment-list" }, trainees.map((trainee) => /* @__PURE__ */ import_react27.default.createElement("div", { key: trainee.id, className: "admin-assignment-row" }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-assignment-copy" }, /* @__PURE__ */ import_react27.default.createElement("strong", null, trainee.name), /* @__PURE__ */ import_react27.default.createElement("p", null, trainee.ausbildung || trainee.email), /* @__PURE__ */ import_react27.default.createElement("small", null, formatRelationshipList(trainee.assignedTrainers, "Keine Ausbilder zugeordnet"))), /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-chip-grid compact" }, trainers.map((trainer) => {
+  ), assignError ? /* @__PURE__ */ import_react27.default.createElement("div", { className: "field-message error" }, assignError) : null, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-assignment-list" }, trainees.map((trainee) => /* @__PURE__ */ import_react27.default.createElement("div", { key: trainee.id, className: `admin-assignment-row${getAssignedTrainerItems(trainee).length ? "" : " invalid"}` }, /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-assignment-copy" }, /* @__PURE__ */ import_react27.default.createElement("strong", null, trainee.name), /* @__PURE__ */ import_react27.default.createElement("p", { title: trainee.email }, trainee.ausbildung || trainee.email), /* @__PURE__ */ import_react27.default.createElement("small", null, formatRelationshipList(trainee.assignedTrainers, "Keine Ausbilder zugeordnet")), !getAssignedTrainerItems(trainee).length ? /* @__PURE__ */ import_react27.default.createElement("span", { className: "status-badge badge rounded-pill text-uppercase status-invalid" }, "Kein Ausbilder") : null), /* @__PURE__ */ import_react27.default.createElement("div", { className: "admin-chip-grid compact" }, trainers.map((trainer) => {
     const checked = trainee.trainerIds.includes(trainer.id);
     return /* @__PURE__ */ import_react27.default.createElement("label", { key: `${trainee.id}-${trainer.id}`, className: `admin-choice-chip${checked ? " active" : ""}` }, /* @__PURE__ */ import_react27.default.createElement(
       "input",
@@ -89205,7 +89684,7 @@ Dabei werden auch zugehoerige Berichte, Noten und Zuordnungen entfernt.`);
         onChange: () => handleAssignTrainers(trainee.id, toggleId(trainee.trainerIds, trainer.id))
       }
     ), /* @__PURE__ */ import_react27.default.createElement("span", null, trainer.name));
-  })))), !trainees.length ? /* @__PURE__ */ import_react27.default.createElement("p", { className: "field-message" }, "Noch keine Azubis vorhanden.") : null))) : /* @__PURE__ */ import_react27.default.createElement(AdminAuditLogPanel, { users, onLoadAuditLogs }));
+  })))), !trainees.length ? /* @__PURE__ */ import_react27.default.createElement("p", { className: "field-message" }, "Noch keine Azubis vorhanden.") : null)) : null));
 }
 
 // src/pages/NotenPage.jsx
@@ -89620,6 +90099,7 @@ function ExportPage({ report, onPreviewImport, onImportReports }) {
   const [importPayload, setImportPayload] = (0, import_react29.useState)(null);
   const [error, setError] = (0, import_react29.useState)("");
   const [csvError, setCsvError] = (0, import_react29.useState)("");
+  const [pdfError, setPdfError] = (0, import_react29.useState)("");
   const [busy, setBusy] = (0, import_react29.useState)(false);
   const previewSummary = (0, import_react29.useMemo)(() => preview?.summary || { totalRows: 0, validRows: 0, invalidRows: 0 }, [preview]);
   async function handlePreview() {
@@ -89672,28 +90152,28 @@ function ExportPage({ report, onPreviewImport, onImportReports }) {
         downloadEntriesCsv(entries2, report?.trainee?.name || "azubi");
         return;
       }
-      const response = await fetch(apiUrl("/api/report/csv"), {
-        method: "GET",
-        credentials: "same-origin"
-      });
-      if (!response.ok) {
-        const contentType = response.headers.get("content-type") || "";
-        const data2 = contentType.includes("application/json") ? await response.json() : null;
-        throw new Error(data2?.error || "CSV-Export konnte nicht gestartet werden.");
-      }
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const disposition = response.headers.get("content-disposition") || "";
-      const match = disposition.match(/filename="([^"]+)"/i);
-      const link = document.createElement("a");
-      link.href = downloadUrl;
-      link.download = match?.[1] || "berichtsheft.csv";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(downloadUrl);
+      await downloadCsvFromApi(apiUrl("/api/report/csv"), "berichtsheft.csv");
     } catch (exportError) {
       setCsvError(exportError.message || "CSV-Export konnte nicht gestartet werden.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function handlePdfExport() {
+    setBusy(true);
+    setPdfError("");
+    try {
+      if (isStaticDemo()) {
+        downloadReportPdf({
+          entries: entries2,
+          traineeName: report?.trainee?.name || "",
+          trainingTitle: report?.trainee?.ausbildung || ""
+        });
+        return;
+      }
+      await downloadPdfFromApi(apiUrl("/api/report/pdf"), "berichtsheft.pdf");
+    } catch (exportError) {
+      setPdfError(exportError.message || "PDF-Export konnte nicht gestartet werden.");
     } finally {
       setBusy(false);
     }
@@ -89703,27 +90183,18 @@ function ExportPage({ report, onPreviewImport, onImportReports }) {
     {
       kicker: "Export",
       title: "PDF-Export und Import",
-      actions: /* @__PURE__ */ import_react29.default.createElement("div", { className: "page-actions" }, /* @__PURE__ */ import_react29.default.createElement(PrimaryButton, { onClick: handleCsvExport, disabled: busy }, busy ? "CSV wird erstellt..." : "CSV exportieren"), /* @__PURE__ */ import_react29.default.createElement(
+      actions: /* @__PURE__ */ import_react29.default.createElement("div", { className: "page-actions" }, /* @__PURE__ */ import_react29.default.createElement(PrimaryButton, { onClick: handleCsvExport, disabled: busy || !entries2.length }, busy ? "CSV wird erstellt..." : "CSV exportieren"), /* @__PURE__ */ import_react29.default.createElement(
         "button",
         {
           type: "button",
           className: "button button-secondary",
-          onClick: () => {
-            if (isStaticDemo()) {
-              downloadReportPdf({
-                entries: entries2,
-                traineeName: report?.trainee?.name || "",
-                trainingTitle: report?.trainee?.ausbildung || ""
-              });
-              return;
-            }
-            window.location.href = apiUrl("/api/report/pdf");
-          }
+          onClick: handlePdfExport,
+          disabled: busy || !signedEntries
         },
         "PDF herunterladen"
       ))
     }
-  ), /* @__PURE__ */ import_react29.default.createElement("section", { className: "stats-grid" }, /* @__PURE__ */ import_react29.default.createElement(StatCard, { label: "Tagesberichte", value: entries2.length, note: "Alle vorhandenen Tagesberichte" }), /* @__PURE__ */ import_react29.default.createElement(StatCard, { label: "Freigegeben", value: signedEntries, note: "Bereits signierte Berichte" }), /* @__PURE__ */ import_react29.default.createElement(StatCard, { label: "In Pr\xFCfung", value: submittedEntries, note: "Aktuell beim Ausbilder" }), /* @__PURE__ */ import_react29.default.createElement(StatCard, { label: "Importierbar", value: previewSummary.validRows, note: "G\xFCltige Zeilen in der aktuellen Vorschau" })), /* @__PURE__ */ import_react29.default.createElement("section", { className: "reports-layout" }, /* @__PURE__ */ import_react29.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react29.default.createElement(
+  ), /* @__PURE__ */ import_react29.default.createElement("section", { className: "stats-grid" }, /* @__PURE__ */ import_react29.default.createElement(StatCard, { label: "Tagesberichte", value: entries2.length, note: "Alle vorhandenen Tagesberichte" }), /* @__PURE__ */ import_react29.default.createElement(StatCard, { label: "Freigegeben", value: signedEntries, note: "Bereits signierte Berichte" }), /* @__PURE__ */ import_react29.default.createElement(StatCard, { label: "In Pr\xFCfung", value: submittedEntries, note: "Aktuell beim Ausbilder" }), /* @__PURE__ */ import_react29.default.createElement(StatCard, { label: "Importierbar", value: previewSummary.validRows, note: "G\xFCltige Zeilen in der aktuellen Vorschau" })), pdfError ? /* @__PURE__ */ import_react29.default.createElement("div", { className: "field-message error report-error-banner" }, pdfError) : null, /* @__PURE__ */ import_react29.default.createElement("section", { className: "reports-layout" }, /* @__PURE__ */ import_react29.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react29.default.createElement(
     PageHeader,
     {
       kicker: "Export",
@@ -89734,20 +90205,11 @@ function ExportPage({ report, onPreviewImport, onImportReports }) {
     {
       type: "button",
       className: "button button-secondary",
-      onClick: () => {
-        if (isStaticDemo()) {
-          downloadReportPdf({
-            entries: entries2,
-            traineeName: report?.trainee?.name || "",
-            trainingTitle: report?.trainee?.ausbildung || ""
-          });
-          return;
-        }
-        window.location.href = apiUrl("/api/report/pdf");
-      }
+      onClick: handlePdfExport,
+      disabled: busy || !signedEntries
     },
     "PDF herunterladen"
-  )), csvError ? /* @__PURE__ */ import_react29.default.createElement("div", { className: "field-message error" }, csvError) : null) : /* @__PURE__ */ import_react29.default.createElement(EmptyState, { title: "Noch keine Berichte zum Export" })), /* @__PURE__ */ import_react29.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react29.default.createElement(
+  )), !signedEntries ? /* @__PURE__ */ import_react29.default.createElement("div", { className: "field-message" }, "PDF wird erst verf\xFCgbar, sobald mindestens ein Bericht signiert ist.") : null, csvError ? /* @__PURE__ */ import_react29.default.createElement("div", { className: "field-message error" }, csvError) : null) : /* @__PURE__ */ import_react29.default.createElement(EmptyState, { title: "Noch keine Berichte zum Export" })), /* @__PURE__ */ import_react29.default.createElement("article", { className: "panel-card" }, /* @__PURE__ */ import_react29.default.createElement(
     PageHeader,
     {
       kicker: "Import",
@@ -89822,6 +90284,10 @@ function ProtectedApp() {
   const trainees = dashboard?.trainees || [];
   const users = dashboard?.users || [];
   const educations = dashboard?.educations || [];
+  const fallbackRoute = getDefaultRouteForRole(role);
+  function guardRoute(menuKey, element) {
+    return canAccessMenuItem(role, menuKey) ? element : /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: fallbackRoute, replace: true });
+  }
   return /* @__PURE__ */ import_react30.default.createElement(
     AppShell,
     {
@@ -89835,188 +90301,327 @@ function ProtectedApp() {
         setFlash({ type: "success", message: `Darstellung auf ${theme === "dark" ? "hell" : "dunkel"} umgestellt.` });
       }
     },
-    /* @__PURE__ */ import_react30.default.createElement(Routes, null, /* @__PURE__ */ import_react30.default.createElement(Route, { path: "/", element: /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/dashboard", replace: true }) }), /* @__PURE__ */ import_react30.default.createElement(Route, { path: "/dashboard", element: /* @__PURE__ */ import_react30.default.createElement(DashboardPage, { role, report, trainees, users }) }), /* @__PURE__ */ import_react30.default.createElement(
+    /* @__PURE__ */ import_react30.default.createElement(Routes, null, /* @__PURE__ */ import_react30.default.createElement(Route, { path: "/", element: /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/dashboard", replace: true }) }), /* @__PURE__ */ import_react30.default.createElement(Route, { path: "/dashboard", element: /* @__PURE__ */ import_react30.default.createElement(DashboardPage, { role, report, trainees, users, onLoadAuditLogs: loadAuditLogs }) }), /* @__PURE__ */ import_react30.default.createElement(
       Route,
       {
         path: "/berichte",
-        element: role === "trainee" ? /* @__PURE__ */ import_react30.default.createElement(
-          TagesberichtePage,
-          {
-            report,
-            initialView: "calendar",
-            onCreate: async (date) => {
-              const id = await createOrFocusEntry(date);
-              setFlash({ type: "success", message: `Tagesbericht f\xFCr ${date || "heute"} ge\xF6ffnet.` });
-              return id;
-            },
-            onSaveEntry: async (entryId, entry) => {
-              await saveEntry(entryId, entry);
-              setFlash({ type: "success", message: "Tagesbericht gespeichert." });
-            },
-            onDeleteEntry: async (entryId) => {
-              await deleteEntry(entryId);
-              setFlash({ type: "success", message: "Tagesbericht gel\xF6scht." });
-              navigate("/berichte", { replace: true });
-            },
-            onSubmitEntry: async (entryId) => {
-              await submitEntry(entryId);
-              setFlash({ type: "success", message: "Tagesbericht eingereicht." });
-            },
-            onSubmitEntries: async (entryIds) => {
-              const data2 = await submitEntries(entryIds);
-              setFlash({
-                type: data2.failed?.length ? "error" : "success",
-                message: data2.failed?.length ? `${data2.processedCount} Berichte eingereicht, ${data2.failed.length} nicht verarbeitet.` : `${data2.processedCount} Berichte eingereicht.`
-              });
-              return data2;
+        element: guardRoute(
+          "reports",
+          /* @__PURE__ */ import_react30.default.createElement(
+            TagesberichtePage,
+            {
+              report,
+              initialView: "calendar",
+              onCreate: async (date) => {
+                const id = await createOrFocusEntry(date);
+                setFlash({ type: "success", message: `Tagesbericht f\xFCr ${date || "heute"} ge\xF6ffnet.` });
+                return id;
+              },
+              onSaveEntry: async (entryId, entry) => {
+                await saveEntry(entryId, entry);
+                setFlash({ type: "success", message: "Tagesbericht gespeichert." });
+              },
+              onDeleteEntry: async (entryId) => {
+                await deleteEntry(entryId);
+                setFlash({ type: "success", message: "Tagesbericht gel\xF6scht." });
+                navigate("/berichte", { replace: true });
+              },
+              onSubmitEntry: async (entryId) => {
+                await submitEntry(entryId);
+                setFlash({ type: "success", message: "Tagesbericht eingereicht." });
+              },
+              onSubmitEntries: async (entryIds) => {
+                const data2 = await submitEntries(entryIds);
+                setFlash({
+                  type: data2.failed?.length ? "error" : "success",
+                  message: data2.failed?.length ? `${data2.processedCount} Berichte eingereicht, ${data2.failed.length} nicht verarbeitet.` : `${data2.processedCount} Berichte eingereicht.`
+                });
+                return data2;
+              }
             }
-          }
-        ) : /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/dashboard", replace: true })
+          )
+        )
       }
-    ), /* @__PURE__ */ import_react30.default.createElement(Route, { path: "/tagesberichte", element: /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/berichte?view=write", replace: true }) }), /* @__PURE__ */ import_react30.default.createElement(Route, { path: "/kalender", element: /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/berichte?view=calendar", replace: true }) }), /* @__PURE__ */ import_react30.default.createElement(
+    ), /* @__PURE__ */ import_react30.default.createElement(Route, { path: "/tagesberichte", element: canAccessMenuItem(role, "reports") ? /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/berichte?view=write", replace: true }) : /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: fallbackRoute, replace: true }) }), /* @__PURE__ */ import_react30.default.createElement(Route, { path: "/kalender", element: canAccessMenuItem(role, "reports") ? /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/berichte?view=calendar", replace: true }) : /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: fallbackRoute, replace: true }) }), /* @__PURE__ */ import_react30.default.createElement(
       Route,
       {
         path: "/freigaben",
-        element: /* @__PURE__ */ import_react30.default.createElement(
-          FreigabenPage,
-          {
-            role,
-            report,
-            trainees,
-            onSign: async (entryId, comment) => {
-              await signEntry(entryId, comment);
-              setFlash({ type: "success", message: "Bericht freigegeben." });
-            },
-            onReject: async (entryId, reason) => {
-              await rejectEntry(entryId, reason);
-              setFlash({ type: "success", message: "Bericht abgelehnt." });
-            },
-            onProcessEntries: async (action, entryIds, payload) => {
-              const data2 = await processTrainerEntries(action, entryIds, payload);
-              setFlash({
-                type: data2.failed?.length ? "error" : "success",
-                message: action === "sign" ? data2.failed?.length ? `${data2.processedCount} Berichte freigegeben, ${data2.failed.length} nicht verarbeitet.` : `${data2.processedCount} Berichte freigegeben.` : data2.failed?.length ? `${data2.processedCount} Berichte zur\xFCckgegeben, ${data2.failed.length} nicht verarbeitet.` : `${data2.processedCount} Berichte zur\xFCckgegeben.`
-              });
-              return data2;
-            },
-            onComment: async (entryId, comment) => {
-              await saveTrainerComment(entryId, comment);
-              setFlash({ type: "success", message: "Kommentar gespeichert." });
+        element: guardRoute(
+          "approvals",
+          /* @__PURE__ */ import_react30.default.createElement(
+            FreigabenPage,
+            {
+              role,
+              report,
+              trainees,
+              onSign: async (entryId, comment) => {
+                await signEntry(entryId, comment);
+                setFlash({ type: "success", message: "Bericht freigegeben." });
+              },
+              onReject: async (entryId, reason) => {
+                await rejectEntry(entryId, reason);
+                setFlash({ type: "success", message: "Bericht abgelehnt." });
+              },
+              onProcessEntries: async (action, entryIds, payload) => {
+                const data2 = await processTrainerEntries(action, entryIds, payload);
+                setFlash({
+                  type: data2.failed?.length ? "error" : "success",
+                  message: action === "sign" ? data2.failed?.length ? `${data2.processedCount} Berichte freigegeben, ${data2.failed.length} nicht verarbeitet.` : `${data2.processedCount} Berichte freigegeben.` : data2.failed?.length ? `${data2.processedCount} Berichte zur\xFCckgegeben, ${data2.failed.length} nicht verarbeitet.` : `${data2.processedCount} Berichte zur\xFCckgegeben.`
+                });
+                return data2;
+              },
+              onComment: async (entryId, comment) => {
+                await saveTrainerComment(entryId, comment);
+                setFlash({ type: "success", message: "Kommentar gespeichert." });
+              }
             }
-          }
+          )
         )
       }
     ), /* @__PURE__ */ import_react30.default.createElement(
       Route,
       {
         path: "/noten",
-        element: ["trainee", "trainer", "admin"].includes(role) ? /* @__PURE__ */ import_react30.default.createElement(
-          NotenPage,
-          {
-            role,
-            grades,
-            report,
-            currentUser: session.user,
-            trainees,
-            users,
-            onLoadGrades: refreshGrades,
-            onSaveGrade: async (payload) => {
-              await saveGrade(payload);
-              setFlash({ type: "success", message: "Note gespeichert." });
-            },
-            onDeleteGrade: async (gradeId) => {
-              await deleteGrade(gradeId);
-              setFlash({ type: "success", message: "Note gel\xF6scht." });
+        element: guardRoute(
+          "grades",
+          /* @__PURE__ */ import_react30.default.createElement(
+            NotenPage,
+            {
+              role,
+              grades,
+              report,
+              currentUser: session.user,
+              trainees,
+              users,
+              onLoadGrades: refreshGrades,
+              onSaveGrade: async (payload) => {
+                await saveGrade(payload);
+                setFlash({ type: "success", message: "Note gespeichert." });
+              },
+              onDeleteGrade: async (gradeId) => {
+                await deleteGrade(gradeId);
+                setFlash({ type: "success", message: "Note gel\xF6scht." });
+              }
             }
-          }
-        ) : /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/dashboard", replace: true })
+          )
+        )
       }
     ), /* @__PURE__ */ import_react30.default.createElement(
       Route,
       {
         path: "/profil",
-        element: ["trainee", "trainer", "admin"].includes(role) ? /* @__PURE__ */ import_react30.default.createElement(
-          ProfilPage,
-          {
-            role,
-            report,
-            trainees,
-            users,
-            theme,
-            themePreference,
-            onToggleTheme: async () => {
-              await toggleTheme();
-              setFlash({ type: "success", message: `Darstellung auf ${theme === "dark" ? "hell" : "dunkel"} umgestellt.` });
-            },
-            onSaveThemePreference: async (nextPreference) => {
-              await saveThemePreference(nextPreference);
-              setFlash({ type: "success", message: `Darstellung auf ${nextPreference === "system" ? "Systemstandard" : nextPreference} gesetzt.` });
-            },
-            onSaveManagedProfile: async (userId, profile) => {
-              await updateManagedProfile(userId, profile);
-              setFlash({ type: "success", message: "Profil gespeichert." });
-            },
-            onChangeOwnPassword: async (payload) => {
-              await changeOwnPassword(payload);
-              setFlash({ type: "success", message: "Dein Passwort wurde erfolgreich ge\xE4ndert." });
+        element: guardRoute(
+          "profile",
+          /* @__PURE__ */ import_react30.default.createElement(
+            ProfilPage,
+            {
+              role,
+              report,
+              trainees,
+              users,
+              theme,
+              themePreference,
+              onToggleTheme: async () => {
+                await toggleTheme();
+                setFlash({ type: "success", message: `Darstellung auf ${theme === "dark" ? "hell" : "dunkel"} umgestellt.` });
+              },
+              onSaveThemePreference: async (nextPreference) => {
+                await saveThemePreference(nextPreference);
+                setFlash({ type: "success", message: `Darstellung auf ${nextPreference === "system" ? "Systemstandard" : nextPreference} gesetzt.` });
+              },
+              onSaveManagedProfile: async (userId, profile) => {
+                await updateManagedProfile(userId, profile);
+                setFlash({ type: "success", message: "Profil gespeichert." });
+              },
+              onChangeOwnPassword: async (payload) => {
+                await changeOwnPassword(payload);
+                setFlash({ type: "success", message: "Dein Passwort wurde erfolgreich ge\xE4ndert." });
+              }
             }
-          }
-        ) : /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/dashboard", replace: true })
+          )
+        )
       }
     ), /* @__PURE__ */ import_react30.default.createElement(
       Route,
       {
         path: "/export",
-        element: role === "trainee" ? /* @__PURE__ */ import_react30.default.createElement(
-          ExportPage,
-          {
-            report,
-            onPreviewImport: previewReportImport,
-            onImportReports: async (payload) => {
-              const data2 = await importReports(payload);
-              setFlash({ type: "success", message: `${data2.importedCount} Berichte importiert.` });
-              return data2;
+        element: guardRoute(
+          "exports",
+          /* @__PURE__ */ import_react30.default.createElement(
+            ExportPage,
+            {
+              report,
+              onPreviewImport: previewReportImport,
+              onImportReports: async (payload) => {
+                const data2 = await importReports(payload);
+                setFlash({ type: "success", message: `${data2.importedCount} Berichte importiert.` });
+                return data2;
+              }
             }
-          }
-        ) : /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/dashboard", replace: true })
+          )
+        )
       }
-    ), /* @__PURE__ */ import_react30.default.createElement(Route, { path: "/archiv", element: /* @__PURE__ */ import_react30.default.createElement(ArchivPage, { role, report, trainees }) }), /* @__PURE__ */ import_react30.default.createElement(
+    ), /* @__PURE__ */ import_react30.default.createElement(Route, { path: "/archiv", element: guardRoute("archive", /* @__PURE__ */ import_react30.default.createElement(ArchivPage, { role, report, trainees })) }), /* @__PURE__ */ import_react30.default.createElement(
       Route,
       {
-        path: "/verwaltung",
-        element: role === "admin" ? /* @__PURE__ */ import_react30.default.createElement(
-          AdminUsersPage,
-          {
-            users,
-            educations,
-            onPreviewUserImport: previewUserImport,
-            onImportUsers: async (payload) => {
-              const data2 = await importUsers(payload);
-              setFlash({ type: "success", message: `${data2.importedCount} Nutzer importiert.` });
-              return data2;
-            },
-            onLoadAuditLogs: loadAuditLogs,
-            onAssignTrainer: async (traineeId, trainerIds) => {
-              await assignTrainer(traineeId, trainerIds);
-              setFlash({ type: "success", message: "Ausbilder-Zuordnung gespeichert." });
-            },
-            onUpdateUser: async (userId, payload) => {
-              await updateUser(userId, payload);
-              setFlash({ type: "success", message: "Benutzer aktualisiert." });
-            },
-            onDeleteUser: async (userId) => {
-              const data2 = await deleteUser(userId);
-              setFlash({ type: "success", message: `${data2.deletedUser?.name || "Benutzer"} gel\xF6scht.` });
-              return data2;
-            },
-            onCreateUser: async (payload) => {
-              await createUser(payload);
-              setFlash({ type: "success", message: "Nutzer angelegt." });
+        path: "/admin/users/new",
+        element: guardRoute(
+          "admin-create-user",
+          /* @__PURE__ */ import_react30.default.createElement(
+            AdminUsersPage,
+            {
+              section: "create",
+              users,
+              educations,
+              onPreviewUserImport: previewUserImport,
+              onImportUsers: async (payload) => {
+                const data2 = await importUsers(payload);
+                setFlash({ type: "success", message: `${data2.importedCount} Nutzer importiert.` });
+                return data2;
+              },
+              onLoadAuditLogs: loadAuditLogs,
+              onAssignTrainer: async (traineeId, trainerIds) => {
+                await assignTrainer(traineeId, trainerIds);
+                setFlash({ type: "success", message: "Ausbilder-Zuordnung gespeichert." });
+              },
+              onUpdateUser: async (userId, payload) => {
+                await updateUser(userId, payload);
+                setFlash({ type: "success", message: "Benutzer aktualisiert." });
+              },
+              onDeleteUser: async (userId) => {
+                const data2 = await deleteUser(userId);
+                setFlash({ type: "success", message: `${data2.deletedUser?.name || "Benutzer"} gel\xF6scht.` });
+                return data2;
+              },
+              onCreateUser: async (payload) => {
+                await createUser(payload);
+                setFlash({ type: "success", message: "Nutzer angelegt." });
+              }
             }
-          }
-        ) : /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/dashboard", replace: true })
+          )
+        )
       }
-    ), /* @__PURE__ */ import_react30.default.createElement(Route, { path: "*", element: /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/dashboard", replace: true }) }))
+    ), /* @__PURE__ */ import_react30.default.createElement(
+      Route,
+      {
+        path: "/admin/users",
+        element: guardRoute(
+          "admin-users",
+          /* @__PURE__ */ import_react30.default.createElement(
+            AdminUsersPage,
+            {
+              section: "users",
+              users,
+              educations,
+              onPreviewUserImport: previewUserImport,
+              onImportUsers: async (payload) => {
+                const data2 = await importUsers(payload);
+                setFlash({ type: "success", message: `${data2.importedCount} Nutzer importiert.` });
+                return data2;
+              },
+              onLoadAuditLogs: loadAuditLogs,
+              onAssignTrainer: async (traineeId, trainerIds) => {
+                await assignTrainer(traineeId, trainerIds);
+                setFlash({ type: "success", message: "Ausbilder-Zuordnung gespeichert." });
+              },
+              onUpdateUser: async (userId, payload) => {
+                await updateUser(userId, payload);
+                setFlash({ type: "success", message: "Benutzer aktualisiert." });
+              },
+              onDeleteUser: async (userId) => {
+                const data2 = await deleteUser(userId);
+                setFlash({ type: "success", message: `${data2.deletedUser?.name || "Benutzer"} gel\xF6scht.` });
+                return data2;
+              },
+              onCreateUser: async (payload) => {
+                await createUser(payload);
+                setFlash({ type: "success", message: "Nutzer angelegt." });
+              }
+            }
+          )
+        )
+      }
+    ), /* @__PURE__ */ import_react30.default.createElement(
+      Route,
+      {
+        path: "/admin/assignments",
+        element: guardRoute(
+          "admin-assignments",
+          /* @__PURE__ */ import_react30.default.createElement(
+            AdminUsersPage,
+            {
+              section: "assignments",
+              users,
+              educations,
+              onPreviewUserImport: previewUserImport,
+              onImportUsers: async (payload) => {
+                const data2 = await importUsers(payload);
+                setFlash({ type: "success", message: `${data2.importedCount} Nutzer importiert.` });
+                return data2;
+              },
+              onLoadAuditLogs: loadAuditLogs,
+              onAssignTrainer: async (traineeId, trainerIds) => {
+                await assignTrainer(traineeId, trainerIds);
+                setFlash({ type: "success", message: "Ausbilder-Zuordnung gespeichert." });
+              },
+              onUpdateUser: async (userId, payload) => {
+                await updateUser(userId, payload);
+                setFlash({ type: "success", message: "Benutzer aktualisiert." });
+              },
+              onDeleteUser: async (userId) => {
+                const data2 = await deleteUser(userId);
+                setFlash({ type: "success", message: `${data2.deletedUser?.name || "Benutzer"} gel\xF6scht.` });
+                return data2;
+              },
+              onCreateUser: async (payload) => {
+                await createUser(payload);
+                setFlash({ type: "success", message: "Nutzer angelegt." });
+              }
+            }
+          )
+        )
+      }
+    ), /* @__PURE__ */ import_react30.default.createElement(
+      Route,
+      {
+        path: "/admin/audit-log",
+        element: guardRoute(
+          "admin-audit-log",
+          /* @__PURE__ */ import_react30.default.createElement(
+            AdminUsersPage,
+            {
+              section: "audit",
+              users,
+              educations,
+              onPreviewUserImport: previewUserImport,
+              onImportUsers: async (payload) => {
+                const data2 = await importUsers(payload);
+                setFlash({ type: "success", message: `${data2.importedCount} Nutzer importiert.` });
+                return data2;
+              },
+              onLoadAuditLogs: loadAuditLogs,
+              onAssignTrainer: async (traineeId, trainerIds) => {
+                await assignTrainer(traineeId, trainerIds);
+                setFlash({ type: "success", message: "Ausbilder-Zuordnung gespeichert." });
+              },
+              onUpdateUser: async (userId, payload) => {
+                await updateUser(userId, payload);
+                setFlash({ type: "success", message: "Benutzer aktualisiert." });
+              },
+              onDeleteUser: async (userId) => {
+                const data2 = await deleteUser(userId);
+                setFlash({ type: "success", message: `${data2.deletedUser?.name || "Benutzer"} gel\xF6scht.` });
+                return data2;
+              },
+              onCreateUser: async (payload) => {
+                await createUser(payload);
+                setFlash({ type: "success", message: "Nutzer angelegt." });
+              }
+            }
+          )
+        )
+      }
+    ), /* @__PURE__ */ import_react30.default.createElement(Route, { path: "/verwaltung", element: /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/admin/users", replace: true }) }), /* @__PURE__ */ import_react30.default.createElement(Route, { path: "*", element: /* @__PURE__ */ import_react30.default.createElement(Navigate, { to: "/dashboard", replace: true }) }))
   );
 }
 function AppContent() {
