@@ -1,10 +1,14 @@
 import dotenv from "dotenv";
 
-dotenv.config({ quiet: true });
+const dotEnvValues = dotenv.config({ quiet: true }).parsed || {};
+
+function readEnv(name, defaultValue = "") {
+  return process.env[name] || dotEnvValues[name] || defaultValue;
+}
 
 export function buildIntegrationTestEnv(overrides = {}) {
-  const redisPassword = process.env.REDIS_PASSWORD || "";
-  const redisUrl = process.env.REDIS_URL || (redisPassword
+  const redisPassword = readEnv("REDIS_PASSWORD");
+  const redisUrl = readEnv("REDIS_URL") || (redisPassword
     ? `redis://:${encodeURIComponent(redisPassword)}@127.0.0.1:6379`
     : "redis://127.0.0.1:6379");
 
@@ -28,13 +32,13 @@ export function buildIntegrationTestEnv(overrides = {}) {
     APPLY_MIGRATIONS_ON_START: "true",
     BOOTSTRAP_DATABASE_ON_START: "true",
     RESET_DATABASE_ON_START: "true",
-    MSSQL_HOST: process.env.MSSQL_HOST || "127.0.0.1",
-    MSSQL_PORT: process.env.MSSQL_PORT || "1433",
-    MSSQL_DATABASE: process.env.MSSQL_TEST_DATABASE || process.env.MSSQL_DATABASE || "ausbildungsdoku_test",
-    DB_USER: process.env.DB_USER || "ausbildungsdoku_app",
-    DB_PASSWORD: process.env.DB_PASSWORD || "ChangeMeDbPassword123!",
-    MSSQL_PASSWORD: process.env.MSSQL_PASSWORD || "YourStrong(!)Password",
-    MSSQL_TRUST_SERVER_CERTIFICATE: process.env.MSSQL_TRUST_SERVER_CERTIFICATE || "true",
+    MSSQL_HOST: readEnv("MSSQL_HOST", "127.0.0.1"),
+    MSSQL_PORT: readEnv("MSSQL_PORT", "1433"),
+    MSSQL_DATABASE: readEnv("MSSQL_TEST_DATABASE") || readEnv("MSSQL_DATABASE", "ausbildungsdoku_test"),
+    DB_USER: readEnv("DB_USER", "ausbildungsdoku_app"),
+    DB_PASSWORD: readEnv("DB_PASSWORD", "ChangeMeDbPassword123!"),
+    MSSQL_PASSWORD: readEnv("MSSQL_PASSWORD", "YourStrong(!)Password"),
+    MSSQL_TRUST_SERVER_CERTIFICATE: readEnv("MSSQL_TRUST_SERVER_CERTIFICATE", "true"),
     REDIS_URL: redisUrl,
     REDIS_PASSWORD: redisPassword,
     REDIS_KEY_PREFIX: "berichtsheft:test:",

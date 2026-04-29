@@ -31,6 +31,7 @@ function baseEnv(overrides = {}) {
     MSSQL_DATABASE: "berichtsheft",
     DB_USER: "ausbildungsdoku_app",
     DB_PASSWORD: "Password123!",
+    SESSION_TTL_SECONDS: "",
     ...overrides
   };
 }

@@ -58,9 +58,9 @@ services:
           done
         fi
         [ -n "$$SQLCMD" ] || exit 1
+        SQL="IF DB_ID(N'$${MSSQL_DATABASE:-ausbildungsdoku}') IS NULL EXEC(N'CREATE DATABASE [$${MSSQL_DATABASE:-ausbildungsdoku}]'); IF DB_ID(N'$${MSSQL_TEST_DATABASE:-ausbildungsdoku_test}') IS NULL EXEC(N'CREATE DATABASE [$${MSSQL_TEST_DATABASE:-ausbildungsdoku_test}]'); IF SUSER_ID(N'$${DB_USER:?DB_USER must be set}') IS NULL CREATE LOGIN [$${DB_USER:?DB_USER must be set}] WITH PASSWORD = N'$$DB_PASSWORD_SQL', CHECK_POLICY = ON; ELSE ALTER LOGIN [$${DB_USER:?DB_USER must be set}] WITH PASSWORD = N'$$DB_PASSWORD_SQL', CHECK_POLICY = ON; EXEC(N'USE [$${MSSQL_DATABASE:-ausbildungsdoku}]; IF USER_ID(N''$${DB_USER:?DB_USER must be set}'') IS NULL CREATE USER [$${DB_USER:?DB_USER must be set}] FOR LOGIN [$${DB_USER:?DB_USER must be set}]; ALTER ROLE db_owner ADD MEMBER [$${DB_USER:?DB_USER must be set}];'); EXEC(N'USE [$${MSSQL_TEST_DATABASE:-ausbildungsdoku_test}]; IF USER_ID(N''$${DB_USER:?DB_USER must be set}'') IS NULL CREATE USER [$${DB_USER:?DB_USER must be set}] FOR LOGIN [$${DB_USER:?DB_USER must be set}]; ALTER ROLE db_owner ADD MEMBER [$${DB_USER:?DB_USER must be set}];');"
         "$$SQLCMD" -C -S mssql -U sa -P "$${MSSQL_PASSWORD:-YourStrong(!)Password}" -d master \
-          -v app_user="$${DB_USER:?DB_USER must be set}" app_password="$$DB_PASSWORD_SQL" app_db="$${MSSQL_DATABASE:-ausbildungsdoku}" test_db="$${MSSQL_TEST_DATABASE:-ausbildungsdoku_test}" \
-          -Q "IF DB_ID(N'\$(app_db)') IS NULL EXEC(N'CREATE DATABASE [\$(app_db)]'); IF DB_ID(N'\$(test_db)') IS NULL EXEC(N'CREATE DATABASE [\$(test_db)]'); IF SUSER_ID(N'\$(app_user)') IS NULL CREATE LOGIN [\$(app_user)] WITH PASSWORD = N'\$(app_password)', CHECK_POLICY = ON; ELSE ALTER LOGIN [\$(app_user)] WITH PASSWORD = N'\$(app_password)', CHECK_POLICY = ON; EXEC(N'USE [\$(app_db)]; IF USER_ID(N''\$(app_user)'') IS NULL CREATE USER [\$(app_user)] FOR LOGIN [\$(app_user)]; ALTER ROLE db_owner ADD MEMBER [\$(app_user)];'); EXEC(N'USE [\$(test_db)]; IF USER_ID(N''\$(app_user)'') IS NULL CREATE USER [\$(app_user)] FOR LOGIN [\$(app_user)]; ALTER ROLE db_owner ADD MEMBER [\$(app_user)];');"
+          -Q "$$SQL"
 
   redis:
     # Lokaler Redis-Container als persistenter Session-Store.
