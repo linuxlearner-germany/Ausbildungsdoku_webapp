@@ -2,7 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 
 function registerCoreMiddleware(app, { config, sessionMiddleware, publicDir, picturesDir, logger = console }) {
-  if (config.server.trustProxy) {
+  if (config.server.trustProxy && typeof app.set === "function") {
     app.set("trust proxy", config.server.trustProxy);
   }
 

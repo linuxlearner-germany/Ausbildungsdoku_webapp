@@ -2,6 +2,19 @@ const bcrypt = require("bcryptjs");
 const { HttpError } = require("../utils/http-error");
 
 function createAuthService({ authRepository, helpers }) {
+  function regenerateSession(req) {
+    return new Promise((resolve, reject) => {
+      req.session.regenerate((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
+  }
+
   function saveSession(req) {
     return new Promise((resolve, reject) => {
       req.session.save((error) => {
@@ -16,8 +29,15 @@ function createAuthService({ authRepository, helpers }) {
   }
 
   async function login(payload, req) {
-    if (helpers.isLoginRateLimited(req)) {
-      throw new HttpError(429, "Zu viele Login-Versuche. Bitte spaeter erneut versuchen.");
+    const rateLimit = await helpers.getLoginRateLimit(req);
+    if (rateLimit.limited) {
+      throw new HttpError(429, `Zu viele Login-Versuche. Bitte in ${rateLimit.retryAfterSeconds} Sekunden erneut versuchen.`, {
+        code: "RATE_LIMITED",
+        details: {
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+          maxAttempts: rateLimit.maxAttempts
+        }
+      });
     }
 
     const identifier = String(payload.identifier || "").trim().toLowerCase();
@@ -26,20 +46,22 @@ function createAuthService({ authRepository, helpers }) {
     const passwordMatches = user ? bcrypt.compareSync(password, user.password_hash) : false;
 
     if (!user || !passwordMatches) {
-      helpers.recordLoginFailure(req);
-      throw new HttpError(401, "E-Mail oder Passwort ist falsch.");
+      await helpers.recordLoginFailure(req);
+      throw new HttpError(401, "E-Mail oder Passwort ist falsch.", { code: "INVALID_CREDENTIALS" });
     }
 
-    helpers.clearLoginFailures(req);
+    await helpers.clearLoginFailures(req);
+    await regenerateSession(req);
     req.session.userId = user.id;
     await saveSession(req);
 
-    const { theme_preference, password_hash, ...safeUser } = user;
+    const { theme_preference, password_hash, password_change_required, ...safeUser } = user;
     return {
       ok: true,
       user: {
         ...safeUser,
-        themePreference: helpers.normalizeThemePreference(theme_preference)
+        themePreference: helpers.normalizeThemePreference(theme_preference),
+        passwordChangeRequired: Boolean(password_change_required)
       }
     };
   }
@@ -50,9 +72,20 @@ function createAuthService({ authRepository, helpers }) {
     };
   }
 
-  function logout(req) {
+  function clearSessionCookie(req, res) {
+    const cookieOptions = req.session?.cookie || {};
+    res.clearCookie(helpers.sessionCookieName || "berichtsheft.sid", {
+      path: cookieOptions.path || "/",
+      ...(cookieOptions.domain ? { domain: cookieOptions.domain } : {}),
+      sameSite: cookieOptions.sameSite || "lax",
+      secure: Boolean(cookieOptions.secure)
+    });
+  }
+
+  function logout(req, res) {
     return new Promise((resolve) => {
       req.session.destroy(() => {
+        clearSessionCookie(req, res);
         resolve({ ok: true });
       });
     });
@@ -91,7 +124,7 @@ function createAuthService({ authRepository, helpers }) {
     }
 
     await authRepository.updatePasswordHash(currentUser.id, helpers.hashPassword(payload.newPassword));
-    helpers.clearLoginFailuresForKey(helpers.getClientIp(req), currentUser.username);
+    await helpers.clearLoginFailuresForKey(helpers.getClientIp(req), currentUser.username);
     return { ok: true };
   }
 

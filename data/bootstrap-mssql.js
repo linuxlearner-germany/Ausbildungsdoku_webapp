@@ -3,8 +3,18 @@ const crypto = require("crypto");
 function createBootstrap({
   db,
   config,
-  hashPassword
+  hashPassword,
+  writeAuditLog = null
 }) {
+  function getInitialAdminIdentity() {
+    return {
+      username: String(config.initialAdmin.username || "").trim().toLowerCase(),
+      email: String(config.initialAdmin.email || "").trim().toLowerCase(),
+      password: config.initialAdmin.password,
+      forcePasswordChange: Boolean(config.initialAdmin.forcePasswordChange)
+    };
+  }
+
   async function saveEducation(name, trx = db) {
     const normalized = String(name || "").trim();
     if (!normalized) {
@@ -18,13 +28,11 @@ function createBootstrap({
   }
 
   async function ensureInitialAdmin(trx = db) {
-    const username = config.initialAdmin.username;
-    const email = config.initialAdmin.email.toLowerCase();
-    const password = config.initialAdmin.password;
+    const { username, email, password, forcePasswordChange } = getInitialAdminIdentity();
 
     const existing = await trx("users")
-      .where({ username })
-      .orWhere({ email })
+      .whereRaw("LOWER(??) = ?", ["username", username])
+      .orWhereRaw("LOWER(??) = ?", ["email", email])
       .first("id", "username", "email", "role");
 
     if (existing) {
@@ -37,6 +45,7 @@ function createBootstrap({
         username,
         email,
         password_hash: hashPassword(password),
+        password_change_required: forcePasswordChange,
         role: "admin",
         theme_preference: "system",
         ausbildung: "",
@@ -44,17 +53,32 @@ function createBootstrap({
         berufsschule: ""
       }, ["id", "username", "email", "role"]);
 
+    if (writeAuditLog) {
+      await writeAuditLog({
+        actor: null,
+        actionType: "INITIAL_ADMIN_CREATED",
+        entityType: "user",
+        entityId: String(createdUser.id),
+        targetUserId: createdUser.id,
+        summary: "Initialer Admin wurde beim Bootstrap angelegt.",
+        metadata: {
+          username,
+          email,
+          passwordChangeRequired: forcePasswordChange
+        },
+        trx
+      });
+    }
+
     return { created: true, user: createdUser };
   }
 
   async function resetInitialAdmin(trx = db) {
-    const username = config.initialAdmin.username;
-    const email = config.initialAdmin.email.toLowerCase();
-    const password = config.initialAdmin.password;
+    const { username, email, password, forcePasswordChange } = getInitialAdminIdentity();
 
     const existingByIdentity = await trx("users")
-      .where({ username })
-      .orWhere({ email })
+      .whereRaw("LOWER(??) = ?", ["username", username])
+      .orWhereRaw("LOWER(??) = ?", ["email", email])
       .first("id", "username", "email", "role", "name", "theme_preference");
 
     if (existingByIdentity) {
@@ -68,6 +92,7 @@ function createBootstrap({
           username,
           email,
           password_hash: hashPassword(password),
+          password_change_required: forcePasswordChange,
           role: "admin",
           name: existingByIdentity.name || "Systemadministrator",
           theme_preference: existingByIdentity.theme_preference || "system"
@@ -95,6 +120,7 @@ function createBootstrap({
         username,
         email,
         password_hash: hashPassword(password),
+        password_change_required: forcePasswordChange,
         role: "admin",
         theme_preference: "system",
         ausbildung: "",

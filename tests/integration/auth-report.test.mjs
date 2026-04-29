@@ -7,11 +7,11 @@ import { extractCookie, postJson, startServer } from "../helpers/test-server.mjs
 let nextPort = 3210;
 let baseUrl = "";
 
-async function withIsolatedServer(run) {
+async function withIsolatedServer(run, envOverrides = {}) {
   const port = nextPort;
   nextPort += 1;
   baseUrl = `http://127.0.0.1:${port}`;
-  const server = await startServer(port);
+  const server = await startServer(port, envOverrides);
 
   try {
     await run();
@@ -51,6 +51,30 @@ await test("Login funktioniert mit gueltigem Admin", { concurrency: false }, asy
   });
 });
 
+await test("Admin-Login akzeptiert Benutzername und E-Mail case-insensitive", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const usernameResponse = await postJson(`${baseUrl}/api/login`, {
+      identifier: "Admin",
+      password: "admin123"
+    });
+    const usernameData = await usernameResponse.json();
+
+    assert.equal(usernameResponse.status, 200);
+    assert.equal(usernameData.user.username, "admin");
+    assert.ok(extractCookie(usernameResponse));
+
+    const emailResponse = await postJson(`${baseUrl}/api/login`, {
+      identifier: "ADMIN@EXAMPLE.COM",
+      password: "admin123"
+    });
+    const emailData = await emailResponse.json();
+
+    assert.equal(emailResponse.status, 200);
+    assert.equal(emailData.user.email, "admin@example.com");
+    assert.ok(extractCookie(emailResponse));
+  });
+});
+
 await test("Login mit falschem Admin-Passwort liefert klare Fehlermeldung", { concurrency: false }, async () => {
   await withIsolatedServer(async () => {
     const response = await postJson(`${baseUrl}/api/login`, {
@@ -61,25 +85,72 @@ await test("Login mit falschem Admin-Passwort liefert klare Fehlermeldung", { co
 
     assert.equal(response.status, 401);
     assert.equal(data.error.message, "E-Mail oder Passwort ist falsch.");
-    assert.equal(data.error.code, "HTTP_ERROR");
+    assert.equal(data.error.code, "INVALID_CREDENTIALS");
+  });
+});
+
+await test("Initial-Admin muss Passwort vor Fachzugriff aendern", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const loginResponse = await postJson(`${baseUrl}/api/login`, {
+      identifier: "admin",
+      password: "admin123"
+    });
+    const loginData = await loginResponse.json();
+    const cookie = extractCookie(loginResponse);
+
+    assert.equal(loginResponse.status, 200);
+    assert.equal(loginData.user.passwordChangeRequired, true);
+
+    const blockedDashboard = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: cookie }
+    });
+    const blockedData = await blockedDashboard.json();
+    assert.equal(blockedDashboard.status, 403);
+    assert.equal(blockedData.error.code, "PASSWORD_CHANGE_REQUIRED");
+
+    const passwordChange = await postJson(
+      `${baseUrl}/api/profile/password`,
+      {
+        currentPassword: "admin123",
+        newPassword: "AdminNeu123!",
+        newPasswordRepeat: "AdminNeu123!"
+      },
+      cookie
+    );
+    assert.equal(passwordChange.status, 200);
+
+    const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, {
+      headers: { Cookie: cookie }
+    });
+    assert.equal(dashboardResponse.status, 200);
+  }, {
+    INITIAL_ADMIN_FORCE_PASSWORD_CHANGE: "true"
   });
 });
 
 await test("Login-Rate-Limit greift", { concurrency: false }, async () => {
   await withIsolatedServer(async () => {
-    for (let index = 0; index < 8; index += 1) {
+    const identifier = `limit-${Date.now()}@example.com`;
+    for (let index = 0; index < 3; index += 1) {
       const response = await postJson(`${baseUrl}/api/login`, {
-        identifier: "limit@example.com",
+        identifier,
         password: "falsch"
       });
       assert.equal(response.status, 401);
     }
 
     const blocked = await postJson(`${baseUrl}/api/login`, {
-      identifier: "limit@example.com",
+      identifier,
       password: "falsch"
     });
+    const data = await blocked.json();
+
     assert.equal(blocked.status, 429);
+    assert.equal(data.error.code, "RATE_LIMITED");
+    assert.equal(blocked.headers.get("retry-after"), "60");
+  }, {
+    LOGIN_RATE_LIMIT_MAX_ATTEMPTS: "3",
+    LOGIN_RATE_LIMIT_WINDOW_MS: "60000"
   });
 });
 

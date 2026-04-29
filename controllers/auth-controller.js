@@ -15,7 +15,7 @@ function createAuthController({ authService, schemas }) {
     },
 
     async logout(req, res) {
-      res.json(await authService.logout(req));
+      res.json(await authService.logout(req, res));
     },
 
     async updateThemePreference(req, res) {

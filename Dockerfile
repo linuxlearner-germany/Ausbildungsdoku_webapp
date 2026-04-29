@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
 # Gemeinsames Node-LTS-Basisimage fuer Build und Runtime.
-FROM node:20-bookworm-slim AS base
+FROM node:20-slim AS base
 WORKDIR /app
 
 FROM base AS deps
@@ -14,7 +14,7 @@ FROM deps AS build
 COPY . .
 RUN npm run build
 
-FROM node:20-bookworm-slim AS runtime-base
+FROM node:20-slim AS runtime-base
 # Runtime-Basis mit PDF-Fonts und eigenem Non-Root-User fuer den App-Prozess.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates fonts-dejavu-core \

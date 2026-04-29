@@ -49,6 +49,13 @@ export function AuthProvider({ children }) {
       const data = await apiClient.post("/api/login", { identifier, password });
       setSession({ user: data.user, ready: true });
       applyThemePreference(data.user?.themePreference || window.localStorage.getItem(THEME_STORAGE_KEY) || "system");
+      if (data.user?.passwordChangeRequired) {
+        setDashboard(null);
+        setGrades([]);
+        setFlash({ type: "error", message: "Bitte ändere dein Passwort, bevor du fortfährst." });
+        return;
+      }
+
       await refreshDashboardState(setDashboard);
 
       if (data.user.role === "trainee") {
@@ -77,7 +84,9 @@ export function AuthProvider({ children }) {
       newPasswordRepeat: String(payload?.newPasswordRepeat || "")
     };
 
-    return apiClient.post("/api/profile/password", safePayload);
+    const result = await apiClient.post("/api/profile/password", safePayload);
+    await restoreSession();
+    return result;
   }
 
   return (

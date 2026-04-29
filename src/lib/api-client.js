@@ -63,7 +63,7 @@ async function request(path, options = {}) {
   const hasJsonBody = options.body !== undefined;
   const targetPath = apiUrl(path);
   const response = await fetch(targetPath, {
-    credentials: "same-origin",
+    credentials: options.credentials || "include",
     headers: {
       ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
       ...(options.headers || {})

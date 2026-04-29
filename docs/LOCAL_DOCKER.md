@@ -49,17 +49,13 @@ Stoppen ohne Datenverlust:
 docker compose -f docker-compose.local.yml down
 ```
 
-Komplett löschen:
-
-```bash
-docker compose -f docker-compose.local.yml down -v
-```
+Volume-Loeschungen sind kein Recovery-Schritt und entfernen MSSQL-Fachdaten.
 
 ## Unterschied zwischen `stop`, `down`, `down -v`, `rebuild`, `update`
 
 - `stop`: Container bleiben angelegt, Volumes bleiben erhalten.
 - `down`: Container und Netzwerk werden entfernt, Volumes bleiben erhalten.
-- `down -v`: Container, Netzwerk und Volumes werden entfernt.
+- Volume-Loeschung: Container, Netzwerk und Volumes werden entfernt; nicht fuer Login-Recovery verwenden.
 - `up -d --build`: Image neu bauen, Container starten, Daten bleiben erhalten.
 - Update: zuerst Backup, dann `down`, dann `up -d --build`.
 
@@ -151,6 +147,7 @@ Verhalten:
 
 - setzt das Passwort fuer den konfigurierten Admin zurueck, wenn er bereits existiert
 - legt den konfigurierten Admin an, wenn noch kein passender Admin vorhanden ist
+- leert nur die Redis-Keys fuer Login-Rate-Limits, damit Tests sofort wieder moeglich sind
 - loescht keine Volumes und keine Fachdatensaetze
 
 Der normale App-Start ueberschreibt bestehende Admins weiterhin nicht automatisch.

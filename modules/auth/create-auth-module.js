@@ -14,12 +14,13 @@ function createAuthModule({ db, sharedRepository, loginRateLimiter, helpers }) {
   const authService = createAuthService({
     authRepository,
     helpers: {
-      isLoginRateLimited: loginRateLimiter.isLoginRateLimited,
+      getLoginRateLimit: loginRateLimiter.getLoginRateLimit,
       recordLoginFailure: loginRateLimiter.recordLoginFailure,
       clearLoginFailures: loginRateLimiter.clearLoginFailures,
       clearLoginFailuresForKey: loginRateLimiter.clearLoginFailuresForKey,
       normalizeThemePreference: helpers.normalizeThemePreference,
       hashPassword: helpers.hashPassword,
+      sessionCookieName: helpers.sessionCookieName,
       getClientIp: loginRateLimiter.getClientIp
     }
   });

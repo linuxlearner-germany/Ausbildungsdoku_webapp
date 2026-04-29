@@ -26,6 +26,10 @@ function createErrorHandler({ logger = console } = {}) {
     }
 
     if (isHttpError(error)) {
+      if (error.status === 429 && Number.isInteger(error.details?.retryAfterSeconds)) {
+        res.setHeader("Retry-After", String(error.details.retryAfterSeconds));
+      }
+
       if (error.status >= 500) {
         logger.error("HTTP-Fehler", {
           requestId: res.locals.requestId,

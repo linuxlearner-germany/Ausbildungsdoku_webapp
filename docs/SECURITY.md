@@ -8,7 +8,7 @@
 - `SESSION_SAME_SITE` und `SESSION_SECURE` werden validiert
 - `helmet` ist aktiv
 - API-Requests mit schreibenden Methoden prüfen Origin/Referer gegen erlaubte Ursprünge
-- Login ist rate-limitiert
+- Login ist ueber Redis rate-limitiert
 - Rollenprüfung liegt serverseitig auf den API-Routen
 - PDF-Export für Berichte ist auf signierte Berichte begrenzt
 - CSV-Exporte werden UTF-8 mit BOM erzeugt
@@ -28,7 +28,7 @@
 - `xlsx` hat aktuell keinen automatischen Non-Breaking-Fix über `npm audit fix`
 - Import-Funktionen sollten nur mit vertrauenswürdigen Dateien verwendet werden
 - Es gibt kein separates CSRF-Token-System; Schutz erfolgt aktuell über SameSite-Cookies und Origin-Prüfung
-- Login-Rate-Limit ist pro Prozess im Speicher, nicht verteilt
+- Login-Rate-Limit-Keys duerfen fuer Recovery gezielt geloescht werden; Redis-Sessions und MSSQL-Daten bleiben getrennt
 
 ## Deployment-Hinweise
 

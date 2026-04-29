@@ -18,13 +18,14 @@ const { createAdminModule } = require("../modules/admin/create-admin-module");
 const { createGradesModule } = require("../modules/grades/create-grades-module");
 const { hashPassword, isValidEmail, normalizeUsername, normalizeEntry, normalizeThemePreference } = require("./runtime-helpers");
 
-function createDependencies({ config, db }) {
+function createDependencies({ config, db, redisClient }) {
   const auditHelpers = createAuditHelpers({ db });
   const sharedRepository = createSharedRepository({ db, writeAuditLog: auditHelpers.writeAuditLog });
   const loginRateLimiter = createLoginRateLimiter({
-    loginAttempts: new Map(),
-    loginWindowMs: 15 * 60 * 1000,
-    loginMaxAttempts: 8
+    redisClient,
+    keyPrefix: config.redis.keyPrefix,
+    loginWindowMs: config.security.loginRateLimit.windowMs,
+    loginMaxAttempts: config.security.loginRateLimit.maxAttempts
   });
   const authMiddleware = createAuthMiddleware({
     getCurrentUser: sharedRepository.getCurrentUser
@@ -35,7 +36,8 @@ function createDependencies({ config, db }) {
     isValidEmail,
     normalizeUsername,
     normalizeEntry,
-    normalizeThemePreference
+    normalizeThemePreference,
+    sessionCookieName: config.session.cookieName
   };
   const importHelpers = {
     toIsoDateParts,

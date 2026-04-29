@@ -63,6 +63,45 @@ function ProtectedApp() {
   const educations = dashboard?.educations || [];
   const fallbackRoute = getDefaultRouteForRole(role);
 
+  if (session.user.passwordChangeRequired) {
+    return (
+      <AppShell
+        user={session.user}
+        theme={theme}
+        themePreference={themePreference}
+        flash={flash}
+        onLogout={logout}
+        onToggleTheme={async () => {
+          await toggleTheme();
+          setFlash({ type: "success", message: `Darstellung auf ${theme === "dark" ? "hell" : "dunkel"} umgestellt.` });
+        }}
+      >
+        <ProfilPage
+          forcePasswordChange
+          role={role}
+          report={report}
+          trainees={[]}
+          users={[]}
+          theme={theme}
+          themePreference={themePreference}
+          onToggleTheme={async () => {
+            await toggleTheme();
+            setFlash({ type: "success", message: `Darstellung auf ${theme === "dark" ? "hell" : "dunkel"} umgestellt.` });
+          }}
+          onSaveThemePreference={async (nextPreference) => {
+            await saveThemePreference(nextPreference);
+            setFlash({ type: "success", message: `Darstellung auf ${nextPreference === "system" ? "Systemstandard" : nextPreference} gesetzt.` });
+          }}
+          onSaveManagedProfile={async () => {}}
+          onChangeOwnPassword={async (payload) => {
+            await changeOwnPassword(payload);
+            setFlash({ type: "success", message: "Dein Passwort wurde erfolgreich geändert." });
+          }}
+        />
+      </AppShell>
+    );
+  }
+
   function guardRoute(menuKey, element) {
     return canAccessMenuItem(role, menuKey) ? element : <Navigate to={fallbackRoute} replace />;
   }

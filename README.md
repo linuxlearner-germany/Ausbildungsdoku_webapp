@@ -67,8 +67,7 @@ Verhalten:
   Container stoppen, Daten bleiben erhalten.
 - `docker compose -f docker-compose.local.yml down`
   Container entfernen, Daten in Named Volumes bleiben erhalten.
-- `docker compose -f docker-compose.local.yml down -v`
-  Container und Volumes entfernen, Daten werden bewusst gelöscht.
+- Volume-Loeschungen sind nicht Teil der Login-Recovery und loeschen MSSQL-Fachdaten.
 - `docker compose -f docker-compose.local.yml up -d --build`
   Container neu bauen und starten, Volumes bleiben erhalten.
 
@@ -84,12 +83,6 @@ Stop ohne Datenverlust:
 
 ```bash
 docker compose -f docker-compose.local.yml down
-```
-
-Bewusst alles löschen:
-
-```bash
-docker compose -f docker-compose.local.yml down -v
 ```
 
 Logs:
@@ -131,6 +124,7 @@ docker compose -f docker-compose.local.yml exec app npm run admin:reset
 ```
 
 Das Kommando setzt das Passwort des konfigurierten Admins aus `.env` zurueck oder legt ihn neu an, ohne Volumes oder Fachdaten zu loeschen.
+Dabei werden auch nur die Redis-Zaehler fuer fehlgeschlagene Login-Versuche geloescht; Sessions und MSSQL-Daten bleiben erhalten.
 
 Build Docker-first:
 
@@ -167,7 +161,7 @@ docker compose -f docker-compose.local.yml up -d --build
 Wichtig:
 
 - `down` ohne `-v` behält Daten.
-- `down -v` löscht Daten.
+- Volume-Loeschungen loeschen Daten und sind kein Login-Recovery-Schritt.
 - Vor Updates ist ein Backup empfohlen.
 
 Optionales Hilfsskript:
@@ -247,7 +241,7 @@ Der komplette Stack ist für Raspberry Pi nicht empfohlen:
 - Port belegt: Port-Mapping in `.env` anpassen
 - DB startet nicht: `logs -f mssql`
 - Redis startet nicht: `logs -f redis`
-- Login funktioniert nicht: Redis prüfen, Session-Secret prüfen
+- Login funktioniert nicht: Redis pruefen, Session-Secret pruefen, bei Admin-Zugang `npm run admin:reset` im App-Container ausfuehren
 - Daten scheinen weg: prüfen, ob versehentlich `down -v` verwendet wurde
 - Docker startet nach Rechnerneustart nicht automatisch: Docker Desktop / Docker Engine muss selbst beim Systemstart laufen
 
