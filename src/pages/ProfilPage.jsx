@@ -63,7 +63,7 @@ function ThemeSettingsPanel({ theme, themePreference, onToggleTheme, onSaveTheme
   );
 }
 
-function PasswordChangePanel({ onChangeOwnPassword }) {
+function PasswordChangePanel({ onChangeOwnPassword, forced = false }) {
   const [form, setForm] = useState({
     currentPassword: "",
     newPassword: "",
@@ -128,8 +128,9 @@ function PasswordChangePanel({ onChangeOwnPassword }) {
     <section className="panel-card">
       <PageHeader
         kicker="Sicherheit"
-        title="Passwort ändern"
+        title={forced ? "Passwortwechsel erforderlich" : "Passwort ändern"}
       />
+      {forced ? <div className="field-message error">Bitte setze ein neues Passwort, bevor du fortfährst.</div> : null}
       <div className="form-grid">
         <label>
           Aktuelles Passwort
@@ -179,7 +180,7 @@ function PasswordChangePanel({ onChangeOwnPassword }) {
   );
 }
 
-export function ProfilPage({ role, report, trainees, users, theme, themePreference, onToggleTheme, onSaveThemePreference, onSaveManagedProfile, onChangeOwnPassword }) {
+export function ProfilPage({ role, report, trainees, users, theme, themePreference, onToggleTheme, onSaveThemePreference, onSaveManagedProfile, onChangeOwnPassword, forcePasswordChange = false }) {
   const targets = useMemo(() => {
     if (role === "trainer") {
       return trainees || [];
@@ -227,6 +228,14 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
     } catch (error) {
       setPdfError(error.message || "PDF konnte nicht geladen werden.");
     }
+  }
+
+  if (forcePasswordChange) {
+    return (
+      <div className="page-stack">
+        <PasswordChangePanel forced onChangeOwnPassword={onChangeOwnPassword} />
+      </div>
+    );
   }
 
   if (role === "trainee") {

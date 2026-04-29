@@ -36,11 +36,12 @@ async function createRuntime() {
       await runMigrations({ db });
     }
 
-    const dependencies = createDependencies({ config, db });
+    const dependencies = createDependencies({ config, db, redisClient });
     const bootstrap = createBootstrap({
       db,
       config,
-      hashPassword: dependencies.bootstrapHelpers.hashPassword
+      hashPassword: dependencies.bootstrapHelpers.hashPassword,
+      writeAuditLog: dependencies.auditHelpers.writeAuditLog
     });
 
     let bootstrapResult = null;

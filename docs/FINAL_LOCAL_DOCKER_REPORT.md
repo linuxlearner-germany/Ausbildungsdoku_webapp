@@ -33,11 +33,7 @@ Stop:
 docker compose -f docker-compose.local.yml down
 ```
 
-Komplett löschen:
-
-```bash
-docker compose -f docker-compose.local.yml down -v
-```
+Volume-Loeschungen entfernen MSSQL-Daten und sind kein Login-Recovery-Schritt.
 
 Update:
 

@@ -1,4 +1,5 @@
 const helmet = require("helmet");
+const rateLimit = require("express-rate-limit");
 const { HttpError } = require("../utils/http-error");
 
 function resolveHeaderOrigin(value) {
@@ -13,11 +14,25 @@ function resolveHeaderOrigin(value) {
   }
 }
 
-function registerSecurityMiddleware(app, { config, isProduction, loginRateLimiter }) {
+function registerSecurityMiddleware(app, { config, isProduction }) {
   app.use(helmet({
     contentSecurityPolicy: false,
     crossOriginEmbedderPolicy: false
   }));
+
+  const loginIpRateLimiter = rateLimit({
+    windowMs: config.security.loginRateLimit.windowMs,
+    limit: config.security.loginRateLimit.maxAttempts,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      ok: false,
+      error: {
+        message: "Zu viele Login-Versuche. Bitte spaeter erneut versuchen.",
+        code: "RATE_LIMITED"
+      }
+    }
+  });
 
   app.use((req, res, next) => {
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -67,12 +82,12 @@ function registerSecurityMiddleware(app, { config, isProduction, loginRateLimite
   });
 
   app.use("/api/login", (req, res, next) => {
-    if (req.method === "POST" && loginRateLimiter?.isLoginRateLimited(req)) {
-      next(new HttpError(429, "Zu viele Login-Versuche. Bitte spaeter erneut versuchen.", { code: "LOGIN_RATE_LIMITED" }));
+    if (req.method !== "POST") {
+      next();
       return;
     }
 
-    next();
+    loginIpRateLimiter(req, res, next);
   });
 }
 

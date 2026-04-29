@@ -4,7 +4,9 @@ import { assetUrl } from "../lib/runtime";
 import { getMenuItemsForRole } from "../navigation/menuConfig.mjs";
 
 export function SidebarNavigation({ user, mobileNavOpen, onNavigate }) {
-  const visibleItems = getMenuItemsForRole(user?.role);
+  const visibleItems = user?.passwordChangeRequired
+    ? getMenuItemsForRole(user?.role).filter((item) => item.key === "profile")
+    : getMenuItemsForRole(user?.role);
 
   return (
     <aside className={`sidebar${mobileNavOpen ? " is-open" : ""}`} aria-label="Seitenleiste">

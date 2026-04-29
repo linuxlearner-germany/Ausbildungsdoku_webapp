@@ -32,10 +32,22 @@ services:
       mssql:
         condition: service_healthy
     restart: "no"
+    environment:
+      MSSQL_PASSWORD: ${MSSQL_PASSWORD:-YourStrong(!)Password}
+      MSSQL_DATABASE: ${MSSQL_DATABASE:-ausbildungsdoku}
+      MSSQL_TEST_DATABASE: ${MSSQL_TEST_DATABASE:-ausbildungsdoku_test}
+      DB_USER: ${DB_USER:-}
+      DB_PASSWORD: ${DB_PASSWORD:-}
     entrypoint:
       - /bin/bash
       - -lc
       - |
+        set -euo pipefail
+        for name in "$${MSSQL_DATABASE:-ausbildungsdoku}" "$${MSSQL_TEST_DATABASE:-ausbildungsdoku_test}" "$${DB_USER:?DB_USER must be set}"; do
+          [[ "$$name" =~ ^[A-Za-z0-9_]+$$ ]] || { echo "Ungueltiger SQL-Bezeichner: $$name" >&2; exit 1; }
+        done
+        DB_PASSWORD_SQL="$${DB_PASSWORD:?DB_PASSWORD must be set}"
+        DB_PASSWORD_SQL="$${DB_PASSWORD_SQL//\'/\'\'}"
         SQLCMD="$$(command -v sqlcmd || true)"
         if [ -z "$$SQLCMD" ]; then
           for candidate in /opt/mssql-tools18/bin/sqlcmd /opt/mssql-tools/bin/sqlcmd; do
@@ -46,18 +58,22 @@ services:
           done
         fi
         [ -n "$$SQLCMD" ] || exit 1
-        "$$SQLCMD" -C -S mssql -U sa -P "${MSSQL_PASSWORD:-YourStrong(!)Password}" -Q "IF DB_ID(N'${MSSQL_DATABASE:-ausbildungsdoku}') IS NULL CREATE DATABASE [${MSSQL_DATABASE:-ausbildungsdoku}]; IF DB_ID(N'${MSSQL_TEST_DATABASE:-ausbildungsdoku_test}') IS NULL CREATE DATABASE [${MSSQL_TEST_DATABASE:-ausbildungsdoku_test}];"
+        "$$SQLCMD" -C -S mssql -U sa -P "$${MSSQL_PASSWORD:-YourStrong(!)Password}" -d master \
+          -v app_user="$${DB_USER:?DB_USER must be set}" app_password="$$DB_PASSWORD_SQL" app_db="$${MSSQL_DATABASE:-ausbildungsdoku}" test_db="$${MSSQL_TEST_DATABASE:-ausbildungsdoku_test}" \
+          -Q "IF DB_ID(N'\$(app_db)') IS NULL EXEC(N'CREATE DATABASE [\$(app_db)]'); IF DB_ID(N'\$(test_db)') IS NULL EXEC(N'CREATE DATABASE [\$(test_db)]'); IF SUSER_ID(N'\$(app_user)') IS NULL CREATE LOGIN [\$(app_user)] WITH PASSWORD = N'\$(app_password)', CHECK_POLICY = ON; ELSE ALTER LOGIN [\$(app_user)] WITH PASSWORD = N'\$(app_password)', CHECK_POLICY = ON; EXEC(N'USE [\$(app_db)]; IF USER_ID(N''\$(app_user)'') IS NULL CREATE USER [\$(app_user)] FOR LOGIN [\$(app_user)]; ALTER ROLE db_owner ADD MEMBER [\$(app_user)];'); EXEC(N'USE [\$(test_db)]; IF USER_ID(N''\$(app_user)'') IS NULL CREATE USER [\$(app_user)] FOR LOGIN [\$(app_user)]; ALTER ROLE db_owner ADD MEMBER [\$(app_user)];');"
 
   redis:
     # Lokaler Redis-Container als persistenter Session-Store.
     image: redis:7.4-alpine
     container_name: ausbildungsdoku-redis
     restart: unless-stopped
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--dir", "/data"]
+    command: ["sh", "-c", "redis-server --save '' --appendonly no --dir /data --requirepass \"$${REDIS_PASSWORD:?REDIS_PASSWORD must be set}\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep -q PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -90,6 +106,8 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-false}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       REQUEST_BODY_LIMIT: ${REQUEST_BODY_LIMIT:-15mb}
+      LOGIN_RATE_LIMIT_WINDOW_MS: ${LOGIN_RATE_LIMIT_WINDOW_MS:-60000}
+      LOGIN_RATE_LIMIT_MAX_ATTEMPTS: ${LOGIN_RATE_LIMIT_MAX_ATTEMPTS:-50}
       SERVER_REQUEST_TIMEOUT_MS: ${SERVER_REQUEST_TIMEOUT_MS:-30000}
       SERVER_HEADERS_TIMEOUT_MS: ${SERVER_HEADERS_TIMEOUT_MS:-35000}
       SERVER_KEEP_ALIVE_TIMEOUT_MS: ${SERVER_KEEP_ALIVE_TIMEOUT_MS:-5000}
@@ -99,8 +117,8 @@ services:
       SESSION_COOKIE_DOMAIN: ${SESSION_COOKIE_DOMAIN:-}
       SESSION_SECURE: ${SESSION_SECURE:-false}
       SESSION_SAME_SITE: ${SESSION_SAME_SITE:-lax}
-      SESSION_MAX_AGE_MS: ${SESSION_MAX_AGE_MS:-28800000}
-      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-28800}
+      SESSION_MAX_AGE_MS: ${SESSION_MAX_AGE_MS:-86400000}
+      SESSION_TTL_SECONDS: ${SESSION_TTL_SECONDS:-86400}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -114,7 +132,8 @@ services:
       MSSQL_PORT: 1433
       MSSQL_DATABASE: ${MSSQL_DATABASE:-ausbildungsdoku}
       MSSQL_TEST_DATABASE: ${MSSQL_TEST_DATABASE:-ausbildungsdoku_test}
-      MSSQL_USER: ${MSSQL_USER:-sa}
+      DB_USER: ${DB_USER:-}
+      DB_PASSWORD: ${DB_PASSWORD:-}
       MSSQL_PASSWORD: ${MSSQL_PASSWORD:-YourStrong(!)Password}
       MSSQL_ENCRYPT: ${MSSQL_ENCRYPT:-true}
       MSSQL_TRUST_SERVER_CERTIFICATE: ${MSSQL_TRUST_SERVER_CERTIFICATE:-true}
@@ -129,6 +148,7 @@ services:
       INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-admin@example.com}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?INITIAL_ADMIN_PASSWORD must be set}
+      INITIAL_ADMIN_FORCE_PASSWORD_CHANGE: ${INITIAL_ADMIN_FORCE_PASSWORD_CHANGE:-true}
     ports:
       - "${APP_PORT_MAPPING:-3010:3010}"
     healthcheck:

@@ -12,6 +12,10 @@ function createApp({ config, db, redisClient, dependencies, runtimeState, logger
   const web = express.Router();
   const renderIndexHtml = createIndexHtmlRenderer(config);
 
+  if (config.server.trustProxy) {
+    app.set("trust proxy", config.server.trustProxy);
+  }
+
   async function getDependencyStatus() {
     const dependencyState = {
       database: "unknown",
@@ -36,17 +40,16 @@ function createApp({ config, db, redisClient, dependencies, runtimeState, logger
     return dependencyState;
   }
 
+  registerSecurityMiddleware(web, {
+    config,
+    isProduction: config.isProduction
+  });
   registerCoreMiddleware(web, {
     config,
     sessionMiddleware: createSessionMiddleware({ config, redisClient }),
     publicDir: config.publicDir,
     picturesDir: config.picturesDir,
     logger
-  });
-  registerSecurityMiddleware(web, {
-    config,
-    isProduction: config.isProduction,
-    loginRateLimiter: dependencies.loginRateLimiter
   });
 
   web.get("/api/live", (_req, res) => {

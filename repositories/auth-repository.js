@@ -5,9 +5,14 @@ function createAuthRepository({ db, getCurrentUser, normalizeThemePreference }) 
     },
 
     async findUserByIdentifier(identifier) {
+      const normalizedIdentifier = String(identifier || "").trim().toLowerCase();
+      if (!normalizedIdentifier) {
+        return null;
+      }
+
       return db("users")
-        .where({ email: identifier })
-        .orWhere({ username: identifier })
+        .whereRaw("LOWER(??) = ?", ["email", normalizedIdentifier])
+        .orWhereRaw("LOWER(??) = ?", ["username", normalizedIdentifier])
         .first();
     },
 
@@ -29,7 +34,10 @@ function createAuthRepository({ db, getCurrentUser, normalizeThemePreference }) 
     async updatePasswordHash(userId, passwordHash) {
       await db("users")
         .where({ id: userId })
-        .update({ password_hash: passwordHash });
+        .update({
+          password_hash: passwordHash,
+          password_change_required: false
+        });
     }
   };
 }

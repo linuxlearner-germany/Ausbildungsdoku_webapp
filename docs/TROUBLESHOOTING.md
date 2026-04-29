@@ -38,6 +38,14 @@ Passe in `.env` das Mapping an:
 - Redis muss laufen
 - `SESSION_SECRET` muss gesetzt sein
 - Browser-Cookies nicht blockieren
+- bei `INVALID_CREDENTIALS`: Admin-Passwort mit `.env` abgleichen oder Recovery ausfuehren
+- bei `RATE_LIMITED`: lokale Sperre laeuft kurz aus oder wird durch Recovery gezielt geloescht
+
+```bash
+docker compose -f docker-compose.local.yml exec app npm run admin:reset
+```
+
+Das Kommando setzt den konfigurierten Admin zurueck und leert nur Login-Rate-Limit-Keys in Redis. MSSQL-Daten und Docker-Volumes bleiben erhalten.
 
 ## Daten scheinen weg
 
