@@ -20,7 +20,7 @@ function registerSecurityMiddleware(app, { config, isProduction }) {
     crossOriginEmbedderPolicy: false
   }));
 
-  const loginIpRateLimiter = rateLimit({
+  const loginIpRateLimiter = config.isTest ? null : rateLimit({
     windowMs: config.security.loginRateLimit.windowMs,
     limit: config.security.loginRateLimit.maxAttempts,
     standardHeaders: true,
@@ -87,7 +87,12 @@ function registerSecurityMiddleware(app, { config, isProduction }) {
       return;
     }
 
-    loginIpRateLimiter(req, res, next);
+    if (loginIpRateLimiter) {
+      loginIpRateLimiter(req, res, next);
+      return;
+    }
+
+    next();
   });
 }
 
