@@ -4,7 +4,7 @@
 
 `docker-compose.yml` beschreibt den produktionsnahen App-Containerbetrieb. MSSQL und Redis werden dort als externe Dienste erwartet.
 
-Wenn die App stattdessen als kompletter interner Server-Stack mit eigener MSSQL-Datenbank und Redis im **lokalen Netz** laufen soll, nutze [docs/SERVER_LAN_DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/SERVER_LAN_DEPLOYMENT.md).
+Wenn die App als interner Server nur im **lokalen Netz** laufen soll, aber MSSQL extern betrieben wird, nutze [docs/SERVER_LAN_DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/SERVER_LAN_DEPLOYMENT.md).
 
 ## Servervoraussetzungen
 
