@@ -1,5 +1,0 @@
-name,username,email,role,password,ausbildung,betrieb,berufsschule,ausbildungsbeginn,ausbildungsende,trainer_usernames
-Herr Ausbilder,trainer1,trainer1@example.com,trainer,Passwort123!,,,,,,
-Zweite Ausbilderin,trainer2,trainer2@example.com,trainer,Passwort123!,,,,,,
-Max Mustermann,azubi1,azubi1@example.com,trainee,Passwort123!,Fachinformatiker Anwendungsentwicklung,Muster GmbH,BBS Technik,2026-09-01,2029-08-31,trainer1|trainer2
-Admin User,admin-neu,admin-neu@example.com,admin,Passwort123!,,,,,,
