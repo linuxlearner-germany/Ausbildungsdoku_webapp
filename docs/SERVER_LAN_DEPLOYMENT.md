@@ -1,36 +1,35 @@
-# Server Deployment im lokalen Netz
+# Server Deployment im lokalen Netz mit externer MSSQL-Datenbank
 
 ## Ziel
 
-Diese Anleitung beschreibt den pragmatischen Serverbetrieb mit kompletter Anwendung **inklusive MSSQL und Redis** auf einem internen Server.
+Diese Anleitung beschreibt den Serverbetrieb **nur im lokalen Netz**, wenn:
 
-Zielbild:
+- die Webapp im Docker-Container auf dem Server laeuft
+- **MSSQL extern** betrieben wird
+- keine oeffentliche Internet-Freigabe gewuenscht ist
 
-- Zugriff nur aus dem lokalen Netz
-- keine öffentliche Freigabe ins Internet
-- bestehende MSSQL-Datenbank wird **vorher exportiert** und auf dem Zielserver wiederhergestellt
-- Betrieb mit `docker-compose.local.yml`, weil dort App, MSSQL und Redis gemeinsam definiert sind
+Technisch ist das der vorhandene produktionsnahe Pfad mit [docker-compose.yml](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docker-compose.yml): Die App laeuft im Container, MSSQL und Redis werden extern angebunden.
 
-## Wann dieser Weg der richtige ist
+## Zielbild
 
-Dieser Pfad ist passend, wenn:
-
-- die App auf einem internen Firmen- oder Heimserver laufen soll
-- MSSQL auf demselben Server im Docker-Stack mitlaufen darf
-- kein öffentlicher Reverse Proxy und kein Internetzugriff erforderlich sind
-
-Wenn MSSQL und Redis extern betrieben werden sollen, ist stattdessen [docs/DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/DEPLOYMENT.md) der passendere Einstieg.
+- Client im LAN greift auf `http://<server-ip>:3010` zu
+- App laeuft auf dem Server im Docker-Container
+- MSSQL laeuft **nicht** im Compose-Stack, sondern extern
+- Redis laeuft ebenfalls extern und bleibt Pflicht fuer Sessions
+- kein Reverse Proxy und kein Internetzugriff notwendig
 
 ## Voraussetzungen
 
 - x86_64 Linux-Server
 - Docker Engine mit Compose
-- feste LAN-IP des Servers, z. B. `192.168.178.50`
-- Zugriff auf die aktuelle Instanz, von der die Daten uebernommen werden
+- feste LAN-IP des App-Servers, z. B. `192.168.178.50`
+- externe MSSQL-Instanz mit Zugriff fuer die App
+- externe Redis-Instanz mit Passwort
+- Zugriff auf die bisherige Datenbankquelle fuer Export und Import
 
-## Schritt 1: Datenbank auf dem bisherigen System exportieren
+## Schritt 1: Datenbank vor dem Umzug exportieren
 
-Auf dem aktuellen System im Repository ausfuehren:
+Wenn die aktuelle Instanz noch mit dem lokalen Docker-MSSQL laeuft, kannst du das Backup direkt im Repository erzeugen:
 
 ```bash
 ./scripts/db-backup.sh
@@ -39,58 +38,77 @@ Auf dem aktuellen System im Repository ausfuehren:
 Ergebnis:
 
 - die Backup-Datei liegt unter `backups/<datenbank>-<timestamp>.bak`
-- dieses Backup ist die Basis fuer den Umzug auf den Server
 
-Vor dem Export sinnvoll:
+Wenn die Quelldatenbank bereits extern laeuft, erstelle das Backup direkt auf dem SQL-Server mit den dort ueblichen Mitteln.
 
-- laufende Aenderungen in der App abschliessen
-- keinen gleichzeitigen Deploy oder Restore durchfuehren
+## Schritt 2: Backup zur externen Ziel-MSSQL uebertragen
 
-## Schritt 2: Backup auf den Server kopieren
-
-Die erzeugte `.bak`-Datei in den Ordner `backups/` auf dem Zielserver kopieren.
+Das `.bak` muss auf dem System verfuegbar sein, auf dem die **externe** MSSQL-Instanz den Restore ausfuehrt.
 
 Beispiel:
 
 ```bash
-scp backups/ausbildungsdoku-20260430-101500.bak user@192.168.178.50:/opt/Ausbildungsdoku_webapp/backups/
+scp backups/ausbildungsdoku-20260430-101500.bak sqladmin@192.168.178.60:/var/opt/mssql/backups/
 ```
 
-## Schritt 3: Repository auf dem Server vorbereiten
+## Schritt 3: Backup in der externen MSSQL wiederherstellen
 
-Auf dem Server:
+Die Wiederherstellung passiert **nicht** ueber `./scripts/db-restore.sh`, weil dieses Skript fuer den lokalen MSSQL-Container gedacht ist.
+
+Der Restore muss auf der externen SQL-Server-Instanz erfolgen, zum Beispiel mit:
+
+- SQL Server Management Studio
+- Azure Data Studio
+- `sqlcmd`
+- vorhandenen DBA-Prozessen
+
+Wichtig:
+
+- Ziel-Datenbankname muss zu `MSSQL_DATABASE` auf dem App-Server passen
+- App-Login `DB_USER` braucht Rechte auf dieser Datenbank
+- bestehende Datenbankstaende werden beim Restore ersetzt
+
+## Schritt 4: App-Repository auf dem Server vorbereiten
+
+Auf dem App-Server:
 
 ```bash
 git clone https://github.com/linuxlearner-germany/Ausbildungsdoku_webapp.git
 cd Ausbildungsdoku_webapp
 cp .env.example .env
-mkdir -p backups
 ```
 
-Dann `.env` anpassen.
+Dann `.env` pflegen.
 
 Wichtige Werte:
 
 - `NODE_ENV=production`
+- `HOST=0.0.0.0`
+- `PORT=3010`
+- `APP_PORT_MAPPING=192.168.178.50:3010:3010`
+- `APP_BASE_URL=http://192.168.178.50:3010`
+- `SESSION_SECURE=false`
 - `ENABLE_DEMO_DATA=false`
 - `RESET_DATABASE_ON_START=false`
-- `SESSION_SECURE=false`
-- `APP_BASE_URL=http://192.168.178.50:3010`
-- `APP_PORT_MAPPING=192.168.178.50:3010:3010`
-- `MSSQL_LOCAL_PORT=1433`
-- starke Werte fuer `SESSION_SECRET`, `REDIS_PASSWORD`, `DB_PASSWORD`, `MSSQL_PASSWORD`, `INITIAL_ADMIN_PASSWORD`
+- `MSSQL_HOST=<externer-sql-host>`
+- `MSSQL_PORT=1433`
+- `MSSQL_DATABASE=<ziel-datenbank>`
+- `DB_USER=<app-login>`
+- `DB_PASSWORD=<app-passwort>`
+- `REDIS_HOST=<externer-redis-host>` oder `REDIS_URL=redis://...`
+- `REDIS_PASSWORD=<redis-passwort>`
+- starke Werte fuer `SESSION_SECRET` und `INITIAL_ADMIN_PASSWORD`
 
 Hinweis:
 
 - `APP_PORT_MAPPING=192.168.178.50:3010:3010` bindet die App nur an die LAN-IP des Servers.
-- MSSQL ist in `docker-compose.local.yml` bereits auf `127.0.0.1:${MSSQL_LOCAL_PORT}:1433` beschraenkt und damit nicht im Netz sichtbar.
-- Redis wird in diesem Stack nicht nach aussen veroeffentlicht.
+- `MSSQL_USER` wird nicht verwendet. Entscheidend sind `DB_USER` und `DB_PASSWORD`.
 
-## Schritt 4: Firewall auf lokales Netz begrenzen
+## Schritt 5: Firewall auf lokales Netz begrenzen
 
-Auf dem Server sollte der Zugriff zusaetzlich per Firewall auf das lokale Netz eingeschraenkt werden.
+Auf dem App-Server den Webzugriff auf das lokale Netz einschränken.
 
-Beispiel mit `ufw` fuer ein `/24`-Netz:
+Beispiel mit `ufw`:
 
 ```bash
 sudo ufw default deny incoming
@@ -99,53 +117,33 @@ sudo ufw allow from 192.168.178.0/24 to any port 3010 proto tcp
 sudo ufw enable
 ```
 
-Damit ist die Webapp nur aus dem internen Netz erreichbar.
+Optional auch auf MSSQL- und Redis-Seite nur den App-Server zulassen.
 
-## Schritt 5: Stack auf dem Server starten
+## Schritt 6: App-Container auf dem Server starten
 
 ```bash
-docker compose -f docker-compose.local.yml up -d --build
+docker compose up -d --build
 ```
 
 Danach pruefen:
 
 ```bash
-docker compose -f docker-compose.local.yml ps
+docker compose ps
 curl http://192.168.178.50:3010/api/ready
 ```
 
 Erwartung:
 
-- `app`, `mssql` und `redis` sind `healthy`
-- `mssql-init` ist erfolgreich beendet
+- der Container `app` laeuft
 - `/api/ready` liefert `200`
+- die App erreicht MSSQL und Redis erfolgreich
 
-## Schritt 6: Datenbank auf dem Zielserver wiederherstellen
+## Schritt 7: Admin-Zugang mit Server-ENV abgleichen
 
-Wenn das Backup bereits in `backups/` auf dem Server liegt:
-
-```bash
-./scripts/db-restore.sh backups/<datei>.bak
-```
-
-Beispiel:
+Wenn der migrierte Admin nicht mehr zum `INITIAL_ADMIN_PASSWORD` der Server-`.env` passt:
 
 ```bash
-./scripts/db-restore.sh backups/ausbildungsdoku-20260430-101500.bak
-```
-
-Wichtig:
-
-- der Restore ersetzt den aktuellen Stand der Datenbank
-- vorher kein `down -v`
-- keine Volumes loeschen
-
-## Schritt 7: Admin-Zugang auf Server-ENV abgleichen
-
-Wenn der migrierte Admin nicht mehr zum `INITIAL_ADMIN_PASSWORD` der neuen Server-`.env` passt:
-
-```bash
-docker compose -f docker-compose.local.yml exec app npm run admin:reset
+docker compose exec app npm run admin:reset
 ```
 
 Dieses Kommando:
@@ -153,7 +151,7 @@ Dieses Kommando:
 - setzt das Passwort des konfigurierten Admins zurueck
 - legt den Admin an, falls er fehlt
 - loescht keine Fachdaten
-- loescht keine Docker-Volumes
+- fasst die externe MSSQL-Datenbank fachlich nicht destruktiv an
 
 ## Schritt 8: Funktionstest im LAN
 
@@ -174,38 +172,34 @@ Pruefen:
 
 Vor jedem Update:
 
-```bash
-./scripts/db-backup.sh
-```
+1. Backup auf der externen MSSQL erzeugen
+2. optional Redis-Konfiguration pruefen
 
-Dann:
+Dann auf dem App-Server:
 
 ```bash
 git pull
-docker compose -f docker-compose.local.yml down
-docker compose -f docker-compose.local.yml up -d --build
+docker compose down
+docker compose up -d --build
 ```
 
-Wichtig:
-
-- `down` ist ok
-- `down -v` ist **nicht** ok
-- MSSQL-Volumes duerfen fuer normale Updates nicht geloescht werden
+Da die Datenbank extern ist, betrifft das Compose-Update nur den App-Container.
 
 ## Empfohlene Betriebsregeln
 
-- nur den Web-Port `3010` fuer das LAN freigeben
-- MSSQL und Redis nicht extern freigeben
-- vor jedem Update ein `.bak` ziehen
+- nur Port `3010` fuer das LAN freigeben
+- keine Portweiterleitung ins Internet
+- MSSQL nur fuer den App-Server freigeben
+- Redis nur fuer den App-Server freigeben
 - `.env` nur auf dem Server pflegen, nie committen
-- Admin-Recovery nur ueber `npm run admin:reset`
+- Admin-Recovery nur ueber `docker compose exec app npm run admin:reset`
 
 ## Kurzfassung
 
-1. auf dem alten System `./scripts/db-backup.sh`
-2. `.bak` nach `backups/` auf dem Server kopieren
-3. Server-`.env` mit LAN-IP und starken Secrets pflegen
-4. `docker compose -f docker-compose.local.yml up -d --build`
-5. `./scripts/db-restore.sh backups/<datei>.bak`
-6. bei Bedarf `docker compose -f docker-compose.local.yml exec app npm run admin:reset`
-7. Zugriff nur aus dem LAN per Bind-IP und Firewall erlauben
+1. bestehende DB vor dem Umzug sichern
+2. Backup auf die externe Ziel-MSSQL bringen
+3. Restore auf der externen MSSQL ausfuehren
+4. Server-`.env` mit externer MSSQL und externem Redis pflegen
+5. `docker compose up -d --build`
+6. `curl http://<server-ip>:3010/api/ready`
+7. bei Bedarf `docker compose exec app npm run admin:reset`
