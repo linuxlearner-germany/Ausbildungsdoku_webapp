@@ -225,6 +225,8 @@ MSSQL ist die Hauptdatenbank für Benutzer, Berichte, Noten, Freigaben, Zuordnun
 
 Der produktionsnahe Containerbetrieb ist in [docs/DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/DEPLOYMENT.md) beschrieben.
 
+Ein kompletter Serverbetrieb **inklusive Datenbankmigration und nur fuer das lokale Netz** ist in [docs/SERVER_LAN_DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/SERVER_LAN_DEPLOYMENT.md) beschrieben.
+
 ## Raspberry Pi
 
 Der komplette Stack ist für Raspberry Pi nicht empfohlen:
