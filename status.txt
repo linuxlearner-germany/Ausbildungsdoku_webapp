@@ -1,0 +1,40 @@
+Ausbildungsdoku Webapp - Status
+
+Stand: 2026-05-01
+Branch: main
+HEAD: cc197c3
+Arbeitsbaum: sauber, keine uncommitted changes
+
+Kurzbeschreibung
+Die Anwendung ist eine Ausbildungsdoku-Webapp fuer Berichtsheft, Freigaben, Noten, Exporte, Benutzerverwaltung und Audit-Logs.
+Sie ist als Docker-first-Projekt mit Node.js/Express-Backend, React-Frontend, Bootstrap, MSSQL und Redis aufgebaut.
+
+Aktueller Projektstand
+- Runtime-Architektur ist klar getrennt in app/, routes/, controllers/, services/, repositories/ und middleware/
+- MSSQL ist die einzige Fachdatenbank
+- Redis wird fuer Sessions genutzt
+- Frontend ist eine React-SPA mit zentraler Navigation und App-Shell
+- Rollenmodell: admin, trainee, trainer
+- Kernfunktionen laut Dokumentation: Berichtsheft, Freigaben, Noten, CSV/PDF-Export, Adminbereich, Audit-Log
+- Docker-Lokalbetrieb ist dokumentiert und auf persistente Datenhaltung ausgelegt
+- Backup- und Restore-Skripte sind vorhanden
+- Admin-Reset-Skript ist vorhanden
+
+Verifikation
+- npm run check: erfolgreich
+- npm test: erfolgreich
+- Testergebnis: 93/93 Tests gruen
+
+Dokumentationsstand
+- README.md beschreibt Setup, Betrieb, Rollen und Datenhaltung
+- docs/ARCHITECTURE.md beschreibt Runtime und Schichtenmodell
+- docs/FINAL_LOCAL_DOCKER_REPORT.md dokumentiert den lokalen Docker-Zielzustand
+- Weitere Betriebsdokumente zu Deployment, Security, Troubleshooting und Backup/Restore sind vorhanden
+
+Offene Punkte / Risiken
+- npm audit weist laut Dokumentation weiterhin offene Advisories auf
+- Browser-E2E-Tests sind nicht Teil des Repositories
+- Produktionsbetrieb erfordert saubere Proxy-, Cookie- und MSSQL-Zertifikatskonfiguration
+
+Fazit
+Das Projekt wirkt funktional vollständig fuer den dokumentierten Scope und ist lokal per Docker sowie per Test-Suite in einem gruenen Zustand.
