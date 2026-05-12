@@ -8,7 +8,7 @@ Dabei gilt:
 
 - nur die App selbst laeuft im Compose-Stack
 - MSSQL ist extern
-- Redis ist extern
+- Redis kann extern oder als eigener Docker-Container laufen
 - der typische Zielpfad ist ein Linux-Server mit Reverse Proxy und HTTPS
 
 Wenn die Anwendung nicht oeffentlich erreichbar sein soll, sondern nur im lokalen Netz betrieben wird, ist die speziellere Anleitung [SERVER_LAN_DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/SERVER_LAN_DEPLOYMENT.md) der passendere Pfad.
@@ -26,7 +26,7 @@ Docker-Container der App
   -> TCP
 Externe MSSQL-Datenbank
   -> TCP
-Externe Redis-Instanz
+Redis-Container oder externe Redis-Instanz
 ```
 
 Die App selbst hoert standardmaessig im Container auf Port `3010`.
@@ -57,7 +57,7 @@ Vor dem ersten Deployment sollten diese Punkte erfuellt sein:
 - Reverse Proxy vor der App, z. B. Nginx, Traefik, Caddy oder Apache
 - gueltiges HTTPS-Zertifikat
 - externe MSSQL-Instanz
-- externe Redis-Instanz
+- Redis-Instanz, entweder extern oder als eigener Container
 - Zugriff auf die Projektdateien und auf eine gepflegte `.env`
 
 ## Technische Mindestannahmen
@@ -70,12 +70,34 @@ Die Anwendung setzt fuer einen stabilen Betrieb voraus:
 - die gesetzten Base-URLs passen exakt zur spaeteren oeffentlichen Adresse
 - der Reverse Proxy setzt die ueblichen Forwarded-Header korrekt
 
+## Firmeninterne Zertifikate
+
+Wenn HTTPS ueber einen Reverse Proxy mit firmeninternen Zertifikaten laeuft, gilt fuer diese App:
+
+- das Browser-HTTPS endet am Reverse Proxy
+- der App-Container selbst braucht dafuer kein eigenes Webserver-Zertifikat
+- Docker interessiert sich fuer dieses Browser-Zertifikat nicht, solange der Proxy die TLS-Terminierung uebernimmt
+- zwischen Proxy und App reicht intern normalerweise HTTP auf Port `3010`
+
+Wichtig ist die Trennung:
+
+- Zertifikat fuer Browser <-> Reverse Proxy: betrifft den App-Container normalerweise nicht
+- Zertifikat fuer App <-> MSSQL: kann den App-Container sehr wohl betreffen
+
+Falls euer MSSQL-Server TLS mit interner CA nutzt, gibt es praktisch zwei Wege:
+
+1. sauberer Zielpfad: interne CA im Container beziehungsweise im Basisimage vertrauen und `MSSQL_TRUST_SERVER_CERTIFICATE=false` beibehalten
+2. pragmatischer interner Pfad: `MSSQL_TRUST_SERVER_CERTIFICATE=true`, wenn ihr bewusst auf die strikte Zertifikatspruefung verzichtet
+
+Fuer Redis gilt ein Zertifikatsthema nur dann, wenn Redis ebenfalls per TLS und interner CA betrieben wird. Ein normaler Redis-Container ohne TLS braucht dafuer keine Zertifikatsintegration.
+
 ## Vor dem Deployment: Datenbank und Redis verstehen
 
 MSSQL und Redis haben unterschiedliche Aufgaben:
 
 - MSSQL speichert die eigentlichen Fachdaten: Benutzer, Berichte, Freigaben, Noten, Zuordnungen, Audit-Logs
 - Redis speichert Sessions und Login-Rate-Limit-Zustaende
+- Redis darf dafuer problemlos in einem separaten Docker-Container laufen
 
 Wichtig fuer den Betrieb:
 
@@ -218,6 +240,13 @@ INITIAL_ADMIN_FORCE_PASSWORD_CHANGE=true
 - `REDIS_KEY_PREFIX`
   Namespace fuer Redis-Keys
 
+Wenn Redis in einem separaten Docker-Container laeuft, ist relevant:
+
+- der App-Container muss den Redis-Host per DNS oder IP erreichen
+- der Redis-Port muss aus Sicht des App-Containers offen sein
+- ein Passwort ist Pflicht
+- Redis muss nicht im selben Compose-File liegen
+
 ### Bootstrap und Startverhalten
 
 - `APPLY_MIGRATIONS_ON_START=true`
@@ -274,6 +303,7 @@ Vor dem ersten Start pruefen:
 - Redis akzeptiert die vorgesehenen Zugangsdaten
 - nur der App-Server darf auf Redis zugreifen
 - Timeouts und Firewalls blockieren die Verbindung nicht
+- wenn Redis im Container laeuft: Restart-Policy und Netzwerkanbindung sind sauber konfiguriert
 
 Wenn `REDIS_URL` genutzt wird, ist das der einfachste Zielpfad. Wenn einzelne Variablen genutzt werden, muessen `REDIS_HOST` und `REDIS_PORT` konsistent gesetzt sein.
 
@@ -286,6 +316,14 @@ Der Reverse Proxy sollte:
 - `/api` an dieselbe App weiterleiten
 - Forwarded-Header sauber setzen
 - SPA-Reloads nicht kaputt machen
+
+Fuer euren Zielpfad konkret:
+
+- Firmenzertifikat auf dem Reverse Proxy einbinden
+- Proxy intern auf `http://<app-host>:3010` weiterleiten
+- `APP_BASE_URL` auf die echte HTTPS-Adresse setzen
+- `TRUST_PROXY=true` setzen
+- `SESSION_SECURE=true` setzen
 
 Wichtig:
 
@@ -416,7 +454,7 @@ Vorher immer empfohlen:
 3. Aenderungen an ENV-Variablen pruefen
 4. nach dem Start `/api/ready` pruefen
 
-Da MSSQL und Redis extern sind, ersetzt dieses Update in der Regel nur den App-Container.
+Da MSSQL extern ist und Redis separat betrieben werden kann, ersetzt dieses Update in der Regel nur den App-Container.
 
 ## Rollback-Grundsatz
 
@@ -498,7 +536,7 @@ docker compose exec app npm run admin:reset
 Die App kann grundsaetzlich auf ARM laufen, aber MSSQL auf Raspberry Pi beziehungsweise ARM ist nicht der verlässlichste Standardpfad. Der praktikable Weg ist meist:
 
 - App auf dem Zielsystem
-- Redis passend zur Plattform
+- Redis passend zur Plattform oder als separater Container
 - MSSQL extern auf einer dafuer geeigneten Umgebung, typischerweise x86_64
 
 ## Kurzcheckliste
@@ -506,7 +544,7 @@ Die App kann grundsaetzlich auf ARM laufen, aber MSSQL auf Raspberry Pi beziehun
 1. Repository auf dem Server bereitstellen
 2. `.env` mit echten Produktionswerten pflegen
 3. externe MSSQL bereitstellen und Rechte fuer `DB_USER` pruefen
-4. externe Redis-Instanz bereitstellen
+4. Redis-Instanz bereitstellen, extern oder als eigener Container
 5. Reverse Proxy mit HTTPS und Forwarded-Headern konfigurieren
 6. `docker compose up -d --build`
 7. `docker compose ps`
