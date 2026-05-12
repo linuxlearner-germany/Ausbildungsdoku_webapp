@@ -4,6 +4,8 @@
 
 `docker-compose.yml` beschreibt den produktionsnahen App-Containerbetrieb. MSSQL und Redis werden dort als externe Dienste erwartet.
 
+Eine konkrete Schritt-fuer-Schritt-Anleitung fuer einen **Debian-Server mit Docker** findest du in [docs/DEBIAN_DOCKER_MSSQL_DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/DEBIAN_DOCKER_MSSQL_DEPLOYMENT.md).
+
 Wenn die App als interner Server nur im **lokalen Netz** laufen soll, aber MSSQL extern betrieben wird, nutze [docs/SERVER_LAN_DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/SERVER_LAN_DEPLOYMENT.md).
 
 ## Servervoraussetzungen
