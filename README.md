@@ -225,7 +225,11 @@ MSSQL ist die Hauptdatenbank für Benutzer, Berichte, Noten, Freigaben, Zuordnun
 
 Der produktionsnahe Containerbetrieb ist in [docs/DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/DEPLOYMENT.md) beschrieben.
 
+Eine konkrete Anleitung fuer **Debian mit Docker sowie externer oder separater MSSQL-Instanz** steht in [docs/DEBIAN_DOCKER_MSSQL_DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/DEBIAN_DOCKER_MSSQL_DEPLOYMENT.md).
+
 Ein Serverbetrieb **nur fuer das lokale Netz mit externer MSSQL-Datenbank** ist in [docs/SERVER_LAN_DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/SERVER_LAN_DEPLOYMENT.md) beschrieben.
+
+Wenn Redis auf dem Debian-Server selbst als Compose-Service mitlaufen soll, steht dafuer [docker-compose.server-redis.yml](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docker-compose.server-redis.yml) bereit.
 
 ## Raspberry Pi
 
