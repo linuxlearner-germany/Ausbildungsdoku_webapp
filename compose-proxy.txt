@@ -1,0 +1,11 @@
+services:
+  app:
+    build:
+      context: .
+      target: runtime
+      args:
+        HTTP_PROXY: "http://proxy.wiweb.local:3128"
+        HTTPS_PROXY: "http://proxy.wiweb.local:3128"
+        NO_PROXY: "localhost,127.0.0.1,.wiweb.local"
+    ports:
+      - "3010:3010"
