@@ -68,6 +68,12 @@
   color: #f8fafc;
 }
 
+.login-product-subtitle {
+  margin: 0.2rem 0 0;
+  color: #94a3b8;
+  font-size: 0.82rem;
+}
+
 .login-form {
   display: grid;
   gap: 0.95rem;
