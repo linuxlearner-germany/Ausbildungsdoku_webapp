@@ -169,9 +169,9 @@ function createAuthService({ authRepository, helpers, config, mailer, logger }) 
       const safeUrl = mailer.escapeHtml(resetUrl);
       await mailer.send({
         to: user.email,
-        subject: "Passwort für Ausbildungsdoku zurücksetzen",
-        text: `Hallo ${user.name || user.username},\n\nüber diesen Link kannst du dein Passwort innerhalb von ${config.mail.passwordResetTtlMinutes} Minuten zurücksetzen:\n${resetUrl}\n\nWenn du die Anfrage nicht gestellt hast, ignoriere diese E-Mail.`,
-        html: `<p>Hallo ${safeName},</p><p>über diesen Link kannst du dein Passwort innerhalb von ${config.mail.passwordResetTtlMinutes} Minuten zurücksetzen:</p><p><a href="${safeUrl}">Passwort zurücksetzen</a></p><p>Wenn du die Anfrage nicht gestellt hast, ignoriere diese E-Mail.</p>`
+        subject: "WIWEB Berichtsheft: Passwort zurücksetzen",
+        text: `Hallo ${user.name || user.username},\n\nüber diesen Link kannst du dein Passwort für WIWEB Berichtsheft innerhalb von ${config.mail.passwordResetTtlMinutes} Minuten zurücksetzen:\n${resetUrl}\n\nWenn du die Anfrage nicht gestellt hast, ignoriere diese E-Mail.`,
+        html: `<p>Hallo ${safeName},</p><p>über diesen Link kannst du dein Passwort für WIWEB Berichtsheft innerhalb von ${config.mail.passwordResetTtlMinutes} Minuten zurücksetzen:</p><p><a href="${safeUrl}">Passwort zurücksetzen</a></p><p>Wenn du die Anfrage nicht gestellt hast, ignoriere diese E-Mail.</p>`
       });
     } catch (error) {
       await authRepository.deletePasswordResetToken(tokenHash);

@@ -57,7 +57,7 @@ export function EmailRelaySettingsPage({ onLoadSettings, onSaveSettings, onTestS
           <label>SMTP-Benutzername<input value={form.username} onChange={(event) => update({ username: event.target.value })} autoComplete="username" /></label>
           <label>SMTP-Passwort<input type="password" value={form.password} onChange={(event) => update({ password: event.target.value, clearPassword: false })} placeholder={form.passwordConfigured ? "Unverändert lassen" : "Passwort eingeben"} autoComplete="new-password" /></label>
           {form.passwordConfigured ? <label className="form-check-label"><input type="checkbox" checked={form.clearPassword} onChange={(event) => update({ clearPassword: event.target.checked, password: "" })} /> Gespeichertes Passwort entfernen</label> : null}
-          <label>Absenderadresse<input value={form.from} onChange={(event) => update({ from: event.target.value })} placeholder="Ausbildungsdoku <noreply@example.com>" /></label>
+          <label>Absenderadresse<input value={form.from} onChange={(event) => update({ from: event.target.value })} placeholder="WIWEB Berichtsheft <noreply@example.com>" /></label>
           <label>Reply-To-Adresse (optional)<input type="email" value={form.replyTo} onChange={(event) => update({ replyTo: event.target.value })} placeholder="support@example.com" /></label>
         </div>
         <p className="field-message">Das Passwort wird verschlüsselt gespeichert und nie wieder angezeigt. Ein Wechsel des SESSION_SECRET erfordert eine erneute Eingabe.</p>

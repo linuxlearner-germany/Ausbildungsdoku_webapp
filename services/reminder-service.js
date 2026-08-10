@@ -103,9 +103,9 @@ function createReminderService({ db, config, mailer, logger }) {
         user: trainee,
         mailType: "TRAINEE_REPORT_REMINDER",
         dedupeKey: `trainee-report:${trainee.id}:${dateKey}`,
-        subject: "Erinnerung: Berichtsheft vervollständigen",
-        text: `Hallo ${trainee.name},\n\ndir fehlen aktuell ${progress.missingReportDays} Berichtstage. Bitte vervollständige dein Berichtsheft:\n${reportsUrl}`,
-        html: `<p>Hallo ${safeName},</p><p>dir fehlen aktuell <strong>${progress.missingReportDays} Berichtstage</strong>. Bitte vervollständige dein Berichtsheft.</p><p><a href="${safeUrl}">Berichte öffnen</a></p>`
+        subject: "WIWEB Berichtsheft: Ausbildungsnachweis vervollständigen",
+        text: `Hallo ${trainee.name},\n\ndir fehlen aktuell ${progress.missingReportDays} Berichtstage. Bitte vervollständige deinen digitalen Ausbildungsnachweis in WIWEB Berichtsheft:\n${reportsUrl}`,
+        html: `<p>Hallo ${safeName},</p><p>dir fehlen aktuell <strong>${progress.missingReportDays} Berichtstage</strong>. Bitte vervollständige deinen digitalen Ausbildungsnachweis in WIWEB Berichtsheft.</p><p><a href="${safeUrl}">Berichte öffnen</a></p>`
       });
       sent += delivered ? 1 : 0;
     }
@@ -139,7 +139,7 @@ function createReminderService({ db, config, mailer, logger }) {
         user: trainer,
         mailType: "TRAINER_BACKLOG_REMINDER",
         dedupeKey: `trainer-backlog:${trainer.id}:${dateKey}`,
-        subject: `${openCount} Berichte warten auf Freigabe`,
+        subject: `WIWEB Berichtsheft: ${openCount} Berichte warten auf Freigabe`,
         text: `Hallo ${trainer.name},\n\naktuell warten ${openCount} eingereichte Berichte auf deine Prüfung:\n${approvalsUrl}`,
         html: `<p>Hallo ${safeName},</p><p>aktuell warten <strong>${openCount} eingereichte Berichte</strong> auf deine Prüfung.</p><p><a href="${safeUrl}">Freigaben öffnen</a></p>`
       });

@@ -1,6 +1,6 @@
 @
 
-# Berichtsheftwebapp Docker Dokumentation
+# WIWEB Berichtsheft – Docker-Dokumentation
 
 ---
 
@@ -501,5 +501,4 @@ docker compose -f docker-compose.server-redis.yml logs -f app
 ```bash
 docker logs ausbildungsdoku-app
 ```
-
 
