@@ -50,19 +50,21 @@ function createTestMailer(htmlEnabled) {
 
 test("Mailer sendet bei deaktiviertem HTML ausschliesslich Klartext", async () => {
   const { mailer, sent } = createTestMailer(false);
-  await mailer.send({ to: "user@example.test", subject: "Test", text: "Klartext", html: "<p>HTML</p>" });
+  await mailer.send({ to: "user@example.test", subject: "Test", text: "Klartext", html: "<p>HTML</p>", htmlAttachments: [{ cid: "logo" }] });
 
   assert.equal(sent.length, 1);
   assert.equal(sent[0].text, "Klartext");
   assert.equal(Object.hasOwn(sent[0], "html"), false);
+  assert.equal(Object.hasOwn(sent[0], "attachments"), false);
 });
 
 test("Mailer sendet bei aktiviertem HTML Klartext und HTML gemeinsam", async () => {
   const { mailer, sent } = createTestMailer(true);
-  await mailer.send({ to: "user@example.test", subject: "Test", text: "Klartext", html: "<p>HTML</p>" });
+  await mailer.send({ to: "user@example.test", subject: "Test", text: "Klartext", html: "<p>HTML</p>", htmlAttachments: [{ cid: "logo" }] });
 
   assert.equal(sent[0].text, "Klartext");
   assert.equal(sent[0].html, "<p>HTML</p>");
+  assert.deepEqual(sent[0].attachments, [{ cid: "logo" }]);
 });
 
 test("Mailer faellt ohne HTML-Vorlage automatisch auf Klartext zurueck", async () => {

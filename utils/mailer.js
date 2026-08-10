@@ -63,7 +63,7 @@ function createMailer({ config, logger, getEmailRelaySettings = async () => null
     return Boolean(settings.enabled && settings.host && settings.from && (!settings.user || settings.password));
   }
 
-  async function send({ to, subject, text, html }) {
+  async function send({ to, subject, text, html, htmlAttachments = [] }) {
     const plainText = typeof text === "string" ? text : "";
     if (!plainText.trim()) {
       const error = new Error("Klartextinhalt fehlt.");
@@ -87,6 +87,9 @@ function createMailer({ config, logger, getEmailRelaySettings = async () => null
     };
     if (settings.htmlEnabled && typeof html === "string" && html.trim()) {
       message.html = html;
+      if (Array.isArray(htmlAttachments) && htmlAttachments.length) {
+        message.attachments = htmlAttachments;
+      }
     }
 
     const result = await createTransport(settings).sendMail(message);

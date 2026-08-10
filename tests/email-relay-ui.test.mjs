@@ -17,6 +17,8 @@ test("Admin-Relay-Seite bietet einen zugaenglichen HTML-Formatumschalter", () =>
 
 test("HTML-Mail-Migration setzt einen verpflichtenden Standardwert true", () => {
   const migration = readProjectFile("data", "migrations", "20260810170000_add_email_html_enabled.js");
-  assert.match(migration, /boolean\("html_enabled"\)\.notNullable\(\)\.defaultTo\(true\)/);
+  assert.match(migration, /html_enabled bit NOT NULL/);
+  assert.match(migration, /DEFAULT \(1\) WITH VALUES/);
+  assert.match(migration, /hasColumn\("email_relay_settings", "html_enabled"\)/);
   assert.doesNotMatch(migration, /createTable/);
 });

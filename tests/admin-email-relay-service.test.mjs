@@ -102,7 +102,7 @@ test("Relay-Einstellung speichert Formatstatus und Audit ohne sensible Inhalte",
 
   assert.equal(result.settings.htmlEnabled, false);
   assert.equal(auditLogs[0].actionType, "EMAIL_RELAY_UPDATED");
-  assert.equal(auditLogs[0].metadata.htmlEnabled, false);
+  assert.deepEqual(auditLogs[0].metadata, { htmlEnabled: false });
   assert.equal(Object.hasOwn(auditLogs[0].metadata, "password"), false);
   assert.equal(Object.hasOwn(auditLogs[0].metadata, "text"), false);
   assert.equal(Object.hasOwn(auditLogs[0].metadata, "html"), false);

@@ -1,4 +1,5 @@
 const { HttpError } = require("../utils/http-error");
+const { testEmailTemplate } = require("../utils/mail-templates");
 const loginBackgrounds = require("../shared/login-backgrounds.json");
 
 const DEFAULT_LOGIN_BACKGROUND = "standard";
@@ -317,7 +318,7 @@ function createAdminService({ adminRepository, helpers, mailer, encryptSetting, 
     const existing = await adminRepository.getEmailRelaySettings();
     const settings = normalizeEmailRelaySettings(payload, existing);
     await adminRepository.saveEmailRelaySettings(settings, actor.id);
-    await helpers.writeAuditLog({ actor, actionType: "EMAIL_RELAY_UPDATED", entityType: "email_relay", entityId: "1", summary: "E-Mail-Relay-Einstellungen aktualisiert.", metadata: { enabled: settings.enabled, host: settings.host, port: settings.port, secure: settings.secure, hasAuthentication: Boolean(settings.username), htmlEnabled: settings.htmlEnabled } });
+    await helpers.writeAuditLog({ actor, actionType: "EMAIL_RELAY_UPDATED", entityType: "email_relay", entityId: "1", summary: "E-Mail-Relay-Einstellungen aktualisiert.", metadata: { htmlEnabled: settings.htmlEnabled } });
     return { ok: true, settings: await getEmailRelaySettings() };
   }
 
@@ -329,14 +330,9 @@ function createAdminService({ adminRepository, helpers, mailer, encryptSetting, 
     }
     const saved = await saveEmailRelaySettings(actor, payload);
     try {
-      const formatLabel = payload.htmlEnabled !== false
-        ? "HTML mit Klartext-Fallback"
-        : "Nur Klartext";
       await mailer.send({
         to: actor.email,
-        subject: "WIWEB Berichtsheft: E-Mail-Test",
-        text: `Die E-Mail-Relay-Konfiguration für WIWEB Berichtsheft funktioniert.\n\nGetesteter Modus: ${formatLabel}.`,
-        html: `<p>Die E-Mail-Relay-Konfiguration für WIWEB Berichtsheft funktioniert.</p><p><strong>Getesteter Modus:</strong> ${formatLabel}.</p>`
+        ...testEmailTemplate({ htmlEnabled: saved.settings.htmlEnabled })
       });
     } catch (error) {
       const smtpResponse = String(error?.response || error?.message || "").toLowerCase();
