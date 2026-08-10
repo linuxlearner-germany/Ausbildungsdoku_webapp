@@ -9,6 +9,7 @@ const { createConfig } = require("../../app/config");
 const { createDb } = require("../../app/create-db");
 const { runMigrations } = require("../../app/run-migrations");
 const { createReminderService } = require("../../services/reminder-service");
+const { escapeHtml } = require("../../utils/mailer");
 
 function insertedId(result) {
   return Number(result[0]?.id ?? result[0]);
@@ -30,14 +31,14 @@ await test("Erinnerungen werden ab 50 offenen Berichten versendet und pro Tag de
   try {
     await runMigrations({ db });
     trainerId = insertedId(await db("users").insert({
-      name: "Reminder Ausbilder",
+      name: "Reminder & Ausbilder",
       username: `reminder-trainer-${suffix}`,
       email: `reminder-trainer-${suffix}@example.test`,
       password_hash: "nicht-fuer-login",
       role: "trainer"
     }).returning("id"));
     traineeId = insertedId(await db("users").insert({
-      name: "Reminder Azubi",
+      name: "Reminder <Azubi>",
       username: `reminder-azubi-${suffix}`,
       email: `reminder-azubi-${suffix}@example.test`,
       password_hash: "nicht-fuer-login",
@@ -68,7 +69,7 @@ await test("Erinnerungen werden ab 50 offenen Berichten versendet und pro Tag de
     const sent = [];
     const mailer = {
       isConfigured: true,
-      escapeHtml: (value) => String(value),
+      escapeHtml,
       async send(message) {
         sent.push(message);
       }
@@ -96,6 +97,15 @@ await test("Erinnerungen werden ab 50 offenen Berichten versendet und pro Tag de
     assert.equal(first.trainerSent, 1);
     assert.ok(sent.some((message) => message.to === `reminder-azubi-${suffix}@example.test`));
     assert.ok(sent.some((message) => message.to === `reminder-trainer-${suffix}@example.test`));
+    const traineeMessage = sent.find((message) => message.to === `reminder-azubi-${suffix}@example.test`);
+    const trainerMessage = sent.find((message) => message.to === `reminder-trainer-${suffix}@example.test`);
+    assert.match(traineeMessage.text, /https:\/\/berichte\.example\.test\/berichte/);
+    assert.match(traineeMessage.html, /href="https:\/\/berichte\.example\.test\/berichte"/);
+    assert.match(traineeMessage.html, /Reminder &lt;Azubi&gt;/);
+    assert.doesNotMatch(traineeMessage.html, /Reminder <Azubi>/);
+    assert.match(trainerMessage.text, /https:\/\/berichte\.example\.test\/freigaben/);
+    assert.match(trainerMessage.html, /href="https:\/\/berichte\.example\.test\/freigaben"/);
+    assert.match(trainerMessage.html, /Reminder &amp; Ausbilder/);
     assert.equal(second.traineeSent, 0);
     assert.equal(second.trainerSent, 0);
   } finally {

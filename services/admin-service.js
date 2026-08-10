@@ -287,7 +287,7 @@ function createAdminService({ adminRepository, helpers, mailer, encryptSetting, 
       : password
         ? encryptSetting(password, sessionSecret)
         : existing?.password_encrypted || null;
-    return { enabled: Boolean(input.enabled), host, port: Number(input.port), secure: Boolean(input.secure), requireTls: Boolean(input.requireTls), username, passwordEncrypted, from, replyTo };
+    return { enabled: Boolean(input.enabled), host, port: Number(input.port), secure: Boolean(input.secure), requireTls: Boolean(input.requireTls), htmlEnabled: input.htmlEnabled !== false, username, passwordEncrypted, from, replyTo };
   }
 
   function serializeEmailRelaySettings(row, fallback) {
@@ -300,6 +300,7 @@ function createAdminService({ adminRepository, helpers, mailer, encryptSetting, 
       port: Number(values.port || 587),
       secure: Boolean(values.secure),
       requireTls: Boolean(row ? values.require_tls : values.requireTls),
+      htmlEnabled: row ? Boolean(values.html_enabled) : values.htmlEnabled !== false,
       username: values.username || values.user || "",
       passwordConfigured: Boolean(row ? values.password_encrypted : values.password),
       from: values.from_address || values.from || "",
@@ -316,7 +317,7 @@ function createAdminService({ adminRepository, helpers, mailer, encryptSetting, 
     const existing = await adminRepository.getEmailRelaySettings();
     const settings = normalizeEmailRelaySettings(payload, existing);
     await adminRepository.saveEmailRelaySettings(settings, actor.id);
-    await helpers.writeAuditLog({ actor, actionType: "EMAIL_RELAY_UPDATED", entityType: "email_relay", entityId: "1", summary: "E-Mail-Relay-Einstellungen aktualisiert.", metadata: { enabled: settings.enabled, host: settings.host, port: settings.port, secure: settings.secure, hasAuthentication: Boolean(settings.username) } });
+    await helpers.writeAuditLog({ actor, actionType: "EMAIL_RELAY_UPDATED", entityType: "email_relay", entityId: "1", summary: "E-Mail-Relay-Einstellungen aktualisiert.", metadata: { enabled: settings.enabled, host: settings.host, port: settings.port, secure: settings.secure, hasAuthentication: Boolean(settings.username), htmlEnabled: settings.htmlEnabled } });
     return { ok: true, settings: await getEmailRelaySettings() };
   }
 
@@ -328,7 +329,15 @@ function createAdminService({ adminRepository, helpers, mailer, encryptSetting, 
     }
     const saved = await saveEmailRelaySettings(actor, payload);
     try {
-      await mailer.send({ to: actor.email, subject: "WIWEB Berichtsheft: E-Mail-Test", text: "Die E-Mail-Relay-Konfiguration für WIWEB Berichtsheft funktioniert.", html: "<p>Die E-Mail-Relay-Konfiguration für WIWEB Berichtsheft funktioniert.</p>" });
+      const formatLabel = payload.htmlEnabled !== false
+        ? "HTML mit Klartext-Fallback"
+        : "Nur Klartext";
+      await mailer.send({
+        to: actor.email,
+        subject: "WIWEB Berichtsheft: E-Mail-Test",
+        text: `Die E-Mail-Relay-Konfiguration für WIWEB Berichtsheft funktioniert.\n\nGetesteter Modus: ${formatLabel}.`,
+        html: `<p>Die E-Mail-Relay-Konfiguration für WIWEB Berichtsheft funktioniert.</p><p><strong>Getesteter Modus:</strong> ${formatLabel}.</p>`
+      });
     } catch (error) {
       const smtpResponse = String(error?.response || error?.message || "").toLowerCase();
       if (smtpResponse.includes("relay access denied")) {
