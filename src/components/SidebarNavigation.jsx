@@ -76,8 +76,8 @@ export function SidebarNavigation({ user, theme, onLogout, onToggleTheme }) {
       <div className="sidebar-brand">
         <BrandLogo size="medium" />
         <div className="sidebar-brand-copy">
-          <strong>Ausbildungsdoku</strong>
-          <small>Digitales Berichtsheft</small>
+          <strong>WIWEB Berichtsheft</strong>
+          <small>Digitaler Ausbildungsnachweis</small>
         </div>
       </div>
       <nav className="sidebar-nav nav flex-column" aria-label="Hauptnavigation">

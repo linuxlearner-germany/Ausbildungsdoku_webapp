@@ -28,7 +28,8 @@ export function LoginPage({ login, busy }) {
         <div className="login-brand">
           <BrandLogo size="large" />
           <div>
-            <h1>Ausbildungsdoku</h1>
+            <h1>WIWEB Berichtsheft</h1>
+            <p className="login-product-subtitle">Digitaler Ausbildungsnachweis</p>
             {isStaticDemo() ? <small className="field-message">Demo-Logins: admin, trainer, azubi.</small> : null}
           </div>
         </div>

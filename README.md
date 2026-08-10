@@ -1,10 +1,10 @@
-# Ausbildungsdoku Webapp
+# WIWEB Berichtsheft
 
 Aktuelle Version: `1.2.0`
 
 ## Überblick
 
-Die Ausbildungsdoku Webapp ist ein digitales Berichtsheft mit getrennten Rollen für Azubis, Ausbilder und Admins. Die Anwendung deckt Berichte, Freigaben, Noten, Exporte, Benutzerverwaltung und Audit-Logs ab.
+WIWEB Berichtsheft ist ein digitaler Ausbildungsnachweis mit getrennten Rollen für Azubis, Ausbilder und Admins. Die Anwendung deckt Berichte, Freigaben, Noten, Exporte, Benutzerverwaltung und Audit-Logs ab.
 
 ## Hauptfunktionen
 

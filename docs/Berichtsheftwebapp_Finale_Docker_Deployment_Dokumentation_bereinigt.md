@@ -2,7 +2,7 @@
 
 ---
 
-Diese Dokumentation beschreibt das **finale Docker-Deployment** der DATENBANKNAMEwebapp / Ausbildungsdoku Webapp mit:
+Diese Dokumentation beschreibt das **finale Docker-Deployment** von **WIWEB Berichtsheft** mit:
 
 - Docker
 - Docker Compose

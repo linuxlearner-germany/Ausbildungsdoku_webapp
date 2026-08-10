@@ -27,9 +27,22 @@ test("Logo-Groessen sind zentral und seitenverhaeltnistreu definiert", () => {
   assert.match(components, /object-fit:\s*contain/);
 });
 
-test("Sidebar gruppiert Produktname und Untertitel mit dem Logo", () => {
+test("Sidebar gruppiert den neuen Produktnamen und Untertitel mit dem Logo", () => {
   const sidebar = readProjectFile("src", "components", "SidebarNavigation.jsx");
 
-  assert.match(sidebar, /<strong>Ausbildungsdoku<\/strong>/);
-  assert.match(sidebar, /<small>Digitales Berichtsheft<\/small>/);
+  assert.match(sidebar, /<strong>WIWEB Berichtsheft<\/strong>/);
+  assert.match(sidebar, /<small>Digitaler Ausbildungsnachweis<\/small>/);
+});
+
+test("Der bisherige Produktname bleibt aus sichtbaren Oberflaechen entfernt", () => {
+  const visibleSources = [
+    readProjectFile("src", "components", "SidebarNavigation.jsx"),
+    readProjectFile("src", "pages", "LoginPage.jsx"),
+    readProjectFile("src", "pages", "PasswordResetPage.jsx"),
+    readProjectFile("public", "index.html"),
+    readProjectFile("scripts", "build-github-pages.mjs")
+  ].join("\n");
+
+  assert.doesNotMatch(visibleSources, /Ausbildungsdoku/);
+  assert.match(visibleSources, /WIWEB Berichtsheft/);
 });
