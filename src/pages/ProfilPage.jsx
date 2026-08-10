@@ -50,7 +50,7 @@ function ThemeSettingsPanel({ theme, themePreference, backgroundPreference, onTo
           <span>{theme === "dark" ? "Dark Mode" : "Light Mode"}</span>
           <small className="field-message">Gespeicherte Präferenz: {themePreference === "system" ? "System" : themePreference}</small>
         </div>
-        <label>
+        <label className="theme-preference-control">
           Theme-Präferenz
           <select value={themePreference} onChange={(event) => onSaveThemePreference(event.target.value)}>
             <option value="system">System</option>
@@ -58,7 +58,10 @@ function ThemeSettingsPanel({ theme, themePreference, backgroundPreference, onTo
             <option value="dark">Dark</option>
           </select>
         </label>
-        <ThemeSwitch theme={theme} onToggle={onToggleTheme} />
+        <div className="theme-quick-toggle">
+          <span>Schnellwechsel</span>
+          <ThemeSwitch theme={theme} onToggle={onToggleTheme} />
+        </div>
       </div>
       <div className="background-settings">
         <div>

@@ -269,7 +269,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
   }
 
   return (
-    <div className="page-stack">
+    <div className={`page-stack${role === "trainer" ? " trainer-approvals-page" : ""}`}>
       <PageHeader
         kicker="Freigaben"
         title="Prüfungen und Freigaben"
@@ -298,9 +298,9 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
             <span className="approval-count">{filteredRows.length}</span>
           </div>
 
-          <FilterBar>
-            <input placeholder="Suche nach Azubi, Titel oder Inhalt" value={query} onChange={(event) => setQuery(event.target.value)} />
-            <select value={traineeFilter} onChange={(event) => setTraineeFilter(event.target.value)}>
+          <FilterBar className="approval-filter-bar" label="Freigaben filtern">
+            <input type="search" aria-label="Freigaben durchsuchen" placeholder="Suche nach Azubi, Titel oder Inhalt" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <select aria-label="Nach Azubi filtern" value={traineeFilter} onChange={(event) => setTraineeFilter(event.target.value)}>
               <option value="all">Alle Azubis</option>
               {traineeOptions.map((trainee) => (
                 <option key={trainee.id} value={trainee.id}>
@@ -308,20 +308,20 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
                 </option>
               ))}
             </select>
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <select aria-label="Nach Status filtern" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="submitted">Eingereicht</option>
               <option value="rejected">Nachbearbeitung</option>
               <option value="signed">Signiert</option>
               <option value="draft">Entwurf</option>
               <option value="all">Alle Status</option>
             </select>
-            <select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)}>
+            <select aria-label="Nach Zeitraum filtern" value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)}>
               <option value="all">Alle Zeitraeume</option>
               <option value="today">Heute</option>
               <option value="week">Diese Woche</option>
               <option value="month">Dieser Monat</option>
             </select>
-            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+            <select aria-label="Sortierung" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
               <option value="date-desc">Neueste zuerst</option>
               <option value="date-asc">Aelteste zuerst</option>
               <option value="trainee-asc">Azubi A-Z</option>
@@ -421,6 +421,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
             </div>
           ) : (
             <EmptyState
+              size="compact"
               title="Keine passenden Freigaben"
               description="Aktuell entsprechen keine Berichte den gewählten Filtern."
             />
@@ -535,6 +536,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
           ) : (
             <div className="approval-empty">
               <EmptyState
+                size="compact"
                 title="Kein Bericht ausgewählt"
                 description="Wähle links einen Bericht aus, um Details anzuzeigen."
               />
