@@ -168,7 +168,7 @@ export async function downloadReportPdf({ entries, traineeName, trainingTitle })
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
-  doc.text("Berichtsheft", 14, 18);
+  doc.text("WIWEB Berichtsheft", 14, 18);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);

@@ -35,7 +35,7 @@ CMD ["node", "index.js"]
 FROM runtime-base AS runtime
 
 ARG APP_VERSION=1.1.0
-LABEL org.opencontainers.image.title="Ausbildungsdoku Webapp" \
+LABEL org.opencontainers.image.title="WIWEB Berichtsheft" \
   org.opencontainers.image.version="${APP_VERSION}" \
   org.opencontainers.image.source="https://github.com/linuxlearner-germany/Ausbildungsdoku_webapp"
 

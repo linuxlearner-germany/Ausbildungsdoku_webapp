@@ -324,7 +324,7 @@ function createAdminService({ adminRepository, helpers, mailer, encryptSetting, 
     }
     const saved = await saveEmailRelaySettings(actor, payload);
     try {
-      await mailer.send({ to: actor.email, subject: "Test: E-Mail-Relay", text: "Die E-Mail-Relay-Konfiguration funktioniert.", html: "<p>Die E-Mail-Relay-Konfiguration funktioniert.</p>" });
+      await mailer.send({ to: actor.email, subject: "WIWEB Berichtsheft: E-Mail-Test", text: "Die E-Mail-Relay-Konfiguration für WIWEB Berichtsheft funktioniert.", html: "<p>Die E-Mail-Relay-Konfiguration für WIWEB Berichtsheft funktioniert.</p>" });
     } catch (error) {
       const smtpResponse = String(error?.response || error?.message || "").toLowerCase();
       if (smtpResponse.includes("relay access denied")) {

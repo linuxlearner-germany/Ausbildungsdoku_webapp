@@ -238,7 +238,7 @@ function renderPdf(res, trainee, entries, picturesDir) {
   function renderHeader(pageTitle, weekLabel = "") {
     if (fs.existsSync(logoPath)) doc.image(logoPath, 50, 42, { fit: [64, 64] });
     setFont("bold", 22);
-    doc.fillColor("#11211F").text("Berichtsheft", 130, 50);
+    doc.fillColor("#11211F").text("WIWEB Berichtsheft", 130, 50);
     setFont("regular", 11);
     doc.fillColor("#334155");
     doc.text(`Name: ${trainee.name}`, 130, 80);

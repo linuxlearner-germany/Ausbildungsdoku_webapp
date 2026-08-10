@@ -1,8 +1,8 @@
-# Berichtsheftwebapp Docker Dokumentation
+# WIWEB Berichtsheft – Docker-Dokumentation
 
 ---
 
-In dieser Dokumentation wird beschrieben, wie die **Berichtsheftwebapp / Ausbildungsdoku Webapp** mit **Docker**, **Docker Compose**, **Redis**, **Microsoft SQL Server** und optionalem **Proxy** deployed wird.
+In dieser Dokumentation wird beschrieben, wie **WIWEB Berichtsheft** mit **Docker**, **Docker Compose**, **Redis**, **Microsoft SQL Server** und optionalem **Proxy** deployed wird.
 
 Die Dokumentation beschreibt ausschließlich den Docker-basierten Betrieb. Eine lokale Installation ohne Docker wird nicht behandelt.
 
@@ -40,7 +40,7 @@ Die Dokumentation beschreibt ausschließlich den Docker-basierten Betrieb. Eine 
 
 ## 1. Ziel der Dokumentation
 
-Diese Dokumentation dient dazu, die Berichtsheftwebapp reproduzierbar per Docker auf einem Server zu betreiben.
+Diese Dokumentation dient dazu, WIWEB Berichtsheft reproduzierbar per Docker auf einem Server zu betreiben.
 
 Das getestete Ziel-Setup besteht aus:
 
@@ -1425,4 +1425,3 @@ NODE_ENV=development
 SESSION_SECURE=false
 TRUST_PROXY=false
 ```
-
