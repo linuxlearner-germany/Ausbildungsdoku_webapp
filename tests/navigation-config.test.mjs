@@ -2,10 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { canAccessMenuItem, getMenuItemsForRole } from "../src/navigation/menuConfig.mjs";
 
-await test("Admin-Navigation blendet fachlich unpassende Bereiche aus", async () => {
+await test("Admin-Navigation enthaelt die Notenverwaltung und Administrationsbereiche", async () => {
   const items = getMenuItemsForRole("admin").map((item) => item.key);
 
-  assert.equal(items.includes("grades"), false);
+  assert.equal(items.includes("grades"), true);
   assert.equal(items.includes("approvals"), false);
   assert.equal(items.includes("archive"), false);
   assert.equal(items.includes("admin-audit-log"), true);
@@ -22,7 +22,7 @@ await test("Azubi- und Ausbilder-Navigation enthalten nur ihre Bereiche", async 
 
   assert.equal(trainerItems.includes("approvals"), true);
   assert.equal(trainerItems.includes("archive"), true);
-  assert.equal(trainerItems.includes("grades"), false);
+  assert.equal(trainerItems.includes("grades"), true);
   assert.equal(trainerItems.includes("admin-audit-log"), false);
 });
 
@@ -30,6 +30,8 @@ await test("Routenpruefung folgt derselben Konfiguration", async () => {
   assert.equal(canAccessMenuItem("admin", "admin-audit-log"), true);
   assert.equal(canAccessMenuItem("admin", "reports"), false);
   assert.equal(canAccessMenuItem("trainer", "approvals"), true);
+  assert.equal(canAccessMenuItem("trainer", "grades"), true);
+  assert.equal(canAccessMenuItem("admin", "grades"), true);
   assert.equal(canAccessMenuItem("trainer", "admin-users"), false);
   assert.equal(canAccessMenuItem("trainee", "grades"), true);
 });

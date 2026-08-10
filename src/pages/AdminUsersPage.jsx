@@ -702,6 +702,30 @@ function AdminUserCard({ user, onEdit, onDelete }) {
   );
 }
 
+function DeleteUserDialog({ user, busy, onCancel, onConfirm }) {
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div className="app-dialog-backdrop" role="presentation">
+      <section className="app-dialog" role="alertdialog" aria-modal="true" aria-labelledby="delete-user-title" aria-describedby="delete-user-description">
+        <p className="page-kicker">Unwiderrufliche Aktion</p>
+        <h2 id="delete-user-title">Benutzer löschen?</h2>
+        <p id="delete-user-description">
+          <strong>{user.name}</strong> wird einschließlich zugehöriger Berichte, Noten und Zuordnungen gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.
+        </p>
+        <div className="app-dialog-actions">
+          <PrimaryButton variant="secondary" onClick={onCancel} disabled={busy}>Abbrechen</PrimaryButton>
+          <button type="button" className="btn btn-danger app-btn" onClick={onConfirm} disabled={busy}>
+            {busy ? "Wird gelöscht..." : "Endgültig löschen"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function AdminUsersPage({ section = "users", users, educations, onCreateUser, onAssignTrainer, onUpdateUser, onDeleteUser, onPreviewUserImport, onImportUsers, onLoadAuditLogs }) {
   const [form, setForm] = useState(buildUserForm());
   const [editingUserId, setEditingUserId] = useState(null);
@@ -710,6 +734,8 @@ export function AdminUsersPage({ section = "users", users, educations, onCreateU
   const [editError, setEditError] = useState("");
   const [assignError, setAssignError] = useState("");
   const [deleteError, setDeleteError] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [csvError, setCsvError] = useState("");
   const [userSearch, setUserSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -810,20 +836,28 @@ export function AdminUsersPage({ section = "users", users, educations, onCreateU
     }
   }
 
-  async function handleDeleteUser(user) {
-    const confirmed = window.confirm(`Benutzer "${user.name}" wirklich loeschen?\n\nDabei werden auch zugehoerige Berichte, Noten und Zuordnungen entfernt.`);
-    if (!confirmed) {
+  function requestDeleteUser(user) {
+    setDeleteError("");
+    setDeleteTarget(user);
+  }
+
+  async function handleDeleteUser() {
+    if (!deleteTarget || deleteBusy) {
       return;
     }
 
+    setDeleteBusy(true);
     setDeleteError("");
     try {
-      await onDeleteUser(user.id);
-      if (editingUserId === user.id) {
+      await onDeleteUser(deleteTarget.id);
+      if (editingUserId === deleteTarget.id) {
         stopEditing();
       }
+      setDeleteTarget(null);
     } catch (error) {
       setDeleteError(error.message);
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -949,7 +983,7 @@ export function AdminUsersPage({ section = "users", users, educations, onCreateU
               </FilterBar>
               <div className="admin-user-grid">
                 {filteredUsers.map((user) => (
-                  <AdminUserCard key={user.id} user={user} onEdit={startEditing} onDelete={handleDeleteUser} />
+                  <AdminUserCard key={user.id} user={user} onEdit={startEditing} onDelete={requestDeleteUser} />
                 ))}
               </div>
               {!filteredUsers.length ? <EmptyState title="Keine Benutzer zur aktuellen Auswahl gefunden" /> : null}
@@ -995,6 +1029,12 @@ export function AdminUsersPage({ section = "users", users, educations, onCreateU
           ) : null}
         </>
       )}
+      <DeleteUserDialog
+        user={deleteTarget}
+        busy={deleteBusy}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteUser}
+      />
     </div>
   );
 }

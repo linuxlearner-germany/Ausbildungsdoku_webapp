@@ -1,5 +1,4 @@
 import React, { createContext, useContext } from "react";
-import { StaticAppContext } from "./StaticAppContext";
 import { AppStateProvider, useAppState } from "./AppStateContext";
 import { AuthProvider } from "./AuthContext";
 import { ReportProvider } from "./ReportContext";
@@ -26,6 +25,7 @@ function AppContextBridge({ children }) {
         grades: state.grades,
         theme: state.theme,
         themePreference: state.themePreference,
+        backgroundPreference: state.backgroundPreference,
         busy: state.busy,
         flash: state.flash,
         setFlash: state.setFlash,
@@ -60,25 +60,25 @@ export function AppProvider({ children }) {
 }
 
 export function useAppContext() {
-  return useContext(AppContext) || useContext(StaticAppContext);
+  return useContext(AppContext);
 }
 
 export function useAuthContext() {
-  return useContext(AuthContext) || useContext(StaticAppContext);
+  return useContext(AuthContext);
 }
 
 export function useReportContext() {
-  return useContext(ReportContext) || useContext(StaticAppContext);
+  return useContext(ReportContext);
 }
 
 export function useAdminContext() {
-  return useContext(AdminContext) || useContext(StaticAppContext);
+  return useContext(AdminContext);
 }
 
 export function useGradesContext() {
-  return useContext(GradesContext) || useContext(StaticAppContext);
+  return useContext(GradesContext);
 }
 
 export function useUiPreferencesContext() {
-  return useContext(UiPreferencesContext) || useContext(StaticAppContext);
+  return useContext(UiPreferencesContext);
 }

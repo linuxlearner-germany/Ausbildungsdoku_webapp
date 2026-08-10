@@ -162,3 +162,49 @@ test("Produktion verbietet Reset beim Start", () => {
     /RESET_DATABASE_ON_START darf in Produktion nicht aktiviert sein/
   );
 });
+
+test("Produktion erzwingt automatische Migrationen", () => {
+  assert.throws(
+    () => loadConfigWithEnv(baseEnv({
+      NODE_ENV: "production",
+      SESSION_SECURE: "true",
+      APPLY_MIGRATIONS_ON_START: "false"
+    })),
+    /APPLY_MIGRATIONS_ON_START darf in Produktion nicht deaktiviert sein/
+  );
+});
+
+test("SMTP verlangt Host, Absender und oeffentliche App-URL", () => {
+  assert.throws(
+    () => loadConfigWithEnv(baseEnv({ SMTP_ENABLED: "true" })),
+    /SMTP_HOST und SMTP_FROM/
+  );
+  assert.throws(
+    () => loadConfigWithEnv(baseEnv({
+      APP_BASE_URL: "",
+      SMTP_ENABLED: "true",
+      SMTP_HOST: "smtp.example.test",
+      SMTP_FROM: "noreply@example.test"
+    })),
+    /APP_BASE_URL muss bei SMTP_ENABLED=true gesetzt sein/
+  );
+
+  const config = loadConfigWithEnv(baseEnv({
+    APP_BASE_URL: "https://berichte.example.test",
+    SMTP_ENABLED: "true",
+    SMTP_HOST: "smtp.example.test",
+    SMTP_FROM: "noreply@example.test",
+    REMINDERS_ENABLED: "true",
+    TRAINER_BACKLOG_THRESHOLD: "50"
+  }));
+  assert.equal(config.mail.enabled, true);
+  assert.equal(config.reminders.enabled, true);
+  assert.equal(config.reminders.trainerBacklogThreshold, 50);
+});
+
+test("Erinnerungen koennen nicht ohne SMTP aktiviert werden", () => {
+  assert.throws(
+    () => loadConfigWithEnv(baseEnv({ REMINDERS_ENABLED: "true" })),
+    /REMINDERS_ENABLED=true erfordert SMTP_ENABLED=true/
+  );
+});

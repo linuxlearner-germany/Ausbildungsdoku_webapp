@@ -26,6 +26,16 @@ function createAuthController({ authService, schemas }) {
     async changeOwnPassword(req, res) {
       const payload = parseSchema(schemas.passwordChangeSchema, req.body || {});
       res.json(await authService.changeOwnPassword(req, payload));
+    },
+
+    async requestPasswordReset(req, res) {
+      const payload = parseSchema(schemas.passwordResetRequestSchema, req.body || {});
+      res.json(await authService.requestPasswordReset(payload, req));
+    },
+
+    async resetPassword(req, res) {
+      const payload = parseSchema(schemas.passwordResetSchema, req.body || {});
+      res.json(await authService.resetPassword(payload, req));
     }
   };
 }

@@ -7,6 +7,11 @@ import { StatusBadge } from "../components/StatusBadge";
 import { calculateWeightedAverage, formatGrade } from "../lib/grades";
 import { downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
 import { apiUrl, isStaticDemo } from "../lib/runtime";
+import { formatLocalDate } from "../lib/date.mjs";
+
+function formatDisplayDate(value, fallback = "-") {
+  return formatLocalDate(value, { day: "2-digit", month: "2-digit", year: "numeric" }) || fallback;
+}
 
 function latestItems(entries) {
   return [...entries].sort((a, b) => String(b.dateFrom).localeCompare(String(a.dateFrom))).slice(0, 5);
@@ -30,6 +35,27 @@ function summarizeAuditEvents(items) {
   return [...summary.entries()]
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0], "de"))
     .slice(0, 5);
+}
+
+const QUICK_ACTIONS = [
+  { to: "/berichte?view=write", title: "Bericht schreiben", description: "Neuen Tagesbericht erfassen", icon: "M5 4h10v12H5zM8 8h4M8 11h4" },
+  { to: "/berichte?view=calendar", title: "Kalenderansicht", description: "Berichtstage im Überblick", icon: "M4 6h12v10H4zM7 3v4M13 3v4M4 9h12" },
+  { to: "/noten", title: "Noten", description: "Leistungen und Schnitt", icon: "M4 16V9M10 16V4M16 16v-5M2 18h16" },
+  { to: "/freigaben", title: "Freigabestatus", description: "Prüfstatus kontrollieren", icon: "M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-3-8 2 2 4-5" },
+  { to: "/profil", title: "Profil", description: "Persönliche Einstellungen", icon: "M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 18a6 6 0 0 1 12 0" },
+  { to: "/archiv", title: "Archiv", description: "Freigegebene Berichte", icon: "M4 6h12v11H4zM3 3h14v3H3zM8 10h4" }
+];
+
+function DashboardQuickAction({ action }) {
+  return (
+    <Link className="quick-action-card dashboard-quick-action" to={action.to}>
+      <svg viewBox="0 0 20 20" aria-hidden="true"><path d={action.icon} /></svg>
+      <span>
+        <strong>{action.title}</strong>
+        <small>{action.description}</small>
+      </span>
+    </Link>
+  );
 }
 
 export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }) {
@@ -70,7 +96,7 @@ export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }
   async function openPdfForTrainee(trainee) {
     if (isStaticDemo()) {
       setPdfError("");
-      downloadReportPdf({
+      await downloadReportPdf({
         entries: trainee.entries || [],
         traineeName: trainee.name,
         trainingTitle: trainee.ausbildung || ""
@@ -93,54 +119,61 @@ export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }
     const latest = latestItems(entries);
     const openApprovals = entries.filter((entry) => entry.status === "submitted").length;
     const gradeAverage = calculateWeightedAverage(grades);
+    const requiredReportDays = reportingProgress?.available ? reportingProgress.requiredWorkdays : 0;
+    const existingReportDays = reportingProgress?.available ? reportingProgress.existingReportDays : entries.length;
+    const reportingPercentage = requiredReportDays > 0
+      ? Math.min(100, Math.max(0, (existingReportDays / requiredReportDays) * 100))
+      : 0;
     return (
-      <div className="page-stack">
+      <div className="page-stack trainee-dashboard">
         <PageHeader
           kicker="Dashboard"
           title="Mein Überblick"
-          actions={<Link className="btn btn-primary app-btn" to="/berichte?view=write">Tagesbericht erstellen</Link>}
         />
-        <section className="stats-grid">
-          <StatCard label="Tagesberichte" value={entries.length} note="Gesamtzahl deiner Einträge" />
-          <StatCard label="In Prüfung" value={openApprovals} note="Warten auf Freigabe" />
-          <StatCard label="Signiert" value={entries.filter((entry) => entry.status === "signed").length} note="Freigegebene Tage" />
+        <section className="stats-grid dashboard-kpi-grid">
+          <StatCard label="Berichtstage" value={existingReportDays} note="Vorhandene Berichtstage" />
+          <StatCard label="Offen / in Prüfung" value={openApprovals} note="Warten auf Freigabe" />
           <StatCard
             label="Fehlende Berichtstage"
             value={reportingProgress?.available ? reportingProgress.missingReportDays : "-"}
-            note={reportingProgress?.available ? `Pflichtwerktage bis ${reportingProgress.calculationUntil}` : reportingProgress?.message || "Ausbildungsbeginn fehlt"}
+            note={reportingProgress?.available ? `Stand ${formatDisplayDate(reportingProgress.calculationUntil)}` : reportingProgress?.message || "Ausbildungsbeginn fehlt"}
           />
           <StatCard label="Notenschnitt" value={gradeAverage ? formatGrade(gradeAverage) : "-"} note="Gewichteter Durchschnitt" />
         </section>
-        <section className="panel-card">
-          <PageHeader kicker="Berichtsheftpflicht" title="Pflichtzeitraum" />
+        <section className="panel-card dashboard-period-panel">
+          <div className="dashboard-section-head">
+            <div>
+              <p className="page-kicker">Berichtsheftpflicht</p>
+              <h3>Pflichtzeitraum</h3>
+            </div>
+            {reportingProgress?.available ? (
+              <strong>{Math.round(reportingPercentage)} % erfüllt</strong>
+            ) : null}
+          </div>
           {reportingProgress?.available ? (
-            <div className="list-stack">
-              <div className="list-row">
-                <div>
-                  <strong>Ausbildungsbeginn</strong>
-                  <p>{reportingProgress.trainingStartDate || "-"}</p>
-                </div>
+            <div className="dashboard-period-content">
+              <div className="dashboard-period-meta">
+                <div><span>Ausbildungsbeginn</span><strong>{formatDisplayDate(reportingProgress.trainingStartDate)}</strong></div>
+                <div><span>Ausbildungsende</span><strong>{formatDisplayDate(reportingProgress.trainingEndDate, "offen")}</strong></div>
+                <div><span>Berechnet bis</span><strong>{formatDisplayDate(reportingProgress.calculationUntil)}</strong></div>
+                <div><span>Pflichtwerktage</span><strong>{requiredReportDays}</strong></div>
+                <div><span>Vorhandene Berichtstage</span><strong>{existingReportDays}</strong></div>
+                <div><span>Fehlende Berichtstage</span><strong>{reportingProgress.missingReportDays}</strong></div>
               </div>
-              <div className="list-row">
+              <div className="dashboard-progress-block">
                 <div>
-                  <strong>Ausbildungsende</strong>
-                  <p>{reportingProgress.trainingEndDate || "offen"}</p>
+                  <span>Erfüllungsgrad</span>
+                  <strong>{existingReportDays} / {requiredReportDays}</strong>
                 </div>
-              </div>
-              <div className="list-row">
-                <div>
-                  <strong>Berechnet bis</strong>
-                  <p>{reportingProgress.calculationUntil || "-"}</p>
-                </div>
-              </div>
-              <div className="list-row">
-                <div>
-                  <strong>Pflichtwerktage</strong>
-                  <p>{reportingProgress.requiredWorkdays}</p>
-                </div>
-                <div>
-                  <strong>Vorhandene Berichtstage</strong>
-                  <p>{reportingProgress.existingReportDays}</p>
+                <div
+                  className="dashboard-progress"
+                  role="progressbar"
+                  aria-label="Erfüllungsgrad der Berichtspflicht"
+                  aria-valuemin="0"
+                  aria-valuemax="100"
+                  aria-valuenow={Math.round(reportingPercentage)}
+                >
+                  <span style={{ width: `${reportingPercentage}%` }} />
                 </div>
               </div>
             </div>
@@ -148,17 +181,17 @@ export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }
             <EmptyState title={reportingProgress?.message || "Ausbildungsbeginn nicht hinterlegt"} />
           )}
         </section>
-        <section className="two-column-grid">
-          <article className="panel-card">
-            <PageHeader kicker="Aktivitäten" title="Letzte Einträge" />
+        <section className="two-column-grid dashboard-lower-grid">
+          <article className="panel-card dashboard-latest-panel">
+            <div className="dashboard-section-head">
+              <div><p className="page-kicker">Aktivitäten</p><h3>Letzte Einträge</h3></div>
+            </div>
             {latest.length ? (
-              <div className="list-stack">
-                {latest.map((entry) => (
-                  <div key={entry.id} className="list-row">
-                    <div>
-                      <strong>{entry.weekLabel || "Ohne Titel"}</strong>
-                      <p>{entry.dateFrom || "-"}</p>
-                    </div>
+              <div className="dashboard-latest-list">
+                {latest.slice(0, 4).map((entry) => (
+                  <div key={entry.id} className="dashboard-latest-row">
+                    <strong>{entry.weekLabel || "Ohne Titel"}</strong>
+                    <time dateTime={entry.dateFrom}>{formatDisplayDate(entry.dateFrom)}</time>
                     <StatusBadge status={entry.status} />
                   </div>
                 ))}
@@ -167,15 +200,12 @@ export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }
               <EmptyState title="Noch keine Aktivitäten" />
             )}
           </article>
-          <article className="panel-card">
-            <PageHeader kicker="Schnellzugriffe" title="Direkte Aktionen" />
-            <div className="quick-actions">
-              <Link className="quick-action-card" to="/berichte?view=write">Berichte schreiben</Link>
-              <Link className="quick-action-card" to="/berichte?view=calendar">Kalenderansicht</Link>
-              <Link className="quick-action-card" to="/noten">Noten verwalten</Link>
-              <Link className="quick-action-card" to="/freigaben">Freigabestatus prüfen</Link>
-              <Link className="quick-action-card" to="/profil">Profil ansehen</Link>
-              <Link className="quick-action-card" to="/archiv">Archiv ansehen</Link>
+          <article className="panel-card dashboard-actions-panel">
+            <div className="dashboard-section-head">
+              <div><p className="page-kicker">Schnellzugriffe</p><h3>Direkte Aktionen</h3></div>
+            </div>
+            <div className="quick-actions dashboard-quick-actions">
+              {QUICK_ACTIONS.map((action) => <DashboardQuickAction key={action.to} action={action} />)}
             </div>
           </article>
         </section>
@@ -213,7 +243,7 @@ export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }
                     <div key={entry.id} className="list-row">
                       <div>
                         <strong>{trainee?.name || "Azubi"}</strong>
-                        <p>{entry.weekLabel || "Ohne Titel"} · {entry.dateFrom || "-"}</p>
+                        <p>{entry.weekLabel || "Ohne Titel"} · {formatDisplayDate(entry.dateFrom)}</p>
                       </div>
                       <StatusBadge status={entry.status} />
                     </div>
@@ -228,6 +258,7 @@ export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }
             <PageHeader kicker="Schnellzugriffe" title="Arbeitsbereiche" />
             <div className="quick-actions">
               <Link className="quick-action-card" to="/freigaben">Freigaben bearbeiten</Link>
+              <Link className="quick-action-card" to="/noten">Noten einsehen</Link>
               <Link className="quick-action-card" to="/archiv">Archiv öffnen</Link>
               {trainees.slice(0, 2).map((trainee) => (
                 <button key={trainee.id} type="button" className="quick-action-card" onClick={() => openPdfForTrainee(trainee)}>
@@ -263,7 +294,7 @@ export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }
                       <div className="trainer-card-latest">
                         <div>
                           <strong>Letzte Aktivität</strong>
-                          <p>{summary.latest.weekLabel || "Ohne Titel"} · {summary.latest.dateFrom || "-"}</p>
+                          <p>{summary.latest.weekLabel || "Ohne Titel"} · {formatDisplayDate(summary.latest.dateFrom)}</p>
                         </div>
                         <StatusBadge status={summary.latest.status} />
                       </div>
@@ -303,6 +334,7 @@ export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }
             <Link className="quick-action-card" to="/admin/users/new">Benutzer anlegen</Link>
             <Link className="quick-action-card" to="/admin/users">Benutzer verwalten</Link>
             <Link className="quick-action-card" to="/admin/assignments">Zuordnungen prüfen</Link>
+            <Link className="quick-action-card" to="/noten">Noten verwalten</Link>
             <Link className="quick-action-card" to="/admin/audit-log">Audit-Log öffnen</Link>
             <Link className="quick-action-card" to="/profil">Profil öffnen</Link>
           </div>

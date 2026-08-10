@@ -1,50 +1,45 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
+import { getBackground } from "../lib/background.mjs";
+import { assetUrl } from "../lib/runtime";
 import { SidebarNavigation } from "./SidebarNavigation";
-import { Topbar } from "./Topbar";
 
-export function AppShell({ user, theme, themePreference, onLogout, onToggleTheme, flash, children }) {
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  useEffect(() => {
-    if (typeof document === "undefined") {
-      return undefined;
-    }
-
-    document.body.classList.toggle("nav-open", mobileNavOpen);
-    return () => document.body.classList.remove("nav-open");
-  }, [mobileNavOpen]);
-
-  useEffect(() => {
-    if (!mobileNavOpen || typeof window === "undefined") {
-      return undefined;
-    }
-
-    function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        setMobileNavOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [mobileNavOpen]);
+export function AppShell({ user, theme, backgroundPreference, onLogout, onToggleTheme, flash, children }) {
+  const background = getBackground(backgroundPreference);
+  const hasBackground = Boolean(background.path);
 
   return (
-    <div className="app-shell">
-      <SidebarNavigation user={user} mobileNavOpen={mobileNavOpen} onNavigate={() => setMobileNavOpen(false)} />
-      {mobileNavOpen ? <button type="button" className="sidebar-backdrop" aria-label="Navigation schliessen" onClick={() => setMobileNavOpen(false)} /> : null}
+    <div className={`app-shell${hasBackground ? " has-background" : ""}`}>
+      <a className="skip-link" href="#main-content">Zum Hauptinhalt springen</a>
+      <SidebarNavigation
+        user={user}
+        theme={theme}
+        onLogout={onLogout}
+        onToggleTheme={onToggleTheme}
+      />
       <div className="app-main">
-        <Topbar
-          user={user}
-          theme={theme}
-          themePreference={themePreference}
-          onLogout={onLogout}
-          onToggleTheme={onToggleTheme}
-          mobileNavOpen={mobileNavOpen}
-          onToggleNavigation={() => setMobileNavOpen((current) => !current)}
-        />
-        {flash ? <div className={`flash alert ${flash.type === "error" ? "alert-danger" : "alert-success"}`}>{flash.message}</div> : null}
-        <main className="page-content container-fluid px-3 px-lg-4">{children}</main>
+        {hasBackground ? (
+          <div className="app-background-layer" aria-hidden="true">
+            <picture>
+              {(background.sources || []).map((source) => (
+                <source key={source.minWidth} media={`(min-width: ${source.minWidth}px)`} srcSet={assetUrl(source.path)} />
+              ))}
+              <img src={assetUrl(background.path)} alt="" style={{ objectPosition: background.position || "center center" }} />
+            </picture>
+          </div>
+        ) : null}
+        {flash ? (
+          <div
+            className={`flash alert ${flash.type === "error" ? "alert-danger" : "alert-success"}`}
+            role={flash.type === "error" ? "alert" : "status"}
+            aria-live={flash.type === "error" ? "assertive" : "polite"}
+            aria-atomic="true"
+          >
+            {flash.message}
+          </div>
+        ) : null}
+        <main id="main-content" tabIndex="-1" className="page-content container-fluid px-3 px-lg-4">
+          {children}
+        </main>
       </div>
     </div>
   );

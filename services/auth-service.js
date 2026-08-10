@@ -1,7 +1,8 @@
 const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 const { HttpError } = require("../utils/http-error");
 
-function createAuthService({ authRepository, helpers }) {
+function createAuthService({ authRepository, helpers, config, mailer, logger }) {
   function regenerateSession(req) {
     return new Promise((resolve, reject) => {
       req.session.regenerate((error) => {
@@ -128,12 +129,88 @@ function createAuthService({ authRepository, helpers }) {
     return { ok: true };
   }
 
+  async function requestPasswordReset(payload, req) {
+    const mailerConfigured = typeof mailer.isConfigured === "function" ? await mailer.isConfigured() : Boolean(mailer.isConfigured);
+    if (!mailerConfigured) {
+      throw new HttpError(503, "Passwort-Reset ist derzeit nicht eingerichtet.", {
+        code: "PASSWORD_RESET_UNAVAILABLE"
+      });
+    }
+
+    const rateLimit = await helpers.getPasswordResetRateLimit(req);
+    if (rateLimit.limited) {
+      throw new HttpError(429, `Zu viele Anfragen. Bitte in ${rateLimit.retryAfterSeconds} Sekunden erneut versuchen.`, {
+        code: "RATE_LIMITED",
+        details: {
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+          maxAttempts: rateLimit.maxAttempts
+        }
+      });
+    }
+    await helpers.recordPasswordResetRequest(req);
+
+    const genericResult = {
+      ok: true,
+      message: "Wenn ein passendes Konto existiert, wurde eine E-Mail mit weiteren Schritten versendet."
+    };
+    const user = await authRepository.findUserByIdentifier(payload.identifier);
+    if (!user) {
+      return genericResult;
+    }
+
+    const token = crypto.randomBytes(32).toString("base64url");
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const expiresAt = new Date(Date.now() + config.mail.passwordResetTtlMinutes * 60_000);
+    const resetUrl = `${config.app.publicBaseUrl}/passwort-zuruecksetzen?token=${encodeURIComponent(token)}`;
+
+    await authRepository.replacePasswordResetToken(user.id, tokenHash, expiresAt);
+    try {
+      const safeName = mailer.escapeHtml(user.name || user.username);
+      const safeUrl = mailer.escapeHtml(resetUrl);
+      await mailer.send({
+        to: user.email,
+        subject: "Passwort für Ausbildungsdoku zurücksetzen",
+        text: `Hallo ${user.name || user.username},\n\nüber diesen Link kannst du dein Passwort innerhalb von ${config.mail.passwordResetTtlMinutes} Minuten zurücksetzen:\n${resetUrl}\n\nWenn du die Anfrage nicht gestellt hast, ignoriere diese E-Mail.`,
+        html: `<p>Hallo ${safeName},</p><p>über diesen Link kannst du dein Passwort innerhalb von ${config.mail.passwordResetTtlMinutes} Minuten zurücksetzen:</p><p><a href="${safeUrl}">Passwort zurücksetzen</a></p><p>Wenn du die Anfrage nicht gestellt hast, ignoriere diese E-Mail.</p>`
+      });
+    } catch (error) {
+      await authRepository.deletePasswordResetToken(tokenHash);
+      logger.error("Passwort-Reset-E-Mail konnte nicht versendet werden.", {
+        userId: user.id,
+        error
+      });
+    }
+
+    return genericResult;
+  }
+
+  async function resetPassword(payload, req) {
+    const tokenHash = crypto.createHash("sha256").update(payload.token).digest("hex");
+    const token = await authRepository.consumePasswordResetToken(
+      tokenHash,
+      helpers.hashPassword(payload.newPassword)
+    );
+    if (!token) {
+      throw new HttpError(400, "Der Link ist ungültig, abgelaufen oder wurde bereits verwendet.", {
+        code: "INVALID_RESET_TOKEN"
+      });
+    }
+
+    await Promise.all([
+      helpers.clearLoginFailuresForKey(helpers.getClientIp(req), token.username),
+      helpers.clearLoginFailuresForKey(helpers.getClientIp(req), token.email)
+    ]);
+    return { ok: true, message: "Dein Passwort wurde geändert. Du kannst dich jetzt anmelden." };
+  }
+
   return {
     login,
     restoreSession,
     logout,
     updateThemePreference,
-    changeOwnPassword
+    changeOwnPassword,
+    requestPasswordReset,
+    resetPassword
   };
 }
 

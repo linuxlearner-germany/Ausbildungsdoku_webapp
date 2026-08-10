@@ -9,5 +9,7 @@ public/app.js
 public/app.js.map
 public/app.css
 public/*.png
+public/chunks/
+github-pages/
 *.bak
 *.log

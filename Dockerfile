@@ -1,43 +1,19 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:20-slim AS base
-
-ARG HTTP_PROXY=http://proxy.wiweb.local:3128
-ARG HTTPS_PROXY=http://proxy.wiweb.local:3128
-ARG NO_PROXY=localhost,127.0.0.1,.wiweb.local
-
-ENV HTTP_PROXY=$HTTP_PROXY
-ENV HTTPS_PROXY=$HTTPS_PROXY
-ENV NO_PROXY=$NO_PROXY
-ENV http_proxy=$HTTP_PROXY
-ENV https_proxy=$HTTPS_PROXY
-ENV no_proxy=$NO_PROXY
+FROM node:24.18.0-bookworm-slim AS base
 
 WORKDIR /app
 
 FROM base AS deps
 COPY package*.json ./
 
-RUN npm config set proxy "$HTTP_PROXY" \
-  && npm config set https-proxy "$HTTPS_PROXY" \
-  && npm ci --no-audit --fetch-retries=5 --fetch-retry-maxtimeout=120000 --include=optional
+RUN npm ci --no-audit --allow-remote=root --fetch-retries=5 --fetch-retry-maxtimeout=120000 --include=optional
 
 FROM deps AS build
 COPY . .
 RUN npm run build
 
-FROM node:20-slim AS runtime-base
-
-ARG HTTP_PROXY=http://proxy.wiweb.local:3128
-ARG HTTPS_PROXY=http://proxy.wiweb.local:3128
-ARG NO_PROXY=localhost,127.0.0.1,.wiweb.local
-
-ENV HTTP_PROXY=$HTTP_PROXY
-ENV HTTPS_PROXY=$HTTPS_PROXY
-ENV NO_PROXY=$NO_PROXY
-ENV http_proxy=$HTTP_PROXY
-ENV https_proxy=$HTTPS_PROXY
-ENV no_proxy=$NO_PROXY
+FROM node:24.18.0-bookworm-slim AS runtime-base
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates fonts-dejavu-core \
@@ -58,11 +34,14 @@ CMD ["node", "index.js"]
 
 FROM runtime-base AS runtime
 
+ARG APP_VERSION=1.1.0
+LABEL org.opencontainers.image.title="Ausbildungsdoku Webapp" \
+  org.opencontainers.image.version="${APP_VERSION}" \
+  org.opencontainers.image.source="https://github.com/linuxlearner-germany/Ausbildungsdoku_webapp"
+
 COPY package*.json ./
 
-RUN npm config set proxy "$HTTP_PROXY" \
-  && npm config set https-proxy "$HTTPS_PROXY" \
-  && npm ci --omit=dev --no-audit --fetch-retries=5 --fetch-retry-maxtimeout=120000 --include=optional
+RUN npm ci --omit=dev --no-audit --allow-remote=root --fetch-retries=5 --fetch-retry-maxtimeout=120000 --include=optional
 
 COPY --from=build --chown=appuser:appuser /app/app ./app
 COPY --from=build --chown=appuser:appuser /app/controllers ./controllers

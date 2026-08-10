@@ -1,6 +1,6 @@
 {
   "name": "berichtsheft_webapp",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Ausbildungsdoku Webapp mit Rollen fuer Azubi, Ausbilder und Verwaltung",
   "main": "index.js",
   "scripts": {
@@ -38,22 +38,23 @@
     "bcryptjs": "^3.0.3",
     "bootstrap": "^5.3.8",
     "connect-redis": "^9.0.0",
-    "dotenv": "^17.3.1",
-    "esbuild": "^0.27.4",
+    "dotenv": "17.4.2",
+    "esbuild": "0.28.1",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.4.1",
+    "express-rate-limit": "8.6.0",
     "express-session": "^1.19.0",
-    "helmet": "^8.1.0",
+    "helmet": "8.3.0",
     "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.7",
-    "knex": "^3.2.9",
-    "mssql": "^12.3.1",
+    "jspdf-autotable": "5.0.8",
+    "knex": "3.3.0",
+    "mssql": "12.7.0",
+    "nodemailer": "^9.0.3",
     "pdfkit": "^0.18.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "react-router-dom": "^7.13.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router-dom": "7.18.1",
     "redis": "^5.12.1",
-    "xlsx": "^0.18.5",
-    "zod": "^4.3.6"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
+    "zod": "4.4.3"
   }
 }

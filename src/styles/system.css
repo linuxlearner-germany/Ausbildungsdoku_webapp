@@ -1,0 +1,55 @@
+/* Final system layer: shared controls stay consistent even across legacy page layouts. */
+:root { --app-space-1:.25rem; --app-space-2:.5rem; --app-space-3:.75rem; --app-space-4:1rem; --app-space-5:1.5rem; --app-space-6:2rem; --app-content-max:1760px; --app-control-height:2.75rem; --app-font-size-sm:.8125rem; --app-font-size-meta:.75rem; --app-line-height:1.5; }
+body { font-size:.9375rem; line-height:var(--app-line-height); }
+.page-content > * { width:min(100%,var(--app-content-max)); margin-inline:auto; }
+.page-header { gap:var(--app-space-3); padding:.1rem 0 .8rem; }
+.page-header h2 { font-size:clamp(1.45rem,2.4vw,2rem); font-weight:700; letter-spacing:-.02em; }
+.page-subtitle { max-width:72ch; font-size:.9375rem; line-height:1.55; }
+button,input,select,textarea { font:inherit; }
+label { display:grid; gap:var(--app-space-2); color:var(--app-text); font-size:var(--app-font-size-sm); font-weight:650; }
+input,select,textarea,.form-control,.form-select { min-height:var(--app-control-height); font-size:.9375rem; }
+input:hover,select:hover,textarea:hover { border-color:var(--app-border-strong); }
+input:disabled,select:disabled,textarea:disabled,button:disabled,.btn:disabled { cursor:not-allowed; opacity:.58; }
+input[type="checkbox"],input[type="radio"] { accent-color:var(--app-primary); min-height:1.125rem; width:1.125rem; padding:0; }
+label:has(input[type="checkbox"]),label:has(input[type="radio"]) { display:flex; align-items:center; min-height:var(--app-control-height); gap:.625rem; }
+.panel-card,.admin-form-card,.approval-content-card,.grade-section-card { padding:clamp(1rem,2vw,1.5rem); }
+.panel-card:hover { box-shadow:var(--app-shadow-sm); }
+.page-stack { gap:var(--app-space-5); }
+.form-grid { gap:var(--app-space-4); align-items:start; }
+.field-message { display:block; margin:0; line-height:1.45; }
+.field-message.error,.field-message.success { padding:.625rem .75rem; border:1px solid currentColor; border-radius:var(--app-radius-sm); background:color-mix(in srgb,currentColor 8%,transparent); }
+.app-btn,.button,.btn { min-height:var(--app-control-height); border-radius:var(--app-radius-sm); font-size:.875rem; font-weight:650; }
+.button-primary,.btn-primary { color:#fff; }
+.button-ghost,.btn-outline-secondary { background:transparent; }
+.table-shell { border-radius:var(--app-radius-md); }
+.data-table thead th { height:3rem; vertical-align:middle; font-size:var(--app-font-size-meta); }
+.data-table td { min-height:3.75rem; font-size:.875rem; }
+.data-table tbody tr { transition:background-color .15s ease; }
+.data-table tbody tr:hover { background:var(--app-surface-muted); }
+.status-badge { font-weight:750; }
+.empty-state { display:grid; place-items:center; align-content:center; gap:.45rem; min-height:7.5rem; text-align:center; padding:var(--app-space-5); border:1px dashed color-mix(in srgb,var(--text-muted) 25%,transparent); border-radius:var(--radius-lg); background:color-mix(in srgb,var(--surface-elevated) 78%,transparent); color:var(--text-muted); box-shadow:none; }
+.empty-state-icon { width:1.6rem; height:1.6rem; margin-bottom:.15rem; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; opacity:.8; }
+.empty-state h3 { margin:0; color:var(--text-secondary); font-size:1rem; font-weight:700; }
+.empty-state p { max-width:52ch; margin:0; color:var(--text-muted); font-size:.875rem; }
+.filter-bar { padding:var(--app-space-3); border:1px solid var(--app-border); border-radius:var(--radius-lg); background:var(--surface-elevated); }
+.filter-bar input,.filter-bar select { border-color:var(--app-input-border); background:var(--app-input-bg); color:var(--text-primary); }
+.filter-bar input:hover,.filter-bar select:hover { border-color:var(--border-strong); }
+.filter-bar input:focus,.filter-bar select:focus { border-color:var(--primary); box-shadow:0 0 0 3px var(--app-focus); }
+.approval-summary { grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--app-space-4); }
+.approval-summary-item { min-height:7rem; display:flex; flex-direction:column; justify-content:center; gap:.4rem; padding:1.15rem 1.25rem; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface); box-shadow:var(--app-shadow-sm); }
+.approval-summary-item strong { color:var(--text-primary); font-size:2rem; line-height:1; font-variant-numeric:tabular-nums; }
+.approval-summary-item span { color:var(--text-secondary); font-size:.75rem; font-weight:750; letter-spacing:.07em; text-transform:uppercase; }
+.approval-summary-item small { color:var(--text-muted); font-size:.78rem; }
+.app-dialog { max-height:min(42rem,calc(100dvh - 2rem)); overflow:auto; }
+.theme-switch { display:inline-flex; align-items:center; justify-content:space-between; gap:.5rem; min-height:var(--app-control-height); padding:.35rem .45rem .35rem .55rem; border:1px solid var(--app-border-strong); border-radius:999px; background:var(--app-surface); color:var(--app-text); font-size:var(--app-font-size-sm); font-weight:700; transition:border-color .15s ease,background-color .15s ease,box-shadow .15s ease; }
+.theme-switch-icon { display:grid; width:1.35rem; place-items:center; font-size:1.05rem; line-height:1; }
+.theme-switch:hover { border-color:var(--app-primary); background:var(--app-surface-muted); }
+.theme-switch:focus-visible { outline:0; box-shadow:0 0 0 .2rem var(--app-focus); }
+.theme-switch-track { display:inline-flex; align-items:center; width:2.35rem; height:1.35rem; padding:.16rem; border-radius:999px; background:var(--app-border-strong); transition:background-color .15s ease; }
+.theme-switch-thumb { width:1.03rem; height:1.03rem; border-radius:50%; background:var(--app-surface); box-shadow:0 1px 2px rgba(15,23,42,.2); transition:transform .15s ease; }
+.theme-switch[aria-checked="true"] .theme-switch-track { background:var(--app-primary); }
+.theme-switch[aria-checked="true"] .theme-switch-thumb { transform:translateX(1rem); }
+.theme-switch.compact { min-height:2.5rem; padding-left:.65rem; }
+@media (min-width:2200px) { :root { --app-content-max:2080px; } }
+@media (min-width:3200px) { :root { --app-content-max:2400px; } }
+@media (prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; transition-duration:.01ms!important; animation-duration:.01ms!important; } }

@@ -7,7 +7,7 @@ const { createAdminRoutes } = require("../../routes/admin-routes");
 const { computeChangedFields, summarizeFieldLabels } = require("../../utils/audit");
 const { buildAdminUsersCsv } = require("../../utils/exporters");
 
-function createAdminModule({ db, sharedRepository, auditHelpers, helpers, imports }) {
+function createAdminModule({ db, sharedRepository, auditHelpers, helpers, imports, mailer, config }) {
   const adminRepository = createAdminRepository({
     db,
     parseTrainerIds: sharedRepository.parseTrainerIds,
@@ -38,8 +38,12 @@ function createAdminModule({ db, sharedRepository, auditHelpers, helpers, import
 
   const adminService = createAdminService({
     adminRepository,
+    mailer,
+    encryptSetting: require("../../utils/settings-crypto").encryptSetting,
+    sessionSecret: config.session.secret,
     helpers: {
       hashPassword: helpers.hashPassword,
+      isValidEmail: helpers.isValidEmail,
       buildUserImportPreview: adminDomainService.buildUserImportPreview,
       importUsersFromPreview: adminDomainService.importUsersFromPreview,
       writeAuditLog: auditHelpers.writeAuditLog,

@@ -46,7 +46,7 @@ function createReportRepository({ db, listEntriesForTrainee, findEntryById, find
     async rejectEntryWithComment(entryId, comment) {
       return db("entries")
         .where({ id: entryId })
-        .whereNot({ status: "signed" })
+        .where({ status: "submitted" })
         .update({
           status: "rejected",
           trainerComment: comment,

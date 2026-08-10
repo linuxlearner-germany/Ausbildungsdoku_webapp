@@ -63,29 +63,11 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
       <div className="page-stack">
         <PageHeader kicker="Freigaben" title="Status deiner Einreichungen" />
         <section className="panel-card">
-          <div className="mobile-records">
-            {entries.length ? (
-              entries.map((entry) => (
-                <article key={entry.id} className="mobile-record-card mobile-record-card-static">
-                  <div className="mobile-record-head">
-                    <strong>{entry.weekLabel || "Ohne Titel"}</strong>
-                    <StatusBadge status={entry.status} />
-                  </div>
-                  <div className="mobile-record-body">
-                    <span>{entry.dateFrom || "-"}</span>
-                    <small>{entry.rejectionReason ? `Abgelehnt: ${entry.rejectionReason}` : formatSignature(entry)}</small>
-                  </div>
-                </article>
-              ))
-            ) : (
-              <EmptyState title="Keine Freigaben vorhanden" />
-            )}
-          </div>
           <DataTable
             rowKey="id"
             rows={entries}
             columns={[
-              { key: "dateFrom", label: "Tag" },
+              { key: "dateFrom", label: "Tag", render: (row) => formatDate(row.dateFrom) },
               { key: "weekLabel", label: "Titel" },
               { key: "status", label: "Status", render: (row) => <StatusBadge status={row.status} /> },
               {
@@ -270,7 +252,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
 
     if (isStaticDemo()) {
       setPdfError("");
-      downloadReportPdf({
+      await downloadReportPdf({
         entries: trainee.entries || [],
         traineeName: trainee.name,
         trainingTitle: trainee.ausbildung || ""
@@ -438,7 +420,10 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
               ))}
             </div>
           ) : (
-            <EmptyState title="Keine passenden Freigaben" />
+            <EmptyState
+              title="Keine passenden Freigaben"
+              description="Aktuell entsprechen keine Berichte den gewählten Filtern."
+            />
           )}
         </article>
 
@@ -453,9 +438,9 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
                 </div>
                 <div className="approval-detail-actions">
                   <StatusBadge status={selectedEntry.status} />
-                  <button type="button" className="button button-secondary" onClick={handlePdfExport}>
+                  <PrimaryButton type="button" variant="secondary" onClick={handlePdfExport}>
                     PDF öffnen
-                  </button>
+                  </PrimaryButton>
                 </div>
               </div>
 
@@ -550,7 +535,8 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
           ) : (
             <div className="approval-empty">
               <EmptyState
-                title="Noch kein Bericht ausgewählt"
+                title="Kein Bericht ausgewählt"
+                description="Wähle links einen Bericht aus, um Details anzuzeigen."
               />
             </div>
           )}

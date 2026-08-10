@@ -53,6 +53,20 @@ function createAdminController({ adminService, schemas }) {
       res.json(await adminService.listAuditLogs(query));
     },
 
+    async getEmailRelaySettings(_req, res) {
+      res.json(await adminService.getEmailRelaySettings());
+    },
+
+    async saveEmailRelaySettings(req, res) {
+      const payload = parseSchema(schemas.emailRelaySettingsSchema, req.body || {});
+      res.json(await adminService.saveEmailRelaySettings(req.user, payload));
+    },
+
+    async testEmailRelaySettings(req, res) {
+      const payload = parseSchema(schemas.emailRelaySettingsSchema, req.body || {});
+      res.json(await adminService.testEmailRelaySettings(req.user, payload));
+    },
+
     async updateProfile(req, res) {
       const payload = parseSchema(schemas.profilePayloadSchema, req.body || {});
       const userId = Number(req.params.userId);

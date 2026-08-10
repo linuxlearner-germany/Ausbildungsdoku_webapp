@@ -64,7 +64,7 @@ services:
 
   redis:
     # Lokaler Redis-Container als persistenter Session-Store.
-    image: redis:7.4-alpine
+    image: redis:7.4.9-alpine
     container_name: ausbildungsdoku-redis
     restart: unless-stopped
     command: ["sh", "-c", "redis-server --save '' --appendonly no --dir /data --requirepass \"$${REDIS_PASSWORD:?REDIS_PASSWORD must be set}\""]
@@ -96,7 +96,8 @@ services:
       redis:
         condition: service_healthy
     environment:
-      NODE_ENV: ${NODE_ENV:-production}
+      # Der lokale Komplett-Stack laeuft ueber HTTP. Produktion verwendet docker-compose.yml mit HTTPS.
+      NODE_ENV: development
       TZ: ${TZ:-Europe/Berlin}
       HOST: 0.0.0.0
       PORT: 3010
@@ -128,6 +129,23 @@ services:
       REDIS_COMMAND_TIMEOUT_MS: ${REDIS_COMMAND_TIMEOUT_MS:-5000}
       REDIS_MAX_RETRIES: ${REDIS_MAX_RETRIES:-4}
       REDIS_PING_INTERVAL_MS: ${REDIS_PING_INTERVAL_MS:-30000}
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
+      PASSWORD_RESET_TTL_MINUTES: ${PASSWORD_RESET_TTL_MINUTES:-60}
+      PASSWORD_RESET_RATE_LIMIT_WINDOW_MS: ${PASSWORD_RESET_RATE_LIMIT_WINDOW_MS:-900000}
+      PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS: ${PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS:-5}
+      REMINDERS_ENABLED: ${REMINDERS_ENABLED:-false}
+      REMINDER_CHECK_INTERVAL_MS: ${REMINDER_CHECK_INTERVAL_MS:-900000}
+      REMINDER_SEND_HOUR: ${REMINDER_SEND_HOUR:-17}
+      REMINDER_WEEKDAYS_ONLY: ${REMINDER_WEEKDAYS_ONLY:-true}
+      TRAINER_BACKLOG_THRESHOLD: ${TRAINER_BACKLOG_THRESHOLD:-50}
       MSSQL_HOST: mssql
       MSSQL_PORT: 1433
       MSSQL_DATABASE: ${MSSQL_DATABASE:-ausbildungsdoku}
@@ -136,7 +154,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-}
       MSSQL_PASSWORD: ${MSSQL_PASSWORD:-YourStrong(!)Password}
       MSSQL_ENCRYPT: ${MSSQL_ENCRYPT:-true}
-      MSSQL_TRUST_SERVER_CERTIFICATE: ${MSSQL_TRUST_SERVER_CERTIFICATE:-true}
+      # Der mitgelieferte lokale MSSQL-Container verwendet ein selbstsigniertes Zertifikat.
+      MSSQL_TRUST_SERVER_CERTIFICATE: "true"
       MSSQL_POOL_MIN: ${MSSQL_POOL_MIN:-0}
       MSSQL_POOL_MAX: ${MSSQL_POOL_MAX:-10}
       MSSQL_CONNECTION_TIMEOUT_MS: ${MSSQL_CONNECTION_TIMEOUT_MS:-15000}

@@ -6,6 +6,7 @@ const { createSessionMiddleware } = require("../sessions/create-session-middlewa
 const { createIndexHtmlRenderer } = require("./render-index-html");
 const { HttpError } = require("../utils/http-error");
 const { createApiSuccess } = require("../utils/api-response");
+const { version: appVersion } = require("../package.json");
 
 function createApp({ config, db, redisClient, dependencies, runtimeState, logger }) {
   const app = express();
@@ -55,6 +56,7 @@ function createApp({ config, db, redisClient, dependencies, runtimeState, logger
   web.get("/api/live", (_req, res) => {
     res.json(createApiSuccess({
       status: runtimeState.isShuttingDown ? "shutting_down" : "live",
+      version: appVersion,
       uptimeMs: Date.now() - runtimeState.startedAt
     }));
   });
@@ -62,6 +64,7 @@ function createApp({ config, db, redisClient, dependencies, runtimeState, logger
   web.get("/api/health", (_req, res) => {
     res.json(createApiSuccess({
       status: runtimeState.isShuttingDown ? "shutting_down" : "live",
+      version: appVersion,
       uptimeMs: Date.now() - runtimeState.startedAt,
       ready: runtimeState.isReady,
       dependencies: runtimeState.dependencies
@@ -92,6 +95,7 @@ function createApp({ config, db, redisClient, dependencies, runtimeState, logger
 
       res.json(createApiSuccess({
         status: "ready",
+        version: appVersion,
         dependencies: dependencyState
       }));
     } catch (error) {

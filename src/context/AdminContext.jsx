@@ -54,6 +54,18 @@ export function AdminProvider({ children }) {
     return apiClient.get(`/api/admin/audit-logs${query ? `?${query}` : ""}`);
   }
 
+  async function loadEmailRelaySettings() {
+    return apiClient.get("/api/admin/email-relay");
+  }
+
+  async function saveEmailRelaySettings(payload) {
+    return apiClient.put("/api/admin/email-relay", payload);
+  }
+
+  async function testEmailRelaySettings(payload) {
+    return apiClient.post("/api/admin/email-relay/test", payload);
+  }
+
   async function updateManagedProfile(userId, payload) {
     await apiClient.post(`/api/profile/${userId}`, payload);
     await refreshDashboard();
@@ -70,6 +82,9 @@ export function AdminProvider({ children }) {
         previewUserImport,
         importUsers,
         loadAuditLogs,
+        loadEmailRelaySettings,
+        saveEmailRelaySettings,
+        testEmailRelaySettings,
         updateManagedProfile
       }}
     >

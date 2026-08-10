@@ -6,6 +6,7 @@ import { PrimaryButton } from "../components/PrimaryButton";
 import { StatusBadge } from "../components/StatusBadge";
 import { downloadCsvFromApi, downloadEntriesCsv, downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
 import { apiUrl, assetUrl, isStaticDemo } from "../lib/runtime";
+import { formatLocalDate } from "../lib/date.mjs";
 
 function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
@@ -28,7 +29,7 @@ function ImportRowPreview({ row }) {
         <StatusBadge status={row.canImport ? "submitted" : "invalid"} />
       </div>
       <div className="import-row-grid">
-        <span>{row.dateFrom || "Kein Datum"}</span>
+        <span>{formatLocalDate(row.dateFrom, { day: "2-digit", month: "2-digit", year: "numeric" }) || row.dateFrom || "Kein Datum"}</span>
         <span>{row.weekLabel || "Kein Titel"}</span>
         <span>{row.betrieb || "-"}</span>
         <span>{row.schule || "-"}</span>
@@ -126,7 +127,7 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
 
     try {
       if (isStaticDemo()) {
-        downloadReportPdf({
+        await downloadReportPdf({
           entries,
           traineeName: report?.trainee?.name || "",
           trainingTitle: report?.trainee?.ausbildung || ""
@@ -152,14 +153,14 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
             <PrimaryButton onClick={handleCsvExport} disabled={busy || !entries.length}>
               {busy ? "CSV wird erstellt..." : "CSV exportieren"}
             </PrimaryButton>
-            <button
+            <PrimaryButton
               type="button"
-              className="button button-secondary"
+              variant="secondary"
               onClick={handlePdfExport}
               disabled={busy || !signedEntries}
             >
               PDF herunterladen
-            </button>
+            </PrimaryButton>
           </div>
         }
       />
@@ -183,14 +184,14 @@ export function ExportPage({ report, onPreviewImport, onImportReports }) {
                 <PrimaryButton onClick={handleCsvExport} disabled={busy}>
                   {busy ? "CSV wird erstellt..." : "Berichtsheft als CSV herunterladen"}
                 </PrimaryButton>
-                <button
+                <PrimaryButton
                   type="button"
-                  className="button button-secondary"
+                  variant="secondary"
                   onClick={handlePdfExport}
                   disabled={busy || !signedEntries}
                 >
                   PDF herunterladen
-                </button>
+                </PrimaryButton>
               </div>
               {!signedEntries ? <div className="field-message">PDF wird erst verfügbar, sobald mindestens ein Bericht signiert ist.</div> : null}
               {csvError ? <div className="field-message error">{csvError}</div> : null}

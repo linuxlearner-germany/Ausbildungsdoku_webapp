@@ -4,7 +4,12 @@ function createAuthMiddleware({ getCurrentUser }) {
   function getApiPath(req) {
     const value = String(req.originalUrl || req.url || "");
     try {
-      return new URL(value, "http://localhost").pathname;
+      const pathname = new URL(value, "http://localhost").pathname;
+      // `originalUrl` enthaelt bei einem Deployment unter APP_BASE_PATH den
+      // Praefix (z. B. /portal/api/...). Die Freigabeliste arbeitet bewusst
+      // mit dem API-Pfad, nicht mit dem Mount-Pfad der Anwendung.
+      const apiPath = pathname.match(/\/api(?:\/|$).*/)?.[0];
+      return apiPath || pathname;
     } catch (_error) {
       return String(req.path || value).split("?")[0];
     }

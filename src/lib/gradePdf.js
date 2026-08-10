@@ -1,5 +1,3 @@
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
 import {
   calculateWeightedAverage,
   formatGrade,
@@ -56,7 +54,11 @@ function drawPageFooter(doc) {
 /**
  * @param {GradePdfOptions} options
  */
-export function generateGradesPdf({ entries, traineeName, trainingTitle, currentDate = new Date() }) {
+export async function generateGradesPdf({ entries, traineeName, trainingTitle, currentDate = new Date() }) {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable")
+  ]);
   const groupedSubjects = groupGradesBySubject(entries);
   const statistics = getGradeStatistics(entries);
   const overallAverage = calculateWeightedAverage(entries);

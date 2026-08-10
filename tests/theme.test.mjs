@@ -59,3 +59,14 @@ test("Dark-Mode-CSS definiert alle zentralen Flaechenvariablen", () => {
     assert.match(block, new RegExp(`${variableName}:\\s*[^;]+;`), `${variableName} fehlt im Dark-Theme-Block`);
   }
 });
+
+test("Dark-Mode-Surfaces und Wallpaper-Overlay bleiben dezent", () => {
+  const themeCss = fs.readFileSync(path.join(process.cwd(), "src", "styles", "theme.css"), "utf8");
+  const layoutCss = fs.readFileSync(path.join(process.cwd(), "src", "styles", "layout.css"), "utf8");
+  const emptyState = fs.readFileSync(path.join(process.cwd(), "src", "components", "EmptyState.jsx"), "utf8");
+
+  assert.match(themeCss, /--color-surface:\s*rgba\(24, 33, 47, 0\.94\)/);
+  assert.match(themeCss, /--app-input-border:\s*#334155/);
+  assert.match(layoutCss, /rgba\(10, 20, 35, 0\.18\)/);
+  assert.doesNotMatch(emptyState, /bg-body|bg-white/);
+});

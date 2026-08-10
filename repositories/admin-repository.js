@@ -136,6 +136,39 @@ function createAdminRepository({
         betrieb: profile.betrieb,
         berufsschule: profile.berufsschule
       });
+    },
+
+    async getEmailRelaySettings() {
+      return db("email_relay_settings").where({ id: 1 }).first();
+    },
+
+    async getEmailRelaySettingsWithPassword() {
+      const row = await this.getEmailRelaySettings();
+      if (!row) return null;
+      return row;
+    },
+
+    async saveEmailRelaySettings(settings, actorId) {
+      const payload = {
+        id: 1,
+        enabled: settings.enabled,
+        host: settings.host,
+        port: settings.port,
+        secure: settings.secure,
+        require_tls: settings.requireTls,
+        username: settings.username,
+        password_encrypted: settings.passwordEncrypted,
+        from_address: settings.from,
+        reply_to: settings.replyTo,
+        updated_at: db.fn.now(),
+        updated_by_user_id: actorId
+      };
+      const existing = await this.getEmailRelaySettings();
+      if (existing) {
+        await db("email_relay_settings").where({ id: 1 }).update(payload);
+      } else {
+        await db("email_relay_settings").insert(payload);
+      }
     }
   };
 }

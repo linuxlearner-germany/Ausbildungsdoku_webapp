@@ -98,3 +98,32 @@ await test("rejectReportEntryForActor schreibt Rueckgabe fuer eingereichte Eintr
   assert.equal(auditLogs.length, 1);
   assert.equal(auditLogs[0].actionType, "REPORT_RETURNED");
 });
+
+await test("Freigabe schreibt kein Audit-Log, wenn der Bericht parallel verarbeitet wurde", async () => {
+  const auditLogs = [];
+  const service = createService({
+    reportRepository: {
+      async signEntry() {
+        return 0;
+      }
+    },
+    sharedRepository: {
+      async findEntryWithOwnerById() {
+        return {
+          id: "entry-race", weekLabel: "Bericht", dateFrom: "2026-04-04", dateTo: "2026-04-04",
+          betrieb: "Support", schule: "", status: "submitted", trainee_id: 33
+        };
+      },
+      async isTrainerAssignedToTrainee() {
+        return true;
+      }
+    },
+    async writeAuditLog(payload) {
+      auditLogs.push(payload);
+    }
+  });
+
+  const result = await service.signReportEntryForActor({ id: 5, role: "trainer", name: "Trainer" }, "entry-race", "");
+  assert.match(result.error, /inzwischen bereits verarbeitet/);
+  assert.equal(auditLogs.length, 0);
+});

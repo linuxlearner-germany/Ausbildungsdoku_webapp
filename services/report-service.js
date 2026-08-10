@@ -151,11 +151,14 @@ function createReportService({ reportRepository, helpers }) {
     if (user.role === "trainer" && !await helpers.isTrainerAssignedToTrainee(user.id, entry.trainee_id)) {
       throw new HttpError(403, "Eintrag gehoert nicht zu dir.");
     }
-    if (entry.status === "signed") {
-      throw new HttpError(400, "Signierte Eintraege koennen nicht kommentiert werden.");
+    if (entry.status !== "submitted") {
+      throw new HttpError(400, "Nur eingereichte Eintraege koennen kommentiert oder zurueckgegeben werden.");
     }
 
-    await reportRepository.rejectEntryWithComment(entryId, comment);
+    const rejectedCount = await reportRepository.rejectEntryWithComment(entryId, comment);
+    if (!rejectedCount) {
+      throw new HttpError(409, "Der Bericht wurde inzwischen bereits verarbeitet.");
+    }
     await helpers.writeAuditLog({
       actor: user,
       actionType: "REPORT_RETURNED",
