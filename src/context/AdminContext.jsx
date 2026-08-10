@@ -5,7 +5,7 @@ import { refreshDashboardState } from "./context-helpers";
 import { AdminContext } from "./sharedContexts";
 
 export function AdminProvider({ children }) {
-  const { dashboard, setDashboard } = useAppState();
+  const { dashboard, setDashboard, loginBackground, setLoginBackground } = useAppState();
 
   async function refreshDashboard() {
     return refreshDashboardState(setDashboard);
@@ -66,6 +66,18 @@ export function AdminProvider({ children }) {
     return apiClient.post("/api/admin/email-relay/test", payload);
   }
 
+  async function loadLoginBackgroundSettings() {
+    const data = await apiClient.get("/api/ui-settings/login-background");
+    setLoginBackground(data.background);
+    return data;
+  }
+
+  async function saveLoginBackgroundSettings(background) {
+    const data = await apiClient.put("/api/admin/ui-settings/login-background", { background });
+    setLoginBackground(data.background);
+    return data;
+  }
+
   async function updateManagedProfile(userId, payload) {
     await apiClient.post(`/api/profile/${userId}`, payload);
     await refreshDashboard();
@@ -85,6 +97,9 @@ export function AdminProvider({ children }) {
         loadEmailRelaySettings,
         saveEmailRelaySettings,
         testEmailRelaySettings,
+        loginBackground,
+        loadLoginBackgroundSettings,
+        saveLoginBackgroundSettings,
         updateManagedProfile
       }}
     >

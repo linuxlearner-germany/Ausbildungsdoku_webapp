@@ -67,6 +67,17 @@ function createAdminController({ adminService, schemas }) {
       res.json(await adminService.testEmailRelaySettings(req.user, payload));
     },
 
+    async getLoginBackgroundSettings(_req, res) {
+      const settings = await adminService.getLoginBackgroundSettings();
+      res.setHeader("Cache-Control", "no-store");
+      res.json({ background: settings.background });
+    },
+
+    async saveLoginBackgroundSettings(req, res) {
+      const payload = parseSchema(schemas.loginBackgroundSettingsSchema, req.body || {});
+      res.json(await adminService.saveLoginBackgroundSettings(req.user, payload));
+    },
+
     async updateProfile(req, res) {
       const payload = parseSchema(schemas.profilePayloadSchema, req.body || {});
       const userId = Number(req.params.userId);
