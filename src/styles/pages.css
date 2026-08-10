@@ -744,3 +744,78 @@ table.archive-data-table > tbody > tr:last-child > td {
 .dashboard-quick-action > span { min-width:0; display:grid; gap:.1rem; }
 .dashboard-quick-action strong { color:var(--text-primary); font-size:.82rem; font-weight:650; }
 .dashboard-quick-action small { overflow:hidden; color:var(--text-muted); font-size:.7rem; font-weight:400; text-overflow:ellipsis; white-space:nowrap; }
+
+/* Trainer workflows: dense desktop layouts without changing role behavior. */
+.trainer-dashboard,
+.trainer-grades-page,
+.trainer-approvals-page { align-self:start; align-content:start; gap:1rem; }
+
+.trainer-dashboard-kpis { grid-template-columns:repeat(4,minmax(0,1fr)); gap:1rem; }
+.trainer-dashboard-kpis .stat-card,
+.trainer-grades-page > .stats-grid .stat-card { min-height:7rem; justify-content:center; padding:1rem 1.15rem; }
+.trainer-dashboard-kpis .stat-card-value,
+.trainer-grades-page > .stats-grid .stat-card-value { font-size:2rem; }
+.trainer-dashboard .stat-card--priority { border-color:color-mix(in srgb,var(--warning) 45%,var(--border)); box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warning) 12%,transparent); }
+.trainer-dashboard .stat-card--priority::before { width:5px; background:var(--warning); }
+.trainer-dashboard .stat-card--priority .stat-card-value { color:var(--warning); }
+
+.trainer-dashboard-workspace { grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr); align-items:start; }
+.trainer-dashboard .trainer-dashboard-panel,
+.trainer-dashboard .trainer-trainees-panel { padding:1rem 1.15rem; }
+.trainer-approval-list { display:grid; padding-top:.35rem; }
+.trainer-approval-row { min-height:3.15rem; display:flex; align-items:center; justify-content:space-between; gap:.75rem; padding:.55rem .1rem; border-bottom:1px solid color-mix(in srgb,var(--border) 72%,transparent); }
+.trainer-approval-row:last-child { border-bottom:0; }
+.trainer-approval-row > div { min-width:0; }
+.trainer-approval-row strong { color:var(--text-primary); font-size:.85rem; }
+.trainer-approval-row p { margin:.12rem 0 0; overflow:hidden; color:var(--text-muted); font-size:.76rem; text-overflow:ellipsis; white-space:nowrap; }
+.trainer-quick-actions { padding-top:.75rem; }
+
+.trainer-trainee-list { margin-top:.65rem; overflow-x:auto; }
+.trainer-trainee-row { min-width:800px; display:grid; grid-template-columns:minmax(145px,1.15fr) minmax(160px,1.3fr) repeat(3,4rem) minmax(150px,1.35fr) 3.5rem; gap:.65rem; align-items:center; min-height:3.35rem; padding:.55rem .35rem; border-bottom:1px solid color-mix(in srgb,var(--border) 72%,transparent); color:var(--text-secondary); font-size:.79rem; }
+.trainer-trainee-row:last-child { border-bottom:0; }
+.trainer-trainee-row--head { min-height:2.35rem; color:var(--text-muted); font-size:.68rem; font-weight:700; letter-spacing:.045em; text-transform:uppercase; }
+.trainer-trainee-row > strong { overflow:hidden; color:var(--text-primary); font-size:.84rem; text-overflow:ellipsis; white-space:nowrap; }
+.trainer-trainee-row > span { min-width:0; }
+.trainer-count-priority { color:var(--warning); font-weight:750; }
+.trainer-latest-cell { display:grid; gap:.08rem; overflow:hidden; color:var(--text-primary); text-overflow:ellipsis; white-space:nowrap; }
+.trainer-latest-cell small { overflow:hidden; color:var(--text-muted); font-size:.7rem; text-overflow:ellipsis; white-space:nowrap; }
+.trainer-trainee-row .trainer-pdf-button { min-height:2.35rem; padding:.35rem .55rem; font-size:.75rem; }
+
+.compact-section-head { padding-bottom:.65rem; border-bottom:1px solid var(--border); }
+.compact-section-head h3 { margin:.18rem 0 0; color:var(--text-primary); font-size:1rem; }
+.trainer-grades-page .trainer-grade-target-panel { padding:1rem 1.15rem; }
+.trainer-grade-target-toolbar { display:grid; grid-template-columns:minmax(260px,1.2fr) minmax(230px,1fr) auto; gap:1rem; align-items:end; padding-top:.75rem; }
+.trainer-selected-profile { min-width:0; display:grid; gap:.08rem; align-content:center; min-height:var(--app-control-height); }
+.trainer-selected-profile span { color:var(--text-muted); font-size:.68rem; font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.trainer-selected-profile strong { overflow:hidden; color:var(--text-primary); font-size:.9rem; text-overflow:ellipsis; white-space:nowrap; }
+.trainer-selected-profile small { overflow:hidden; color:var(--text-muted); font-size:.75rem; text-overflow:ellipsis; white-space:nowrap; }
+.trainer-access-badge { align-self:end; display:inline-flex; align-items:center; min-height:var(--app-control-height); padding:0 .8rem; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-elevated); color:var(--text-secondary); font-size:.75rem; font-weight:700; white-space:nowrap; }
+.trainer-grade-empty-panel { padding:1rem; }
+
+.trainer-approvals-page .approval-summary-item { min-height:5.25rem; padding:.85rem 1rem; gap:.25rem; }
+.trainer-approvals-page .approval-summary-item strong { font-size:1.65rem; }
+.trainer-approvals-page .approval-layout { grid-template-columns:minmax(380px,.82fr) minmax(0,1.18fr); gap:1rem; align-items:start; }
+.trainer-approvals-page .approval-list-panel,
+.trainer-approvals-page .approval-detail-panel { gap:.85rem; padding:1rem; }
+.approval-filter-bar { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.6rem; padding:.65rem; }
+.approval-filter-bar > input:first-child { grid-column:1 / -1; }
+.approval-filter-bar > .app-btn,
+.approval-filter-bar > .button { min-height:2.35rem; justify-self:start; padding:.4rem .65rem; }
+.trainer-approvals-page .approval-count { min-width:2.5rem; padding:.55rem .7rem; font-size:1rem; }
+.trainer-approvals-page .approval-list-row { gap:.45rem; padding:.7rem .8rem; }
+.trainer-approvals-page .approval-row-meta { font-size:.76rem; }
+.trainer-approvals-page .approval-empty { min-height:0; align-items:start; }
+
+.display-settings-panel .theme-settings-layout { grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr) auto; align-items:end; }
+.theme-quick-toggle { display:grid; gap:.5rem; justify-items:start; color:var(--text-primary); font-size:var(--app-font-size-sm); font-weight:650; }
+.display-settings-panel .background-grid { grid-template-columns:repeat(3,minmax(0,1fr)); }
+
+.archive-data-table-managed { min-width:760px; }
+.archive-data-table tbody td { height:3.5rem; }
+
+/* The corporate wallpaper stays dark beneath light-theme surfaces. */
+:root:not([data-theme="dark"]) .app-shell.has-background .page-content > .page-stack > .page-header h2 { color:#f8fafc; }
+:root:not([data-theme="dark"]) .app-shell.has-background .page-content > .page-stack > .page-header .page-kicker { color:#bfdbfe; }
+:root:not([data-theme="dark"]) .app-shell.has-background .page-content > .page-stack > .page-header .page-subtitle { color:#dbeafe; }
+:root:not([data-theme="dark"]) .app-shell.has-background .page-content > .page-stack > .page-header { border-bottom-color:rgba(226,232,240,.55); }
+:root:not([data-theme="dark"]) .app-shell.has-background .page-content > .page-stack > .page-header .btn-outline-secondary { border-color:rgba(226,232,240,.7); background:rgba(15,23,42,.22); color:#f8fafc; }

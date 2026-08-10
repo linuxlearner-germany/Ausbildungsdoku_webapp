@@ -28,7 +28,7 @@ test("Pflichtzeitraum berechnet Fortschritt dynamisch und zeigt sechs Metadaten"
 
 test("Dashboard bietet sechs kompakte Schnellzugriffe", () => {
   const source = readProjectFile("src", "pages", "DashboardPage.jsx");
-  const actionBlock = source.slice(source.indexOf("const QUICK_ACTIONS"), source.indexOf("function DashboardQuickAction"));
+  const actionBlock = source.slice(source.indexOf("const QUICK_ACTIONS"), source.indexOf("const TRAINER_QUICK_ACTIONS"));
 
   assert.equal((actionBlock.match(/\{ to:/g) || []).length, 6);
   for (const title of ["Bericht schreiben", "Kalenderansicht", "Noten", "Freigabestatus", "Profil", "Archiv"]) {
