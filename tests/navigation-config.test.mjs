@@ -24,6 +24,7 @@ await test("Azubi- und Ausbilder-Navigation enthalten nur ihre Bereiche", async 
   assert.equal(trainerItems.includes("archive"), true);
   assert.equal(trainerItems.includes("grades"), true);
   assert.equal(trainerItems.includes("admin-audit-log"), false);
+  assert.deepEqual(trainerItems, ["dashboard", "grades", "approvals", "archive", "profile"]);
 });
 
 await test("Routenpruefung folgt derselben Konfiguration", async () => {

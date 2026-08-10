@@ -344,9 +344,10 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
   const noGradesMessage = role === "trainer"
     ? "Für den ausgewählten Azubi sind aktuell keine Noten vorhanden."
     : "Lege den ersten Leistungsnachweis an, um Auswertungen pro Fach zu sehen.";
+  const trainerHasNoGrades = role === "trainer" && !loadingGrades && normalizedGrades.length === 0;
 
   return (
-    <div className="page-stack">
+    <div className={`page-stack${role === "trainer" ? " trainer-grades-page" : ""}`}>
       <PageHeader
         kicker="Noten"
         title={pageTitle}
@@ -373,35 +374,64 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
       {actionError ? <div className="field-message error report-error-banner" role="alert">{actionError}</div> : null}
 
       {role !== "trainee" ? (
-        <section className="panel-card">
-          <PageHeader
-            kicker="Azubi-Auswahl"
-            title={role === "trainer" ? "Zugewiesene Azubis" : "Azubi auswählen"}
-          />
-          {targetOptions.length ? (
-            <div className="form-grid">
-              <label>
-                Azubi
-                <select value={selectedTraineeId || ""} onChange={(event) => setSelectedTraineeId(Number(event.target.value))}>
-                  {targetOptions.map((target) => (
-                    <option key={target.id} value={target.id}>
-                      {target.name}{target.ausbildung ? ` · ${target.ausbildung}` : ""}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="read-only-card">
-                <span>Aktuelle Auswahl</span>
-                <strong>{selectedProfile?.name || "-"}</strong>
-                <small>{selectedProfile?.ausbildung || selectedProfile?.email || "Keine Zusatzdaten"}</small>
+        <section className={`panel-card grade-target-panel${role === "trainer" ? " trainer-grade-target-panel" : ""}`}>
+          {role === "trainer" ? (
+            <>
+              <div className="compact-section-head">
+                <div><p className="page-kicker">Azubi-Auswahl</p><h3>Zugewiesene Azubis</h3></div>
               </div>
-              <div className="read-only-card">
-                <span>Berechtigung</span>
-                <strong>{isReadOnly ? "Nur lesen" : "Vollzugriff"}</strong>
-              </div>
-            </div>
+              {targetOptions.length ? (
+                <div className="trainer-grade-target-toolbar">
+                  <label>
+                    Azubi auswählen
+                    <select value={selectedTraineeId || ""} onChange={(event) => setSelectedTraineeId(Number(event.target.value))}>
+                      {targetOptions.map((target) => (
+                        <option key={target.id} value={target.id}>
+                          {target.name}{target.ausbildung ? ` · ${target.ausbildung}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="trainer-selected-profile">
+                    <span>Aktuelle Auswahl</span>
+                    <strong>{selectedProfile?.name || "-"}</strong>
+                    <small>{selectedProfile?.ausbildung || selectedProfile?.email || "Keine Zusatzdaten"}</small>
+                  </div>
+                  <span className="trainer-access-badge">Nur lesen</span>
+                </div>
+              ) : (
+                <EmptyState size="compact" title="Keine Azubis verfügbar" description={noTargetsMessage} />
+              )}
+            </>
           ) : (
-            <EmptyState title="Keine Azubis verfügbar" description={noTargetsMessage} />
+            <>
+              <PageHeader kicker="Azubi-Auswahl" title="Azubi auswählen" />
+              {targetOptions.length ? (
+                <div className="form-grid">
+                  <label>
+                    Azubi
+                    <select value={selectedTraineeId || ""} onChange={(event) => setSelectedTraineeId(Number(event.target.value))}>
+                      {targetOptions.map((target) => (
+                        <option key={target.id} value={target.id}>
+                          {target.name}{target.ausbildung ? ` · ${target.ausbildung}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="read-only-card">
+                    <span>Aktuelle Auswahl</span>
+                    <strong>{selectedProfile?.name || "-"}</strong>
+                    <small>{selectedProfile?.ausbildung || selectedProfile?.email || "Keine Zusatzdaten"}</small>
+                  </div>
+                  <div className="read-only-card">
+                    <span>Berechtigung</span>
+                    <strong>{isReadOnly ? "Nur lesen" : "Vollzugriff"}</strong>
+                  </div>
+                </div>
+              ) : (
+                <EmptyState title="Keine Azubis verfügbar" description={noTargetsMessage} />
+              )}
+            </>
           )}
         </section>
       ) : null}
@@ -409,6 +439,14 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
       {!selectedProfile ? (
         <section className="panel-card">
           <EmptyState title="Keine Auswahl" description={noTargetsMessage} />
+        </section>
+      ) : trainerHasNoGrades ? (
+        <section className="panel-card trainer-grade-empty-panel">
+          <EmptyState
+            size="compact"
+            title="Noch keine Noten"
+            description={noGradesMessage}
+          />
         </section>
       ) : (
         <>

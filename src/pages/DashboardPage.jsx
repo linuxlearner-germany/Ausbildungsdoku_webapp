@@ -13,6 +13,14 @@ function formatDisplayDate(value, fallback = "-") {
   return formatLocalDate(value, { day: "2-digit", month: "2-digit", year: "numeric" }) || fallback;
 }
 
+function reportStatusLabel(status) {
+  if (status === "submitted") return "Eingereicht";
+  if (status === "signed") return "Signiert";
+  if (status === "rejected") return "Nachbearbeitung";
+  if (status === "draft") return "Entwurf";
+  return status || "-";
+}
+
 function latestItems(entries) {
   return [...entries].sort((a, b) => String(b.dateFrom).localeCompare(String(a.dateFrom))).slice(0, 5);
 }
@@ -44,6 +52,13 @@ const QUICK_ACTIONS = [
   { to: "/freigaben", title: "Freigabestatus", description: "Prüfstatus kontrollieren", icon: "M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-3-8 2 2 4-5" },
   { to: "/profil", title: "Profil", description: "Persönliche Einstellungen", icon: "M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 18a6 6 0 0 1 12 0" },
   { to: "/archiv", title: "Archiv", description: "Freigegebene Berichte", icon: "M4 6h12v11H4zM3 3h14v3H3zM8 10h4" }
+];
+
+const TRAINER_QUICK_ACTIONS = [
+  { to: "/freigaben", title: "Freigaben bearbeiten", description: "Offene Berichte prüfen", icon: "M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16zm-3-8 2 2 4-5" },
+  { to: "/noten", title: "Noten einsehen", description: "Leistungsstände überblicken", icon: "M4 16V9M10 16V4M16 16v-5M2 18h16" },
+  { to: "/archiv", title: "Archiv durchsuchen", description: "Signierte Berichte finden", icon: "M4 6h12v11H4zM3 3h14v3H3zM8 10h4" },
+  { to: "/profil", title: "Profil & Darstellung", description: "Stammdaten und Theme", icon: "M10 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 18a6 6 0 0 1 12 0" }
 ];
 
 function DashboardQuickAction({ action }) {
@@ -215,32 +230,38 @@ export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }
 
   if (role === "trainer") {
     const allEntries = trainees.flatMap((trainee) => trainee.entries);
+    const submittedCount = allEntries.filter((entry) => entry.status === "submitted").length;
+    const signedCount = allEntries.filter((entry) => entry.status === "signed").length;
+    const rejectedCount = allEntries.filter((entry) => entry.status === "rejected").length;
     const openEntries = allEntries
       .filter((entry) => entry.status === "submitted")
       .sort((a, b) => String(a.dateFrom).localeCompare(String(b.dateFrom)));
     return (
-      <div className="page-stack">
+      <div className="page-stack trainer-dashboard">
         <PageHeader
           kicker="Dashboard"
           title="Freigabeübersicht"
           actions={<Link className="btn btn-primary app-btn" to="/freigaben">Freigaben öffnen</Link>}
         />
         {pdfError ? <div className="field-message error report-error-banner">{pdfError}</div> : null}
-        <section className="stats-grid">
+        <section className="stats-grid trainer-dashboard-kpis">
           <StatCard label="Azubis" value={trainees.length} note="Dir zugeordnete Personen" />
-          <StatCard label="Offene Prüfungen" value={allEntries.filter((entry) => entry.status === "submitted").length} note="Zur Freigabe eingereicht" />
-          <StatCard label="Signiert" value={allEntries.filter((entry) => entry.status === "signed").length} note="Freigegebene Berichte" />
-          <StatCard label="Abgelehnt" value={allEntries.filter((entry) => entry.status === "rejected").length} note="Zur Nachbearbeitung zurückgegeben" />
+          <StatCard label="Offene Prüfungen" value={submittedCount} note="Zur Freigabe eingereicht" priority={submittedCount > 0} />
+          <StatCard label="Signiert" value={signedCount} note="Freigegebene Berichte" />
+          <StatCard label="Abgelehnt" value={rejectedCount} note="Zur Nachbearbeitung zurückgegeben" />
         </section>
-        <section className="two-column-grid">
-          <article className="panel-card">
-            <PageHeader kicker="Offene Fälle" title="Warten auf Freigabe" />
+        <section className="two-column-grid trainer-dashboard-workspace">
+          <article className="panel-card trainer-dashboard-panel">
+            <div className="dashboard-section-head">
+              <div><p className="page-kicker">Offene Fälle</p><h3>Warten auf Freigabe</h3></div>
+              <span className="approval-count">{openEntries.length}</span>
+            </div>
             {openEntries.length ? (
-              <div className="list-stack">
+              <div className="trainer-approval-list">
                 {openEntries.slice(0, 6).map((entry) => {
                   const trainee = trainees.find((item) => item.entries.some((candidate) => candidate.id === entry.id));
                   return (
-                    <div key={entry.id} className="list-row">
+                    <div key={entry.id} className="trainer-approval-row">
                       <div>
                         <strong>{trainee?.name || "Azubi"}</strong>
                         <p>{entry.weekLabel || "Ohne Titel"} · {formatDisplayDate(entry.dateFrom)}</p>
@@ -251,62 +272,56 @@ export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }
                 })}
               </div>
             ) : (
-              <EmptyState title="Keine offenen Freigaben" />
+              <EmptyState size="compact" title="Keine offenen Freigaben" description="Aktuell wartet kein Bericht auf deine Prüfung." />
             )}
           </article>
-          <article className="panel-card">
-            <PageHeader kicker="Schnellzugriffe" title="Arbeitsbereiche" />
-            <div className="quick-actions">
-              <Link className="quick-action-card" to="/freigaben">Freigaben bearbeiten</Link>
-              <Link className="quick-action-card" to="/noten">Noten einsehen</Link>
-              <Link className="quick-action-card" to="/archiv">Archiv öffnen</Link>
-              {trainees.slice(0, 2).map((trainee) => (
-                <button key={trainee.id} type="button" className="quick-action-card" onClick={() => openPdfForTrainee(trainee)}>
-                  PDF: {trainee.name}
-                </button>
-              ))}
+          <article className="panel-card trainer-dashboard-panel">
+            <div className="dashboard-section-head">
+              <div><p className="page-kicker">Schnellzugriffe</p><h3>Arbeitsbereiche</h3></div>
+            </div>
+            <div className="quick-actions dashboard-quick-actions trainer-quick-actions">
+              {TRAINER_QUICK_ACTIONS.map((action) => <DashboardQuickAction key={action.to} action={action} />)}
             </div>
           </article>
         </section>
-        <section className="panel-card">
-          <PageHeader kicker="Azubi-Status" title="Zugeordnete Auszubildende" />
+        <section className="panel-card trainer-trainees-panel">
+          <div className="dashboard-section-head">
+            <div><p className="page-kicker">Azubi-Status</p><h3>Zugeordnete Auszubildende</h3></div>
+          </div>
           {trainees.length ? (
-            <div className="trainer-overview-grid">
+            <div className="trainer-trainee-list" role="table" aria-label="Zugeordnete Auszubildende">
+              <div className="trainer-trainee-row trainer-trainee-row--head" role="row">
+                <span role="columnheader">Name</span>
+                <span role="columnheader">Ausbildung</span>
+                <span role="columnheader">Offen</span>
+                <span role="columnheader">Signiert</span>
+                <span role="columnheader">Abgelehnt</span>
+                <span role="columnheader">Letzte Aktivität</span>
+                <span role="columnheader">PDF</span>
+              </div>
               {trainees.map((trainee) => {
                 const summary = trainerSummary(trainee);
                 return (
-                  <article key={trainee.id} className="trainer-card">
-                    <div className="trainer-card-head">
-                      <div>
-                        <strong>{trainee.name}</strong>
-                        <p>{trainee.ausbildung || trainee.email}</p>
-                      </div>
+                  <div key={trainee.id} className="trainer-trainee-row" role="row">
+                    <strong role="cell">{trainee.name}</strong>
+                    <span role="cell">{trainee.ausbildung || trainee.email || "-"}</span>
+                    <span role="cell" className={summary.submitted ? "trainer-count-priority" : ""}>{summary.submitted}</span>
+                    <span role="cell">{summary.signed}</span>
+                    <span role="cell">{summary.rejected}</span>
+                    <span role="cell" className="trainer-latest-cell">
+                      {summary.latest ? <>{summary.latest.weekLabel || "Ohne Titel"}<small>{formatDisplayDate(summary.latest.dateFrom)} · {reportStatusLabel(summary.latest.status)}</small></> : "Noch keine Berichte"}
+                    </span>
+                    <span role="cell">
                       <button type="button" className="btn btn-outline-secondary trainer-pdf-button" onClick={() => openPdfForTrainee(trainee)}>
                         PDF
                       </button>
-                    </div>
-                    <div className="trainer-card-stats">
-                      <span>Offen: {summary.submitted}</span>
-                      <span>Signiert: {summary.signed}</span>
-                      <span>Abgelehnt: {summary.rejected}</span>
-                    </div>
-                    {summary.latest ? (
-                      <div className="trainer-card-latest">
-                        <div>
-                          <strong>Letzte Aktivität</strong>
-                          <p>{summary.latest.weekLabel || "Ohne Titel"} · {formatDisplayDate(summary.latest.dateFrom)}</p>
-                        </div>
-                        <StatusBadge status={summary.latest.status} />
-                      </div>
-                    ) : (
-                      <EmptyState title="Noch keine Berichte" />
-                    )}
-                  </article>
+                    </span>
+                  </div>
                 );
               })}
             </div>
           ) : (
-            <EmptyState title="Keine Azubis zugeordnet" />
+            <EmptyState size="compact" title="Keine Azubis zugeordnet" />
           )}
         </section>
       </div>
