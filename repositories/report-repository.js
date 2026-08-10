@@ -43,16 +43,11 @@ function createReportRepository({ db, listEntriesForTrainee, findEntryById, find
       });
     },
 
-    async rejectEntryWithComment(entryId, comment) {
+    async updateTrainerComment(entryId, comment) {
       return db("entries")
-        .where({ id: entryId })
-        .where({ status: "submitted" })
+        .where({ id: entryId, status: "submitted" })
         .update({
-          status: "rejected",
           trainerComment: comment,
-          rejectionReason: comment,
-          signedAt: null,
-          signerName: "",
           updated_at: db.fn.now()
         });
     },
@@ -75,14 +70,13 @@ function createReportRepository({ db, listEntriesForTrainee, findEntryById, find
         });
     },
 
-    async signEntry(entryId, signerName, trainerComment, signedAt) {
+    async signEntry(entryId, signerName, signedAt) {
       return db("entries")
         .where({ id: entryId, status: "submitted" })
         .update({
           status: "signed",
           signedAt,
           signerName,
-          trainerComment,
           rejectionReason: "",
           updated_at: db.fn.now()
         });
@@ -95,7 +89,6 @@ function createReportRepository({ db, listEntriesForTrainee, findEntryById, find
           status: "rejected",
           signedAt: null,
           signerName: "",
-          trainerComment: reason,
           rejectionReason: reason,
           updated_at: db.fn.now()
         });

@@ -128,7 +128,7 @@ function createReportDomainService({
     return { ok: true, entry };
   }
 
-  async function signReportEntryForActor(user, entryId, trainerComment = "") {
+  async function signReportEntryForActor(user, entryId) {
     const entry = await sharedRepository.findEntryWithOwnerById(entryId);
     if (!entry) {
       return { error: "Eintrag nicht gefunden." };
@@ -149,7 +149,7 @@ function createReportDomainService({
       return { error: "Nur eingereichte Eintraege koennen signiert werden." };
     }
 
-    const signedCount = await reportRepository.signEntry(entryId, user.name, trainerComment, new Date().toISOString());
+    const signedCount = await reportRepository.signEntry(entryId, user.name, new Date().toISOString());
     if (!signedCount) {
       return { error: "Der Bericht wurde inzwischen bereits verarbeitet." };
     }
@@ -163,7 +163,7 @@ function createReportDomainService({
       metadata: {
         dateFrom: entry.dateFrom,
         dateTo: entry.dateTo,
-        trainerComment
+        trainerComment: entry.trainerComment || ""
       }
     });
     await writeAuditLog({

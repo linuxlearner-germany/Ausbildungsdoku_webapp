@@ -170,6 +170,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
     [filteredRows, selected]
   );
   const canEditFeedback = selectedEntry?.status === "submitted";
+  const commentChanged = canEditFeedback && comment.trim() !== String(selectedEntry?.trainerComment || "").trim();
 
   useEffect(() => {
     if (!filteredRows.length) {
@@ -205,6 +206,25 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
     setActionError("");
     try {
       await handler();
+    } catch (error) {
+      setActionError(error.message || "Aktion konnte nicht ausgeführt werden.");
+    } finally {
+      setBusyAction("");
+    }
+  }
+
+  async function runDecisionAction(type, handler) {
+    const currentIndex = selectableFilteredRows.findIndex((entry) => entry.id === selectedEntry?.id);
+    const nextOpenEntry = currentIndex >= 0
+      ? [...selectableFilteredRows.slice(currentIndex + 1), ...selectableFilteredRows.slice(0, currentIndex)]
+        .find((entry) => entry.id !== selectedEntry.id)
+      : selectableFilteredRows[0];
+
+    setBusyAction(type);
+    setActionError("");
+    try {
+      await handler();
+      setSelected(nextOpenEntry?.id || null);
     } catch (error) {
       setActionError(error.message || "Aktion konnte nicht ausgeführt werden.");
     } finally {
@@ -366,7 +386,7 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
               {selectedIds.length ? (
                 <>
                   <PrimaryButton
-                    onClick={() => runBatchAction("batch-sign", "sign", { trainerComment: comment })}
+                    onClick={() => runBatchAction("batch-sign", "sign", {})}
                     disabled={Boolean(busyAction)}
                   >
                     {busyAction === "batch-sign" ? "Freigabe läuft..." : `${selectedIds.length} Berichte freigeben`}
@@ -483,25 +503,43 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
                 </section>
               </div>
 
-              <div className="approval-feedback-grid">
-                <label>
-                  Rückmeldung / Kommentar
+              <div className="approval-feedback-grid approval-feedback-separated">
+                <section className="approval-feedback-section">
+                  <label htmlFor="trainer-comment">Kommentar zum Bericht</label>
+                  <p className="approval-feedback-hint">Optional speichern. Der Bericht bleibt eingereicht und kann danach freigegeben oder zurückgegeben werden.</p>
                   <textarea
+                    id="trainer-comment"
                     rows="5"
                     value={comment}
                     onChange={(event) => setComment(event.target.value)}
                     disabled={Boolean(busyAction) || !canEditFeedback}
                   />
-                </label>
-                <label>
-                  Grund für Rückgabe
+                  <PrimaryButton
+                    variant="secondary"
+                    onClick={() => runAction("comment", () => onComment(selectedEntry.id, comment))}
+                    disabled={Boolean(busyAction) || !canEditFeedback || !commentChanged}
+                  >
+                    {busyAction === "comment" ? "Speichert..." : "Kommentar speichern"}
+                  </PrimaryButton>
+                </section>
+                <section className="approval-feedback-section approval-return-section">
+                  <label htmlFor="return-reason">Grund für die Rückgabe</label>
+                  <p className="approval-feedback-hint">Nur die ausdrückliche Rückgabe setzt den Bericht auf Nachbearbeitung.</p>
                   <textarea
+                    id="return-reason"
                     rows="5"
                     value={reason}
                     onChange={(event) => setReason(event.target.value)}
                     disabled={Boolean(busyAction) || !canEditFeedback}
                   />
-                </label>
+                  <PrimaryButton
+                    variant="ghost"
+                    onClick={() => runDecisionAction("reject", () => onReject(selectedEntry.id, reason))}
+                    disabled={Boolean(busyAction) || !reason.trim() || !canEditFeedback}
+                  >
+                    {busyAction === "reject" ? "Rückgabe läuft..." : "Zur Nachbearbeitung zurückgeben"}
+                  </PrimaryButton>
+                </section>
               </div>
 
               {!canEditFeedback ? (
@@ -511,25 +549,12 @@ export function FreigabenPage({ role, report, trainees, onSign, onReject, onComm
               ) : null}
 
               <div className="approval-action-bar">
+                <span className="approval-decision-label">Entscheidung</span>
                 <PrimaryButton
-                  variant="secondary"
-                  onClick={() => runAction("comment", () => onComment(selectedEntry.id, comment))}
-                  disabled={busyAction === "sign" || busyAction === "reject" || !canEditFeedback}
-                >
-                  {busyAction === "comment" ? "Speichert..." : "Kommentar speichern"}
-                </PrimaryButton>
-                <PrimaryButton
-                  onClick={() => runAction("sign", () => onSign(selectedEntry.id, comment))}
+                  onClick={() => runDecisionAction("sign", () => onSign(selectedEntry.id))}
                   disabled={Boolean(busyAction) || !canEditFeedback}
                 >
                   {busyAction === "sign" ? "Freigabe läuft..." : "Freigeben"}
-                </PrimaryButton>
-                <PrimaryButton
-                  variant="ghost"
-                  onClick={() => runAction("reject", () => onReject(selectedEntry.id, reason))}
-                  disabled={Boolean(busyAction) || !reason.trim() || !canEditFeedback}
-                >
-                  {busyAction === "reject" ? "Rückgabe läuft..." : "Zurückgeben"}
                 </PrimaryButton>
               </div>
             </>
