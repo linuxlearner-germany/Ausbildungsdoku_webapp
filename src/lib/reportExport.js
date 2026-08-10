@@ -163,23 +163,36 @@ export async function downloadReportPdf({ entries, traineeName, trainingTitle })
     import("jspdf-autotable")
   ]);
   const doc = new jsPDF({ format: "a4", unit: "mm" });
-  const sortedEntries = (entries || []).slice().sort((left, right) => String(left.dateFrom).localeCompare(String(right.dateFrom)));
+  const sortedEntries = filterSignedReportEntries(entries).slice().sort((left, right) => String(left.dateFrom).localeCompare(String(right.dateFrom)));
   const pageWidth = doc.internal.pageSize.getWidth();
+  const logo = await loadImageData(assetUrl("/Pictures/logo-short.png")).catch(() => null);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(20);
-  doc.text("WIWEB Berichtsheft", 14, 18);
+  function drawHeader() {
+    if (logo) doc.addImage(logo, "PNG", 14, 10, 48, 11.9);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(0, 101, 168);
+    doc.setFontSize(16);
+    doc.text("WIWEB Berichtsheft", 68, 16);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(68, 84, 106);
+    doc.setFontSize(8.5);
+    doc.text("Digitaler Ausbildungsnachweis", 68, 21);
+    doc.setDrawColor(0, 101, 168);
+    doc.line(14, 25, pageWidth - 14, 25);
+  }
+
+  drawHeader();
 
   doc.setFont("helvetica", "normal");
+  doc.setTextColor(23, 43, 58);
   doc.setFontSize(10.5);
-  doc.text(`Name: ${traineeName || "-"}`, 14, 27);
-  doc.text(`Ausbildung: ${trainingTitle || "-"}`, 14, 33);
-  doc.text(`Stand: ${formatDateTime(new Date().toISOString())}`, 14, 39);
-  doc.line(14, 43, pageWidth - 14, 43);
+  doc.text(`Name: ${traineeName || "-"}`, 14, 32);
+  doc.text(`Ausbildung: ${trainingTitle || "-"}`, 14, 38);
+  doc.text(`Stand: ${formatDateTime(new Date().toISOString())}`, 14, 44);
 
   autoTable(doc, {
-    startY: 48,
-    margin: { left: 14, right: 14 },
+    startY: 49,
+    margin: { top: 30, left: 14, right: 14, bottom: 16 },
     head: [["Datum", "Titel", "Status", "Betrieb", "Berufsschule", "Kommentar"]],
     body: sortedEntries.length
       ? sortedEntries.map((entry) => [
@@ -216,16 +229,18 @@ export async function downloadReportPdf({ entries, traineeName, trainingTitle })
       3: { cellWidth: 38 },
       4: { cellWidth: 38 },
       5: { cellWidth: 27 }
-    }
+    },
+    didDrawPage: drawHeader
   });
 
   doc.addPage();
+  drawHeader();
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
-  doc.text("Unterschriften", 14, 24);
+  doc.text("Unterschriften", 14, 36);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
-  doc.text("Hiermit wird bestätigt, dass die Berichtsheftführung geprüft wurde.", 14, 36);
+  doc.text("Hiermit wird bestätigt, dass die Berichtsheftführung geprüft wurde.", 14, 46);
 
   [
     { lineY: 82, label: "Unterschrift Azubi" },
@@ -238,5 +253,34 @@ export async function downloadReportPdf({ entries, traineeName, trainingTitle })
     doc.text(label, 105, lineY + 6);
   });
 
+  const pageCount = doc.getNumberOfPages();
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(93, 107, 120);
+    doc.text(`WIWEB Berichtsheft · Seite ${page} von ${pageCount}`, pageWidth / 2, 290, { align: "center" });
+  }
+
   doc.save(`berichtsheft-${slugify(traineeName, "azubi")}.pdf`);
+}
+import { assetUrl } from "./runtime.js";
+
+export function filterSignedReportEntries(entries) {
+  return (entries || []).filter((entry) => entry.status === "signed");
+}
+
+function loadImageData(url) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      canvas.getContext("2d").drawImage(image, 0, 0);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    image.onerror = reject;
+    image.src = url;
+  });
 }
