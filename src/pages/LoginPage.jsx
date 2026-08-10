@@ -1,13 +1,22 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BrandLogo } from "../components/BrandLogo";
 import { PrimaryButton } from "../components/PrimaryButton";
-import { assetUrl, isStaticDemo } from "../lib/runtime";
+import { isStaticDemo } from "../lib/runtime";
+import { getLoginBackground, getLoginBackgroundUrl } from "../lib/login-background.mjs";
 
-export function LoginPage({ login, busy }) {
+export function LoginPage({ login, busy, background = "standard" }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [viewportWidth, setViewportWidth] = useState(() => typeof window === "undefined" ? 1920 : window.innerWidth);
+  const loginBackground = getLoginBackground(background);
+
+  useEffect(() => {
+    const updateViewportWidth = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", updateViewportWidth);
+    return () => window.removeEventListener("resize", updateViewportWidth);
+  }, []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -22,7 +31,10 @@ export function LoginPage({ login, busy }) {
   return (
     <div
       className="login-page"
-      style={{ "--login-background-image": `url("${assetUrl("/Pictures/login-bg.png")}")` }}
+      style={{
+        "--login-background-image": `url("${getLoginBackgroundUrl(background, viewportWidth)}")`,
+        "--login-background-position": loginBackground.position || "center center"
+      }}
     >
       <div className="login-card">
         <div className="login-brand">

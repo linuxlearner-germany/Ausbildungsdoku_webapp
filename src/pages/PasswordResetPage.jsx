@@ -3,13 +3,17 @@ import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { BrandLogo } from "../components/BrandLogo";
 import { PrimaryButton } from "../components/PrimaryButton";
 import { apiClient } from "../lib/api-client";
-import { assetUrl } from "../lib/runtime";
+import { getLoginBackground, getLoginBackgroundUrl } from "../lib/login-background.mjs";
 
-function PublicAuthCard({ title, subtitle, children }) {
+function PublicAuthCard({ title, subtitle, background, children }) {
+  const loginBackground = getLoginBackground(background);
   return (
     <div
       className="login-page"
-      style={{ "--login-background-image": `url("${assetUrl("/Pictures/login-bg.png")}")` }}
+      style={{
+        "--login-background-image": `url("${getLoginBackgroundUrl(background, typeof window === "undefined" ? 1920 : window.innerWidth)}")`,
+        "--login-background-position": loginBackground.position || "center center"
+      }}
     >
       <div className="login-card password-reset-card">
         <div className="login-brand">
@@ -25,7 +29,7 @@ function PublicAuthCard({ title, subtitle, children }) {
   );
 }
 
-export function PasswordResetRequestPage() {
+export function PasswordResetRequestPage({ background = "standard" }) {
   const [identifier, setIdentifier] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -46,7 +50,7 @@ export function PasswordResetRequestPage() {
   }
 
   return (
-    <PublicAuthCard title="Passwort vergessen?" subtitle="Wir senden dir einen einmaligen, zeitlich begrenzten Link.">
+    <PublicAuthCard background={background} title="Passwort vergessen?" subtitle="Wir senden dir einen einmaligen, zeitlich begrenzten Link.">
       {message ? (
         <div className="password-reset-result" role="status">
           <p>{message}</p>
@@ -78,7 +82,7 @@ export function PasswordResetRequestPage() {
   );
 }
 
-export function PasswordResetConfirmPage() {
+export function PasswordResetConfirmPage({ background = "standard" }) {
   const [searchParams] = useSearchParams();
   const token = searchParams.get("token") || "";
   const [form, setForm] = useState({ newPassword: "", newPasswordRepeat: "" });
@@ -114,7 +118,7 @@ export function PasswordResetConfirmPage() {
   }
 
   return (
-    <PublicAuthCard title="Neues Passwort" subtitle="Der Link kann nur einmal verwendet werden.">
+    <PublicAuthCard background={background} title="Neues Passwort" subtitle="Der Link kann nur einmal verwendet werden.">
       {complete ? (
         <div className="password-reset-result" role="status">
           <p>Dein Passwort wurde geändert.</p>

@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { formatLocalDate, getTodayLocalDateString } from "../lib/date.mjs";
 import { applyThemeAttribute, getSystemPrefersDark, isThemePreference, readStoredThemePreference, resolveTheme, THEME_STORAGE_KEY } from "../lib/theme.mjs";
 import { readStoredBackgroundPreference, saveStoredBackgroundPreference } from "../lib/background.mjs";
+import { normalizeLoginBackground } from "../lib/login-background.mjs";
 import { createSeedStore } from "../lib/staticData";
 import { AdminContext, AuthContext, ReportContext } from "./sharedContexts";
 
@@ -450,6 +451,7 @@ export function StaticAppProvider({ children }) {
   const [backgroundPreference, setBackgroundPreference] = useState(() => readStoredBackgroundPreference(typeof window !== "undefined" ? window.localStorage : null));
 
   const currentUser = useMemo(() => getUserById(store, store.sessionUserId), [store]);
+  const loginBackground = normalizeLoginBackground(store.loginBackground);
   const dashboard = useMemo(() => buildDashboard(store, currentUser), [store, currentUser]);
   const grades = useMemo(() => {
     if (!currentUser) return [];
@@ -531,6 +533,21 @@ export function StaticAppProvider({ children }) {
 
   async function refreshDashboard() {
     return buildDashboard(store, currentUser);
+  }
+
+  async function loadLoginBackgroundSettings() {
+    return { background: loginBackground, updatedAt: null };
+  }
+
+  async function saveLoginBackgroundSettings(background) {
+    if (currentUser?.role !== "admin") {
+      throw new Error("Nur Administratoren dürfen den Login-Hintergrund ändern.");
+    }
+    const normalized = normalizeLoginBackground(background);
+    commit((draft) => {
+      draft.loginBackground = normalized;
+    });
+    return { ok: true, background: normalized, updatedAt: new Date().toISOString() };
   }
 
   async function refreshGrades(traineeId = null) {
@@ -1282,6 +1299,9 @@ export function StaticAppProvider({ children }) {
     previewUserImport,
     importUsers,
     loadAuditLogs,
+    loginBackground,
+    loadLoginBackgroundSettings,
+    saveLoginBackgroundSettings,
     updateManagedProfile
   };
 
@@ -1294,6 +1314,7 @@ export function StaticAppProvider({ children }) {
         theme,
         themePreference,
         backgroundPreference,
+        loginBackground,
         busy,
         flash,
         setFlash,
@@ -1320,6 +1341,8 @@ export function StaticAppProvider({ children }) {
         previewUserImport,
         importUsers,
         loadAuditLogs,
+        loadLoginBackgroundSettings,
+        saveLoginBackgroundSettings,
         updateManagedProfile,
         changeOwnPassword,
         saveThemePreference,

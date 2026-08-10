@@ -26,6 +26,7 @@ function AppContextBridge({ children }) {
         theme: state.theme,
         themePreference: state.themePreference,
         backgroundPreference: state.backgroundPreference,
+        loginBackground: state.loginBackground,
         busy: state.busy,
         flash: state.flash,
         setFlash: state.setFlash,
