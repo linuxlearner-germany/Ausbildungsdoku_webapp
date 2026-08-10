@@ -123,8 +123,8 @@ function createReportService({ reportRepository, helpers }) {
     };
   }
 
-  async function signEntry(user, entryId, trainerComment) {
-    const result = await helpers.signReportEntryForActor(user, entryId, trainerComment);
+  async function signEntry(user, entryId) {
+    const result = await helpers.signReportEntryForActor(user, entryId);
     if (result?.error) {
       const status = result.error === "Eintrag nicht gefunden." ? 404 : result.error.includes("gehört nicht zu dir") ? 403 : 400;
       throw new HttpError(status, result.error);
@@ -144,6 +144,7 @@ function createReportService({ reportRepository, helpers }) {
   }
 
   async function commentEntry(user, entryId, comment) {
+    const normalizedComment = String(comment || "").trim();
     const entry = await reportRepository.findEntryWithOwnerById(entryId);
     if (!entry) {
       throw new HttpError(404, "Eintrag nicht gefunden.");
@@ -152,29 +153,29 @@ function createReportService({ reportRepository, helpers }) {
       throw new HttpError(403, "Eintrag gehoert nicht zu dir.");
     }
     if (entry.status !== "submitted") {
-      throw new HttpError(400, "Nur eingereichte Eintraege koennen kommentiert oder zurueckgegeben werden.");
+      throw new HttpError(400, "Nur eingereichte Eintraege koennen kommentiert werden.");
     }
 
-    const rejectedCount = await reportRepository.rejectEntryWithComment(entryId, comment);
-    if (!rejectedCount) {
+    const updatedCount = await reportRepository.updateTrainerComment(entryId, normalizedComment);
+    if (!updatedCount) {
       throw new HttpError(409, "Der Bericht wurde inzwischen bereits verarbeitet.");
     }
     await helpers.writeAuditLog({
       actor: user,
-      actionType: "REPORT_RETURNED",
+      actionType: "REPORT_COMMENT_UPDATED",
       entityType: "report_entry",
       entityId: entryId,
       targetUserId: entry.trainee_id,
-      summary: "Bericht wurde mit Kommentar zurueckgegeben.",
-      metadata: { reason: comment }
+      summary: normalizedComment ? "Ausbilderkommentar wurde gespeichert." : "Ausbilderkommentar wurde entfernt.",
+      metadata: { comment: normalizedComment }
     });
 
-    return { ok: true };
+    return { ok: true, status: "submitted", trainerComment: normalizedComment };
   }
 
   async function batchTrainerAction(user, payload) {
     const batch = payload.action === "sign"
-      ? await helpers.buildBatchResult(payload.entryIds, (entryId) => helpers.signReportEntryForActor(user, entryId, payload.trainerComment))
+      ? await helpers.buildBatchResult(payload.entryIds, (entryId) => helpers.signReportEntryForActor(user, entryId))
       : await helpers.buildBatchResult(payload.entryIds, (entryId) => helpers.rejectReportEntryForActor(user, entryId, payload.reason));
 
     if (!batch.processedCount) {

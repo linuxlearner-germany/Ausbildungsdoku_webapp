@@ -194,17 +194,78 @@ await test("Signieren nur fuer eingereichte Eintraege", { concurrency: false }, 
 
     const invalidSign = await postJson(
       `${baseUrl}/api/trainer/sign`,
-      { entryId: draftEntry.id, trainerComment: "" },
+      { entryId: draftEntry.id },
       trainerCookie
     );
     assert.equal(invalidSign.status, 400);
 
     const validSign = await postJson(
       `${baseUrl}/api/trainer/sign`,
-      { entryId: submittedEntry.id, trainerComment: "" },
+      { entryId: submittedEntry.id },
       trainerCookie
     );
     assert.equal(validSign.status, 200);
+  });
+});
+
+await test("Ausbilderkommentar behaelt den Status eingereicht und ist von Freigabe und Rueckgabe getrennt", { concurrency: false }, async () => {
+  await withIsolatedServer(async () => {
+    const uniqueDay = String(10 + (Date.now() % 18)).padStart(2, "0");
+    const traineeLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "azubi",
+      password: "azubi123"
+    });
+    const traineeCookie = extractCookie(traineeLogin);
+    const createResponse = await postJson(
+      `${baseUrl}/api/report/draft`,
+      { dateFrom: `2041-06-${uniqueDay}`, weekLabel: "Kommentar-Trennung", betrieb: "Prüfinhalt", schule: "" },
+      traineeCookie
+    );
+    const created = await createResponse.json();
+    assert.equal(createResponse.status, 200);
+    const updateResponse = await postJson(
+      `${baseUrl}/api/report/entry/${created.entry.id}`,
+      { ...created.entry, weekLabel: "Kommentar-Trennung", betrieb: "Prüfinhalt", schule: "" },
+      traineeCookie
+    );
+    assert.equal(updateResponse.status, 200);
+    assert.equal((await postJson(`${baseUrl}/api/report/submit`, { entryId: created.entry.id }, traineeCookie)).status, 200);
+
+    const trainerLogin = await postJson(`${baseUrl}/api/login`, {
+      identifier: "trainer",
+      password: "trainer123"
+    });
+    const trainerCookie = extractCookie(trainerLogin);
+    const commentResponse = await postJson(
+      `${baseUrl}/api/trainer/comment`,
+      { entryId: created.entry.id, comment: "Nur ein Kommentar" },
+      trainerCookie
+    );
+    const commentData = await commentResponse.json();
+
+    assert.equal(commentResponse.status, 200);
+    assert.equal(commentData.status, "submitted");
+
+    const dashboardResponse = await fetch(`${baseUrl}/api/dashboard`, { headers: { Cookie: trainerCookie } });
+    const dashboard = await dashboardResponse.json();
+    const commentedEntry = dashboard.trainees.flatMap((trainee) => trainee.entries).find((entry) => entry.id === created.entry.id);
+    assert.equal(commentedEntry.status, "submitted");
+    assert.equal(commentedEntry.trainerComment, "Nur ein Kommentar");
+    assert.equal(commentedEntry.rejectionReason, "");
+
+    const rejectResponse = await postJson(
+      `${baseUrl}/api/trainer/reject`,
+      { entryId: created.entry.id, reason: "Bitte fachlich ergänzen" },
+      trainerCookie
+    );
+    assert.equal(rejectResponse.status, 200);
+
+    const traineeDashboardResponse = await fetch(`${baseUrl}/api/dashboard`, { headers: { Cookie: traineeCookie } });
+    const traineeDashboard = await traineeDashboardResponse.json();
+    const returnedEntry = traineeDashboard.report.entries.find((entry) => entry.id === created.entry.id);
+    assert.equal(returnedEntry.status, "rejected");
+    assert.equal(returnedEntry.trainerComment, "Nur ein Kommentar");
+    assert.equal(returnedEntry.rejectionReason, "Bitte fachlich ergänzen");
   });
 });
 
@@ -302,9 +363,18 @@ await test("Ausbilder kann mehrere eingereichte Berichte gesammelt freigeben", {
     const trainerDashboard = await trainerDashboardResponse.json();
     const submittedEntries = trainerDashboard.trainees.flatMap((trainee) => trainee.entries).filter((entry) => entry.status === "submitted");
 
+    for (const entry of submittedEntries.slice(0, 2)) {
+      const commentResponse = await postJson(
+        `${baseUrl}/api/trainer/comment`,
+        { entryId: entry.id, comment: "Batch-Freigabe" },
+        trainerCookie
+      );
+      assert.equal(commentResponse.status, 200);
+    }
+
     const batchResponse = await postJson(
       `${baseUrl}/api/trainer/batch`,
-      { action: "sign", entryIds: submittedEntries.slice(0, 2).map((entry) => entry.id), trainerComment: "Batch-Freigabe" },
+      { action: "sign", entryIds: submittedEntries.slice(0, 2).map((entry) => entry.id) },
       trainerCookie
     );
     const batchData = await batchResponse.json();
@@ -466,7 +536,7 @@ await test("Sammelfreigabe blockiert fremde Berichte mit Teilfehler", { concurre
 
     const batchResponse = await postJson(
       `${baseUrl}/api/trainer/batch`,
-      { action: "sign", entryIds: [ownSubmitted.id, foreignDraft.entry.id], trainerComment: "Gemischt" },
+      { action: "sign", entryIds: [ownSubmitted.id, foreignDraft.entry.id] },
       trainerCookie
     );
     const batchData = await batchResponse.json();
