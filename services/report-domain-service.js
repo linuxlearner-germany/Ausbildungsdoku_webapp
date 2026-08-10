@@ -149,7 +149,10 @@ function createReportDomainService({
       return { error: "Nur eingereichte Eintraege koennen signiert werden." };
     }
 
-    await reportRepository.signEntry(entryId, user.name, trainerComment, new Date().toISOString());
+    const signedCount = await reportRepository.signEntry(entryId, user.name, trainerComment, new Date().toISOString());
+    if (!signedCount) {
+      return { error: "Der Bericht wurde inzwischen bereits verarbeitet." };
+    }
     await writeAuditLog({
       actor: user,
       actionType: "REPORT_APPROVED",
@@ -200,7 +203,10 @@ function createReportDomainService({
       return { error: "Nur eingereichte Eintraege koennen zurueckgegeben werden." };
     }
 
-    await reportRepository.rejectSubmittedEntry(entryId, trimmedReason);
+    const rejectedCount = await reportRepository.rejectSubmittedEntry(entryId, trimmedReason);
+    if (!rejectedCount) {
+      return { error: "Der Bericht wurde inzwischen bereits verarbeitet." };
+    }
     await writeAuditLog({
       actor: user,
       actionType: "REPORT_RETURNED",

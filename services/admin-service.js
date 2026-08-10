@@ -1,6 +1,6 @@
 const { HttpError } = require("../utils/http-error");
 
-function createAdminService({ adminRepository, helpers }) {
+function createAdminService({ adminRepository, helpers, mailer, encryptSetting, sessionSecret }) {
   function validateAdminUserPayload(input, { requirePassword = false } = {}) {
     const result = helpers.validateAdminUserPayload(input, { requirePassword });
     if (result.error) {
@@ -259,6 +259,85 @@ function createAdminService({ adminRepository, helpers }) {
     });
   }
 
+  function normalizeEmailRelaySettings(input, existing = null) {
+    const host = String(input.host || "").trim();
+    const from = String(input.from || "").trim();
+    const replyTo = String(input.replyTo || "").trim();
+    const username = String(input.username || "").trim();
+    const password = String(input.password || "");
+    const clearPassword = Boolean(input.clearPassword);
+    if (input.enabled && (!host || !from)) {
+      throw new HttpError(400, "SMTP-Host und Absender muessen bei aktivem Relay gesetzt sein.");
+    }
+    if (from && !helpers.isValidEmail(from.match(/<([^>]+)>/)?.[1] || from)) {
+      throw new HttpError(400, "Die Absenderadresse ist ungueltig.");
+    }
+    if (replyTo && !helpers.isValidEmail(replyTo)) {
+      throw new HttpError(400, "Die Reply-To-Adresse ist ungueltig.");
+    }
+    if (Boolean(username) !== Boolean(password || (existing?.password_encrypted && !clearPassword))) {
+      throw new HttpError(400, "SMTP-Benutzername und Passwort muessen gemeinsam gesetzt sein.");
+    }
+    const passwordEncrypted = !username || clearPassword
+      ? null
+      : password
+        ? encryptSetting(password, sessionSecret)
+        : existing?.password_encrypted || null;
+    return { enabled: Boolean(input.enabled), host, port: Number(input.port), secure: Boolean(input.secure), requireTls: Boolean(input.requireTls), username, passwordEncrypted, from, replyTo };
+  }
+
+  function serializeEmailRelaySettings(row, fallback) {
+    const source = row ? "database" : "environment";
+    const values = row || fallback;
+    return {
+      source,
+      enabled: Boolean(values.enabled),
+      host: values.host || "",
+      port: Number(values.port || 587),
+      secure: Boolean(values.secure),
+      requireTls: Boolean(row ? values.require_tls : values.requireTls),
+      username: values.username || values.user || "",
+      passwordConfigured: Boolean(row ? values.password_encrypted : values.password),
+      from: values.from_address || values.from || "",
+      replyTo: values.reply_to || values.replyTo || "",
+      updatedAt: row?.updated_at || null
+    };
+  }
+
+  async function getEmailRelaySettings() {
+    return serializeEmailRelaySettings(await adminRepository.getEmailRelaySettings(), mailer.getEnvironmentSettings());
+  }
+
+  async function saveEmailRelaySettings(actor, payload) {
+    const existing = await adminRepository.getEmailRelaySettings();
+    const settings = normalizeEmailRelaySettings(payload, existing);
+    await adminRepository.saveEmailRelaySettings(settings, actor.id);
+    await helpers.writeAuditLog({ actor, actionType: "EMAIL_RELAY_UPDATED", entityType: "email_relay", entityId: "1", summary: "E-Mail-Relay-Einstellungen aktualisiert.", metadata: { enabled: settings.enabled, host: settings.host, port: settings.port, secure: settings.secure, hasAuthentication: Boolean(settings.username) } });
+    return { ok: true, settings: await getEmailRelaySettings() };
+  }
+
+  async function testEmailRelaySettings(actor, payload) {
+    if (!payload.enabled) {
+      throw new HttpError(400, "Aktiviere das Relay, bevor du eine Test-E-Mail sendest.", {
+        code: "SMTP_RELAY_DISABLED"
+      });
+    }
+    const saved = await saveEmailRelaySettings(actor, payload);
+    try {
+      await mailer.send({ to: actor.email, subject: "Test: E-Mail-Relay", text: "Die E-Mail-Relay-Konfiguration funktioniert.", html: "<p>Die E-Mail-Relay-Konfiguration funktioniert.</p>" });
+    } catch (error) {
+      const smtpResponse = String(error?.response || error?.message || "").toLowerCase();
+      if (smtpResponse.includes("relay access denied")) {
+        throw new HttpError(502, "Der SMTP-Server erlaubt keine Zustellung an deine Admin-E-Mail-Adresse. Passe die Relay-Regeln des Mailservers an oder hinterlege für das Admin-Konto eine zugelassene Empfängeradresse.", {
+          code: "SMTP_RELAY_DENIED"
+        });
+      }
+      throw new HttpError(502, "Test-E-Mail konnte nicht versendet werden. Bitte Relay-Einstellungen pruefen.", { code: "SMTP_TEST_FAILED" });
+    }
+    await helpers.writeAuditLog({ actor, actionType: "EMAIL_RELAY_TEST_SENT", entityType: "email_relay", entityId: "1", summary: "Test-E-Mail fuer das Relay versendet." });
+    return saved;
+  }
+
   async function updateProfile(actor, userId, payload) {
     const trainee = await adminRepository.findTraineeById(userId);
     if (!trainee || trainee.role !== "trainee") {
@@ -317,6 +396,9 @@ function createAdminService({ adminRepository, helpers }) {
     deleteUser,
     getUsersCsvExport,
     listAuditLogs,
+    getEmailRelaySettings,
+    saveEmailRelaySettings,
+    testEmailRelaySettings,
     updateProfile,
     getAdminDashboard
   };

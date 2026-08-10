@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractCookie, postJson, withIsolatedServer } from "./helpers/test-server.mjs";
+import { extractCookie, postJson, withIsolatedServer } from "../helpers/test-server.mjs";
 
 async function login(baseUrl, identifier, password) {
   const response = await postJson(`${baseUrl}/api/login`, { identifier, password });
@@ -131,5 +131,33 @@ await test("Passwortwechsel erfordert eine Session", { concurrency: false }, asy
       newPasswordRepeat: "AzubiNeu123!"
     });
     assert.equal(response.status, 401);
+  });
+});
+
+await test("Passwort-Reset-Anfrage antwortet ohne Konto-Offenlegung", { concurrency: false }, async () => {
+  await withIsolatedServer(async (baseUrl) => {
+    const existingResponse = await postJson(`${baseUrl}/api/password-reset/request`, {
+      identifier: "azubi"
+    });
+    const missingResponse = await postJson(`${baseUrl}/api/password-reset/request`, {
+      identifier: "existiert-nicht"
+    });
+    const existingBody = await existingResponse.json();
+    const missingBody = await missingResponse.json();
+
+    assert.equal(existingResponse.status, 503);
+    assert.equal(missingResponse.status, 503);
+    assert.equal(existingBody.error.message, missingBody.error.message);
+  });
+});
+
+await test("Passwort-Reset lehnt ungueltige Einmal-Links ab", { concurrency: false }, async () => {
+  await withIsolatedServer(async (baseUrl) => {
+    const response = await postJson(`${baseUrl}/api/password-reset/confirm`, {
+      token: "ungueltiger-token-mit-ausreichender-laenge-123456789",
+      newPassword: "NeuesPasswort123!",
+      newPasswordRepeat: "NeuesPasswort123!"
+    });
+    assert.equal(response.status, 400);
   });
 });

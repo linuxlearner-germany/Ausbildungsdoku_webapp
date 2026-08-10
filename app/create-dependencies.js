@@ -16,9 +16,12 @@ const { createAuthModule } = require("../modules/auth/create-auth-module");
 const { createReportModule } = require("../modules/report/create-report-module");
 const { createAdminModule } = require("../modules/admin/create-admin-module");
 const { createGradesModule } = require("../modules/grades/create-grades-module");
+const { createMailer } = require("../utils/mailer");
+const { createReminderService } = require("../services/reminder-service");
 const { hashPassword, isValidEmail, normalizeUsername, normalizeEntry, normalizeThemePreference } = require("./runtime-helpers");
+const { decryptSetting } = require("../utils/settings-crypto");
 
-function createDependencies({ config, db, redisClient }) {
+function createDependencies({ config, db, redisClient, logger }) {
   const auditHelpers = createAuditHelpers({ db });
   const sharedRepository = createSharedRepository({ db, writeAuditLog: auditHelpers.writeAuditLog });
   const loginRateLimiter = createLoginRateLimiter({
@@ -27,8 +30,28 @@ function createDependencies({ config, db, redisClient }) {
     loginWindowMs: config.security.loginRateLimit.windowMs,
     loginMaxAttempts: config.security.loginRateLimit.maxAttempts
   });
+  const passwordResetRateLimiter = createLoginRateLimiter({
+    redisClient,
+    keyPrefix: `${config.redis.keyPrefix}password-reset:`,
+    loginWindowMs: config.mail.passwordResetRateLimitWindowMs,
+    loginMaxAttempts: config.mail.passwordResetRateLimitMaxAttempts
+  });
   const authMiddleware = createAuthMiddleware({
     getCurrentUser: sharedRepository.getCurrentUser
+  });
+  let emailRelayRepository;
+  const mailer = createMailer({
+    config,
+    logger,
+    getEmailRelaySettings: async () => {
+      if (!emailRelayRepository) return null;
+      const settings = await emailRelayRepository.getEmailRelaySettingsWithPassword();
+      if (!settings) return null;
+      return {
+        ...settings,
+        password: decryptSetting(settings.password_encrypted, config.session.secret)
+      };
+    }
   });
 
   const commonHelpers = {
@@ -54,7 +77,11 @@ function createDependencies({ config, db, redisClient }) {
     db,
     sharedRepository,
     loginRateLimiter,
-    helpers: commonHelpers
+    passwordResetRateLimiter,
+    helpers: commonHelpers,
+    config,
+    mailer,
+    logger
   });
 
   const reportModule = createReportModule({
@@ -72,8 +99,11 @@ function createDependencies({ config, db, redisClient }) {
     sharedRepository,
     auditHelpers,
     helpers: commonHelpers,
-    imports: importHelpers
+    imports: importHelpers,
+    mailer,
+    config
   });
+  emailRelayRepository = adminModule.repository;
 
   const gradesModule = createGradesModule({
     db,
@@ -99,6 +129,7 @@ function createDependencies({ config, db, redisClient }) {
       };
     }
   };
+  const reminderService = createReminderService({ db, config, mailer, logger });
 
   return {
     auditHelpers,
@@ -112,6 +143,8 @@ function createDependencies({ config, db, redisClient }) {
       grades: gradesModule
     },
     dashboardService,
+    mailer,
+    reminderService,
     bootstrapHelpers: {
       hashPassword
     }

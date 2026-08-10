@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { extractCookie, postJson, startServer } from "./helpers/test-server.mjs";
+import { extractCookie, postJson, startServer } from "../helpers/test-server.mjs";
 
 const port = 3211;
 const baseUrl = `http://127.0.0.1:${port}`;

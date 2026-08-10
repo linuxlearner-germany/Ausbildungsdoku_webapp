@@ -13,6 +13,9 @@ function createAdminRoutes({ adminController, requireRole }) {
   router.delete("/admin/users/:id", requireRole("admin"), asyncHandler(adminController.deleteUser));
   router.get("/admin/users/export.csv", requireRole("admin"), asyncHandler(adminController.exportUsersCsv));
   router.get("/admin/audit-logs", requireRole("admin"), asyncHandler(adminController.listAuditLogs));
+  router.get("/admin/email-relay", requireRole("admin"), asyncHandler(adminController.getEmailRelaySettings));
+  router.put("/admin/email-relay", requireRole("admin"), asyncHandler(adminController.saveEmailRelaySettings));
+  router.post("/admin/email-relay/test", requireRole("admin"), asyncHandler(adminController.testEmailRelaySettings));
 
   return router;
 }

@@ -60,7 +60,7 @@ services:
           -Q "$$SQL"
 
   redis:
-    image: redis:7.4-alpine
+    image: redis:7.4.9-alpine
     container_name: ausbildungsdoku-redis-dev
     restart: unless-stopped
     command: ["sh", "-c", "redis-server --save '' --appendonly no --dir /data --requirepass \"$${REDIS_PASSWORD:?REDIS_PASSWORD must be set}\""]

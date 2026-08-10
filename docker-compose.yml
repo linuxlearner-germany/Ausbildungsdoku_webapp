@@ -1,14 +1,14 @@
 services:
   app:
     # Produktionsnaher Modus: nur die App laeuft im Container, MSSQL und Redis werden extern angebunden.
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: runtime
-    image: ausbildungsdoku-webapp:latest
+    image: ${APP_IMAGE:-ghcr.io/linuxlearner-germany/ausbildungsdoku-webapp}:${APP_IMAGE_TAG:-1.2.0}
+    pull_policy: always
     container_name: ausbildungsdoku-app
     restart: unless-stopped
     init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: ${NODE_ENV:-production}
       TZ: ${TZ:-Europe/Berlin}
@@ -42,6 +42,23 @@ services:
       REDIS_COMMAND_TIMEOUT_MS: ${REDIS_COMMAND_TIMEOUT_MS:-5000}
       REDIS_MAX_RETRIES: ${REDIS_MAX_RETRIES:-4}
       REDIS_PING_INTERVAL_MS: ${REDIS_PING_INTERVAL_MS:-30000}
+      SMTP_ENABLED: ${SMTP_ENABLED:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-true}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_REPLY_TO: ${SMTP_REPLY_TO:-}
+      PASSWORD_RESET_TTL_MINUTES: ${PASSWORD_RESET_TTL_MINUTES:-60}
+      PASSWORD_RESET_RATE_LIMIT_WINDOW_MS: ${PASSWORD_RESET_RATE_LIMIT_WINDOW_MS:-900000}
+      PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS: ${PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS:-5}
+      REMINDERS_ENABLED: ${REMINDERS_ENABLED:-false}
+      REMINDER_CHECK_INTERVAL_MS: ${REMINDER_CHECK_INTERVAL_MS:-900000}
+      REMINDER_SEND_HOUR: ${REMINDER_SEND_HOUR:-17}
+      REMINDER_WEEKDAYS_ONLY: ${REMINDER_WEEKDAYS_ONLY:-true}
+      TRAINER_BACKLOG_THRESHOLD: ${TRAINER_BACKLOG_THRESHOLD:-50}
       MSSQL_HOST: ${MSSQL_HOST:-}
       MSSQL_PORT: ${MSSQL_PORT:-1433}
       MSSQL_DATABASE: ${MSSQL_DATABASE:-}
@@ -69,3 +86,17 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  migrate:
+    # Knex-Migrationen laufen vor jedem App-Start. `latest` ist idempotent,
+    # daher ist ein erneuter Start oder `docker compose up` sicher.
+    image: ${APP_IMAGE:-ghcr.io/linuxlearner-germany/ausbildungsdoku-webapp}:${APP_IMAGE_TAG:-1.2.0}
+    pull_policy: always
+    restart: "no"
+    init: true
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      APPLY_MIGRATIONS_ON_START: "true"
+    command: ["node", "scripts/db-migrate.mjs"]

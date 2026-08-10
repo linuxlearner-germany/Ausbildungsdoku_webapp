@@ -2,9 +2,14 @@ import React, { useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { DataTable } from "../components/DataTable";
 import { StatusBadge } from "../components/StatusBadge";
-import { EmptyState } from "../components/EmptyState";
+import { PrimaryButton } from "../components/PrimaryButton";
 import { downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
 import { apiUrl, isStaticDemo } from "../lib/runtime";
+import { formatLocalDate } from "../lib/date.mjs";
+
+function formatDate(value) {
+  return formatLocalDate(value, { day: "2-digit", month: "2-digit", year: "numeric" }) || "-";
+}
 
 export function ArchivPage({ role, report, trainees }) {
   const [pdfError, setPdfError] = useState("");
@@ -12,7 +17,7 @@ export function ArchivPage({ role, report, trainees }) {
   async function exportPdf(trainee) {
     if (isStaticDemo()) {
       setPdfError("");
-      downloadReportPdf({
+      await downloadReportPdf({
         entries: trainee.entries || [],
         traineeName: trainee.name,
         trainingTitle: trainee.ausbildung || ""
@@ -31,7 +36,7 @@ export function ArchivPage({ role, report, trainees }) {
   async function exportOwnPdf() {
     if (isStaticDemo()) {
       setPdfError("");
-      downloadReportPdf({
+      await downloadReportPdf({
         entries: report?.entries || [],
         traineeName: report?.trainee?.name || "",
         trainingTitle: report?.trainee?.ausbildung || ""
@@ -53,69 +58,46 @@ export function ArchivPage({ role, report, trainees }) {
       : trainees.flatMap((trainee) =>
           trainee.entries.filter((entry) => entry.status === "signed").map((entry) => ({ ...entry, traineeName: trainee.name, traineeId: trainee.id }))
         );
+  const traineeView = role === "trainee";
 
   return (
-    <div className="page-stack">
+    <div className="page-stack archive-page">
       <PageHeader
         kicker="Archiv"
         title="Freigegebene Berichte und PDF-Archiv"
+        subtitle="Freigegebene Berichte einsehen und als PDF exportieren."
         actions={
-          role === "trainee" ? (
-            <button type="button" className="button button-primary" onClick={() => {
-              exportOwnPdf();
-            }}>
-              Gesamtes PDF laden
-            </button>
+          traineeView ? (
+            <PrimaryButton type="button" className="archive-pdf-action" onClick={exportOwnPdf}>
+              <svg className="button-icon" viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2v10m0 0 3-3m-3 3L7 9M4 13v4h12v-4" /></svg>
+              Gesamtes PDF herunterladen
+            </PrimaryButton>
           ) : trainees.length ? (
             <div className="page-actions">
               {trainees.slice(0, 2).map((trainee) => (
-                <button key={trainee.id} type="button" className="button button-primary" onClick={() => exportPdf(trainee)}>
+                <PrimaryButton key={trainee.id} type="button" onClick={() => exportPdf(trainee)}>
                   PDF {trainee.name}
-                </button>
+                </PrimaryButton>
               ))}
             </div>
           ) : null
         }
       />
       {pdfError ? <div className="field-message error report-error-banner">{pdfError}</div> : null}
-      <section className="panel-card">
-        <div className="mobile-records">
-          {rows.length ? (
-            rows.map((row) => (
-              <article key={row.id} className="mobile-record-card mobile-record-card-static">
-                <div className="mobile-record-head">
-                  <strong>{row.weekLabel || "Ohne Titel"}</strong>
-                  <StatusBadge status={row.status} />
-                </div>
-                <div className="mobile-record-body">
-                  {role === "trainee" ? null : <small>Azubi: {row.traineeName}</small>}
-                  <span>{row.dateFrom || "-"}</span>
-                  <small>Freigabe durch: {row.signerName || "-"}</small>
-                  {role === "trainee" ? null : (
-                    <button
-                      type="button"
-                      className="button button-secondary archive-pdf-button"
-                      onClick={() => exportPdf(trainees.find((trainee) => trainee.id === row.traineeId))}
-                    >
-                      PDF öffnen
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))
-          ) : (
-            <EmptyState title="Noch kein Archiv" />
-          )}
-        </div>
+      <section className="panel-card archive-table-panel">
         <DataTable
           rowKey="id"
+          caption="Freigegebene Berichte"
           rows={rows}
+          tableClassName={`archive-data-table${traineeView ? " archive-data-table-own" : " archive-data-table-managed"}`}
+          emptyTitle="Noch keine freigegebenen Berichte"
+          emptyDescription="Freigegebene Berichte erscheinen automatisch in diesem Archiv."
           columns={[
-            ...(role === "trainee" ? [] : [{ key: "traineeName", label: "Azubi" }]),
-            { key: "dateFrom", label: "Tag" },
-            { key: "weekLabel", label: "Titel" },
-            { key: "status", label: "Status", render: (row) => <StatusBadge status={row.status} /> },
-            { key: "signerName", label: "Freigabe durch", render: (row) => row.signerName || "-" }
+            ...(traineeView ? [] : [{ key: "traineeName", label: "Azubi", className: "archive-column-trainee", width: "20%" }]),
+            { key: "dateFrom", label: "Tag", className: "archive-column-date", width: traineeView ? "17%" : "14%", render: (row) => formatDate(row.dateFrom) },
+            { key: "weekLabel", label: "Titel", className: "archive-column-title", width: traineeView ? "36%" : "29%" },
+            { key: "status", label: "Status", className: "archive-column-status", width: traineeView ? "20%" : "16%", render: (row) => <StatusBadge status={row.status} /> },
+            { key: "signerName", label: "Freigabe durch", className: "archive-column-signer", width: traineeView ? "27%" : "21%", render: (row) => row.signerName || "-" }
           ]}
         />
       </section>

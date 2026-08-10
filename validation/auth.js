@@ -31,8 +31,28 @@ const passwordChangeSchema = z.object({
   }
 });
 
+const passwordResetRequestSchema = z.object({
+  identifier: z.string().trim().min(1).max(255)
+});
+
+const passwordResetSchema = z.object({
+  token: z.string().trim().min(32).max(512),
+  newPassword: z.string().min(10, "Neues Passwort muss mindestens 10 Zeichen lang sein."),
+  newPasswordRepeat: z.string()
+}).superRefine((value, context) => {
+  if (value.newPassword !== value.newPasswordRepeat) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Neues Passwort und Wiederholung stimmen nicht ueberein.",
+      path: ["newPasswordRepeat"]
+    });
+  }
+});
+
 module.exports = {
   loginSchema,
   themePreferenceSchema,
-  passwordChangeSchema
+  passwordChangeSchema,
+  passwordResetRequestSchema,
+  passwordResetSchema
 };

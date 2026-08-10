@@ -1,6 +1,7 @@
 import React from "react";
 import { apiClient } from "../lib/api-client";
 import { applyThemeAttribute, THEME_STORAGE_KEY } from "../lib/theme.mjs";
+import { saveStoredBackgroundPreference } from "../lib/background.mjs";
 import { useAppState } from "./AppStateContext";
 import { UiPreferencesContext } from "./sharedContexts";
 
@@ -12,6 +13,8 @@ export function UiPreferencesProvider({ children }) {
     setTheme,
     themePreference,
     setThemePreference,
+    backgroundPreference,
+    setBackgroundPreference,
     applyThemePreference
   } = useAppState();
 
@@ -53,12 +56,23 @@ export function UiPreferencesProvider({ children }) {
     return saveThemePreference(nextPreference);
   }
 
+  function saveBackgroundPreference(nextBackground) {
+    const preference = saveStoredBackgroundPreference(
+      typeof window !== "undefined" ? window.localStorage : null,
+      nextBackground
+    );
+    setBackgroundPreference(preference);
+    return preference;
+  }
+
   return (
     <UiPreferencesContext.Provider
       value={{
         theme,
         themePreference,
+        backgroundPreference,
         saveThemePreference,
+        saveBackgroundPreference,
         toggleTheme
       }}
     >

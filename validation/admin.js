@@ -14,6 +14,19 @@ const adminUserPayloadSchema = z.object({
   trainerIds: z.array(z.union([z.number(), z.string()])).optional().default([])
 }).passthrough();
 
+const emailRelaySettingsSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  host: z.string().trim().optional().default(""),
+  port: z.coerce.number().int().min(1).max(65535).optional().default(587),
+  secure: z.boolean().optional().default(false),
+  requireTls: z.boolean().optional().default(true),
+  username: z.string().trim().optional().default(""),
+  password: z.string().optional().default(""),
+  clearPassword: z.boolean().optional().default(false),
+  from: z.string().trim().optional().default(""),
+  replyTo: z.string().trim().optional().default("")
+});
+
 const assignTrainerSchema = z.object({
   traineeId: z.coerce.number().int("Ungueltiger Azubi."),
   trainerIds: z.array(z.union([z.number(), z.string()])).optional().default([])
@@ -38,6 +51,7 @@ const profilePayloadSchema = z.object({
 
 module.exports = {
   adminUserPayloadSchema,
+  emailRelaySettingsSchema,
   assignTrainerSchema,
   auditLogQuerySchema,
   profilePayloadSchema

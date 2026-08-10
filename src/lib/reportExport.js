@@ -1,6 +1,3 @@
-import { jsPDF } from "jspdf";
-import autoTable from "jspdf-autotable";
-
 function slugify(value, fallback) {
   return String(value || fallback)
     .trim()
@@ -135,7 +132,9 @@ export function downloadUsersCsv(users) {
 export async function downloadFileFromApi(url, fallbackFilename, { errorMessage, method = "GET" } = {}) {
   const response = await fetch(url, {
     method,
-    credentials: "same-origin"
+    // API_BASE_URL darf auf einen anderen Origin zeigen. In diesem Fall
+    // werden Sitzungs-Cookies nur mit `include` mitgesendet.
+    credentials: "include"
   });
 
   if (!response.ok) {
@@ -158,7 +157,11 @@ export async function downloadCsvFromApi(url, fallbackFilename = "berichtsheft.c
   });
 }
 
-export function downloadReportPdf({ entries, traineeName, trainingTitle }) {
+export async function downloadReportPdf({ entries, traineeName, trainingTitle }) {
+  const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+    import("jspdf"),
+    import("jspdf-autotable")
+  ]);
   const doc = new jsPDF({ format: "a4", unit: "mm" });
   const sortedEntries = (entries || []).slice().sort((left, right) => String(left.dateFrom).localeCompare(String(right.dateFrom)));
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -214,6 +217,25 @@ export function downloadReportPdf({ entries, traineeName, trainingTitle }) {
       4: { cellWidth: 38 },
       5: { cellWidth: 27 }
     }
+  });
+
+  doc.addPage();
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.text("Unterschriften", 14, 24);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.text("Hiermit wird bestätigt, dass die Berichtsheftführung geprüft wurde.", 14, 36);
+
+  [
+    { lineY: 82, label: "Unterschrift Azubi" },
+    { lineY: 142, label: "Unterschrift Ausbilder" },
+    { lineY: 202, label: "Unterschrift Erziehungsberechtigte/r" }
+  ].forEach(({ lineY, label }) => {
+    doc.line(14, lineY, 86, lineY);
+    doc.line(105, lineY, pageWidth - 14, lineY);
+    doc.text("Ort, Datum", 14, lineY + 6);
+    doc.text(label, 105, lineY + 6);
   });
 
   doc.save(`berichtsheft-${slugify(traineeName, "azubi")}.pdf`);

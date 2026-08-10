@@ -7,6 +7,8 @@ function createAuthRoutes({ authController, requireAuth }) {
   router.get("/session", asyncHandler(authController.getSession));
   router.post("/login", asyncHandler(authController.login));
   router.post("/logout", asyncHandler(authController.logout));
+  router.post("/password-reset/request", asyncHandler(authController.requestPasswordReset));
+  router.post("/password-reset/confirm", asyncHandler(authController.resetPassword));
   router.post("/preferences/theme", requireAuth, asyncHandler(authController.updateThemePreference));
   router.post("/profile/password", requireAuth, asyncHandler(authController.changeOwnPassword));
   router.post("/profile/:userId/password", requireAuth, asyncHandler(authController.changeOwnPassword));

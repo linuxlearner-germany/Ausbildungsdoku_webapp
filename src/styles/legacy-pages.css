@@ -1,34 +1,34 @@
 :root {
-  --bg: #f6f9fc;
-  --surface: #ffffff;
-  --surface-soft: #fbfdff;
-  --surface-muted: #eef4fa;
-  --surface-elevated: #ffffff;
-  --surface-strong: #d9e5f0;
-  --sidebar-bg: linear-gradient(180deg, #ffffff, #f1f6fb);
-  --topbar-bg: rgba(255, 255, 255, 0.98);
-  --card-bg: #ffffff;
-  --card-soft-bg: #f9fcff;
-  --text: #172220;
-  --muted: #607284;
-  --line: #d8e3ee;
-  --primary: #1f5f57;
-  --primary-strong: #173f4c;
-  --accent: #2d7a60;
-  --danger: #a4473c;
-  --warning: #a9771e;
-  --focus-ring: rgba(31, 95, 87, 0.18);
-  --primary-soft: rgba(31, 95, 87, 0.1);
-  --primary-soft-strong: rgba(31, 95, 87, 0.16);
-  --button-secondary-bg: #ffffff;
-  --button-secondary-text: #173f4c;
-  --button-secondary-line: #ccd9e6;
+  --bg: var(--app-bg);
+  --surface: var(--app-surface);
+  --surface-soft: var(--app-surface-muted);
+  --surface-muted: var(--app-surface-muted);
+  --surface-elevated: var(--color-surface-elevated);
+  --surface-strong: var(--app-surface-emphasis);
+  --sidebar-bg: var(--app-sidebar);
+  --topbar-bg: var(--app-surface);
+  --card-bg: var(--app-surface);
+  --card-soft-bg: var(--app-surface-muted);
+  --text: var(--app-text);
+  --muted: var(--app-muted);
+  --line: var(--app-border);
+  --primary: var(--app-primary);
+  --primary-strong: var(--app-primary-strong);
+  --accent: var(--app-success);
+  --danger: var(--app-danger);
+  --warning: var(--app-warning);
+  --focus-ring: var(--app-focus);
+  --primary-soft: var(--app-primary-soft);
+  --primary-soft-strong: var(--app-primary-soft);
+  --button-secondary-bg: var(--app-surface);
+  --button-secondary-text: var(--app-text);
+  --button-secondary-line: var(--app-border-strong);
   --button-ghost-bg: #fff1ef;
   --button-ghost-text: #a4473c;
-  --field-bg: #ffffff;
-  --field-bg-disabled: #edf4fa;
-  --table-row-hover: #f3f8fd;
-  --placeholder: #7d90a1;
+  --field-bg: var(--app-input-bg);
+  --field-bg-disabled: var(--app-surface-muted);
+  --table-row-hover: var(--app-surface-emphasis);
+  --placeholder: var(--color-text-muted);
   --status-draft-bg: #eaf0f6;
   --status-draft-text: #586978;
   --status-submitted-bg: #fff1c9;
@@ -55,52 +55,52 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #151b1a;
-  --surface: #1c2423;
-  --surface-soft: #202a28;
-  --surface-muted: #273330;
-  --surface-elevated: #1c2423;
-  --surface-strong: #32403c;
-  --sidebar-bg: linear-gradient(180deg, #1c2423, #19201f);
-  --topbar-bg: rgba(28, 36, 35, 0.94);
-  --card-bg: #1c2423;
-  --card-soft-bg: #202a28;
-  --text: #ecf2ef;
-  --muted: #a0b1ab;
-  --line: #33413d;
-  --primary: #8ebdb1;
-  --primary-strong: #355e57;
-  --accent: #79c59f;
-  --danger: #e09b93;
-  --warning: #d8b86f;
-  --focus-ring: rgba(142, 189, 177, 0.18);
-  --primary-soft: rgba(142, 189, 177, 0.12);
-  --primary-soft-strong: rgba(142, 189, 177, 0.18);
-  --button-secondary-bg: #2a4440;
-  --button-secondary-text: #edf4f2;
-  --button-secondary-line: #2a4440;
+  --bg: var(--app-bg);
+  --surface: var(--app-surface);
+  --surface-soft: var(--app-surface-muted);
+  --surface-muted: var(--app-surface-muted);
+  --surface-elevated: var(--color-surface-elevated);
+  --surface-strong: var(--app-surface-emphasis);
+  --sidebar-bg: var(--app-sidebar);
+  --topbar-bg: var(--app-surface);
+  --card-bg: var(--app-surface);
+  --card-soft-bg: var(--app-surface-muted);
+  --text: var(--app-text);
+  --muted: var(--app-muted);
+  --line: var(--app-border);
+  --primary: var(--app-primary);
+  --primary-strong: var(--app-primary-strong);
+  --accent: var(--app-success);
+  --danger: var(--app-danger);
+  --warning: var(--app-warning);
+  --focus-ring: var(--app-focus);
+  --primary-soft: var(--app-primary-soft);
+  --primary-soft-strong: var(--app-primary-soft);
+  --button-secondary-bg: var(--app-surface-muted);
+  --button-secondary-text: var(--app-text);
+  --button-secondary-line: var(--app-border-strong);
   --button-ghost-bg: rgba(224, 155, 147, 0.12);
   --button-ghost-text: #f0b8b1;
-  --field-bg: #18211f;
-  --field-bg-disabled: #23302d;
-  --table-row-hover: #23302d;
-  --placeholder: #8c9d98;
+  --field-bg: var(--app-input-bg);
+  --field-bg-disabled: var(--app-surface-muted);
+  --table-row-hover: var(--app-surface-emphasis);
+  --placeholder: var(--color-text-muted);
   --status-draft-bg: #2a3532;
   --status-draft-text: #d0dad6;
   --status-submitted-bg: #473b1e;
   --status-submitted-text: #f3d58f;
-  --status-signed-bg: #233f37;
-  --status-signed-text: #a6dbc7;
+  --status-signed-bg: var(--app-success-soft);
+  --status-signed-text: var(--status-success-text);
   --status-rejected-bg: #4a2e2b;
   --status-rejected-text: #efb7af;
   --status-missing-bg: #29322f;
   --status-missing-text: #bcc9c5;
   --shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-  --page-overlay-top: #171d1c;
-  --page-overlay-bottom: #141918;
+  --page-overlay-top: var(--app-bg);
+  --page-overlay-bottom: var(--app-bg);
   --success-border: color-mix(in srgb, var(--accent) 48%, transparent);
   --danger-border: color-mix(in srgb, var(--danger) 48%, transparent);
-  --button-primary-text: #10211d;
+  --button-primary-text: #ffffff;
   --login-overlay-top: rgba(8, 16, 20, 0.56);
   --login-overlay-bottom: rgba(8, 16, 20, 0.78);
   --login-sheen: rgba(255, 255, 255, 0.08);
@@ -171,7 +171,6 @@ button, input, textarea, select { font: inherit; }
 :root:not([data-theme="dark"]) .approval-content-card,
 :root:not([data-theme="dark"]) .trainer-card,
 :root:not([data-theme="dark"]) .assignment-row,
-:root:not([data-theme="dark"]) .mobile-record-card,
 :root:not([data-theme="dark"]) .quick-action-card,
 :root:not([data-theme="dark"]) .report-list-row,
 :root:not([data-theme="dark"]) .approval-list-row,
@@ -188,8 +187,8 @@ button, input, textarea, select { font: inherit; }
 
 :root:not([data-theme="dark"]) .sidebar-link:hover,
 :root:not([data-theme="dark"]) .sidebar-link.active {
-  background: rgba(31, 95, 87, 0.1);
-  color: #1f5f57;
+  background: var(--app-primary-soft);
+  color: var(--app-primary);
 }
 
 :root:not([data-theme="dark"]) .data-table tbody tr {
@@ -245,11 +244,6 @@ button, input, textarea, select { font: inherit; }
   align-items: center;
 }
 
-.sidebar-logo {
-  width: 74px;
-  height: auto;
-}
-
 .sidebar-nav {
   display: grid;
   gap: 8px;
@@ -301,28 +295,6 @@ button, input, textarea, select { font: inherit; }
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
-}
-
-.mobile-nav-toggle {
-  display: none;
-  width: 48px;
-  height: 48px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--card-soft-bg);
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 5px;
-  cursor: pointer;
-}
-
-.mobile-nav-toggle span {
-  width: 18px;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--primary-strong);
 }
 
 .topbar-copy strong {
@@ -801,47 +773,12 @@ textarea {
   gap: 16px;
 }
 
-.mobile-records {
-  display: none;
-  gap: 12px;
-}
-
-.mobile-record-card {
-  width: 100%;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: var(--card-soft-bg);
-  text-align: left;
-  cursor: pointer;
-}
-
-.mobile-record-card-static {
-  cursor: default;
-}
-
-.mobile-record-card.selected {
-  border-color: var(--primary);
-  background: var(--primary-soft);
-}
-
-.mobile-record-head,
 .mobile-detail-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-}
-
-.mobile-record-body {
-  display: grid;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.mobile-record-body small {
-  color: var(--muted);
 }
 
 .subject-summary-card {
@@ -1198,23 +1135,6 @@ textarea {
   gap: 6px;
 }
 
-@media (max-width: 1080px) {
-  .admin-users-layout,
-  .admin-role-sections {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-user-facts {
-    grid-template-columns: 1fr;
-  }
-
-  .audit-log-toolbar,
-  .audit-log-grid,
-  .import-row-grid,
-  .import-summary-grid {
-    grid-template-columns: 1fr;
-  }
-}
 
 .trainer-overview-grid {
   display: grid;
@@ -1940,286 +1860,4 @@ textarea {
 .profile-target-card.active {
   border-color: var(--primary);
   background: var(--primary-soft);
-}
-
-@media (max-width: 1100px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-    gap: 14px;
-    padding: 14px;
-  }
-
-  .sidebar {
-    position: static;
-    height: auto;
-    display: none;
-    padding: 18px 16px;
-  }
-
-  .sidebar.is-open {
-    display: grid;
-  }
-
-  .stats-grid,
-  .approval-summary,
-  .approval-layout,
-  .two-column-grid,
-  .reports-layout,
-  .profile-manager-layout,
-  .theme-settings-layout,
-  .form-grid,
-  .quick-actions,
-  .review-panels,
-  .report-editor-summary,
-  .read-only-grid,
-  .import-summary-grid,
-  .import-row-grid,
-  .editor-writing-grid,
-  .approval-meta-grid,
-  .approval-content-grid,
-  .approval-feedback-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .mobile-nav-toggle {
-    display: inline-flex;
-  }
-
-  .topbar {
-    padding: 16px 18px;
-  }
-
-  .topbar-copy strong {
-    font-size: 1rem;
-  }
-
-  .page-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .sidebar-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .calendar-grid-enterprise {
-    gap: 8px;
-  }
-
-  .calendar-tile {
-    min-height: 92px;
-    padding: 10px;
-  }
-
-  .week-strip {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .report-editor-drawer {
-    grid-template-columns: 1fr minmax(0, 620px);
-  }
-}
-
-@media (max-width: 720px) {
-  .screen-loading {
-    padding: 18px;
-  }
-
-  .page-content,
-  .page-stack,
-  .app-main {
-    gap: 14px;
-  }
-
-  .panel-card,
-  .stat-card {
-    padding: 18px;
-    border-radius: 20px;
-  }
-
-  .topbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .topbar-user {
-    justify-content: space-between;
-  }
-
-  .user-pill {
-    min-width: 0;
-    flex: 1;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .quick-actions {
-    grid-template-columns: 1fr;
-  }
-
-  .trainer-overview-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .report-list-item,
-  .list-row,
-  .report-list-summary,
-  .report-list-meta,
-  .approval-list-head,
-  .approval-detail-head,
-  .approval-detail-actions,
-  .approval-row-main,
-  .approval-action-bar,
-  .day-inspector-head,
-  .day-inspector-actions,
-  .day-inspector-button-row,
-  .subject-summary-head,
-  .table-actions,
-  .assignment-row,
-  .trainer-card-head,
-  .trainer-card-stats,
-  .trainer-card-latest {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .filter-bar,
-  .editor-footer,
-  .page-actions,
-  .theme-panel,
-  .calendar-month-switcher,
-  .report-type-pills,
-  .writing-toolbar-controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .view-switch {
-    width: 100%;
-    justify-content: stretch;
-  }
-
-  .view-switch-button {
-    flex: 1;
-  }
-
-  .week-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .report-editor-drawer {
-    grid-template-columns: 1fr;
-  }
-
-  .report-editor-backdrop {
-    display: none;
-  }
-
-  .report-editor-panel {
-    padding: 12px;
-  }
-
-
-  .button {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .assignment-actions {
-    min-width: 100%;
-    width: 100%;
-  }
-
-  .calendar-weekday {
-    font-size: 0.68rem;
-    padding: 6px 0;
-  }
-
-  .calendar-tile {
-    min-height: 78px;
-    padding: 8px;
-    border-radius: 14px;
-  }
-
-  .calendar-tile-body strong {
-    font-size: 0.86rem;
-  }
-
-  .calendar-tile-body small,
-  .calendar-tile-empty-label {
-    font-size: 0.72rem;
-  }
-
-  .data-table {
-    min-width: 760px;
-  }
-
-  .mobile-records {
-    display: grid;
-    margin-bottom: 14px;
-  }
-}
-
-@media (max-width: 520px) {
-  .app-shell {
-    padding: 10px;
-  }
-
-  .sidebar,
-  .topbar,
-  .panel-card,
-  .stat-card {
-    border-radius: 18px;
-  }
-
-  .flash {
-    top: 14px;
-    right: 14px;
-    left: 14px;
-    max-width: none;
-    border-radius: 16px;
-  }
-
-  .sidebar-logo {
-    width: 58px;
-  }
-
-  .sidebar-nav {
-    grid-template-columns: 1fr;
-  }
-
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .page-header h2,
-  .panel-card h3,
-  .login-brand h1 {
-    font-size: 1.55rem;
-  }
-
-  .topbar-user {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .calendar-grid-enterprise {
-    gap: 6px;
-  }
-
-  .calendar-tile {
-    min-height: 84px;
-  }
-
-  .status-badge,
-  .grade-pill {
-    width: 100%;
-    justify-content: center;
-  }
 }

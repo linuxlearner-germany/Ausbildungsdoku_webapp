@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from "
 import * as XLSX from "xlsx";
 import { formatLocalDate, getTodayLocalDateString } from "../lib/date.mjs";
 import { applyThemeAttribute, getSystemPrefersDark, isThemePreference, readStoredThemePreference, resolveTheme, THEME_STORAGE_KEY } from "../lib/theme.mjs";
+import { readStoredBackgroundPreference, saveStoredBackgroundPreference } from "../lib/background.mjs";
 import { createSeedStore } from "../lib/staticData";
 import { AdminContext, AuthContext, ReportContext } from "./sharedContexts";
 
@@ -446,6 +447,7 @@ export function StaticAppProvider({ children }) {
   const [flash, setFlash] = useState(null);
   const [themePreference, setThemePreference] = useState(initialThemePreference);
   const [theme, setTheme] = useState(resolveTheme(initialThemePreference, getSystemPrefersDark()));
+  const [backgroundPreference, setBackgroundPreference] = useState(() => readStoredBackgroundPreference(typeof window !== "undefined" ? window.localStorage : null));
 
   const currentUser = useMemo(() => getUserById(store, store.sessionUserId), [store]);
   const dashboard = useMemo(() => buildDashboard(store, currentUser), [store, currentUser]);
@@ -1141,6 +1143,12 @@ export function StaticAppProvider({ children }) {
     return nextPreference;
   }
 
+  function saveBackgroundPreference(nextBackground) {
+    const preference = saveStoredBackgroundPreference(window.localStorage, nextBackground);
+    setBackgroundPreference(preference);
+    return preference;
+  }
+
   async function changeOwnPassword(payload) {
     if (!currentUser) {
       throw new Error("Nicht angemeldet.");
@@ -1285,6 +1293,7 @@ export function StaticAppProvider({ children }) {
         grades,
         theme,
         themePreference,
+        backgroundPreference,
         busy,
         flash,
         setFlash,
@@ -1314,6 +1323,7 @@ export function StaticAppProvider({ children }) {
         updateManagedProfile,
         changeOwnPassword,
         saveThemePreference,
+        saveBackgroundPreference,
         refreshGrades,
         saveGrade,
         deleteGrade,

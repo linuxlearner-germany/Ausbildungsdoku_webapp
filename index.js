@@ -36,7 +36,7 @@ async function createRuntime() {
       await runMigrations({ db });
     }
 
-    const dependencies = createDependencies({ config, db, redisClient });
+    const dependencies = createDependencies({ config, db, redisClient, logger });
     const bootstrap = createBootstrap({
       db,
       config,
@@ -51,6 +51,7 @@ async function createRuntime() {
 
     const app = createApp({ config, db, redisClient, dependencies, runtimeState, logger });
     app.locals.bootstrap = bootstrapResult;
+    dependencies.reminderService.start();
     runtimeState.isReady = true;
 
     async function shutdown() {
@@ -58,6 +59,7 @@ async function createRuntime() {
       runtimeState.isShuttingDown = true;
       runtimeState.dependencies.database = "down";
       runtimeState.dependencies.redis = "down";
+      dependencies.reminderService.stop();
       await Promise.allSettled([
         db.destroy(),
         redisClient.quit()

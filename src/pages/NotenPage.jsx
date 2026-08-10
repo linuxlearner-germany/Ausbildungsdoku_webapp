@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "../components/PageHeader";
 import { FilterBar } from "../components/FilterBar";
 import { DataTable } from "../components/DataTable";
@@ -18,13 +18,19 @@ import {
   normalizeGradeEntry
 } from "../lib/grades";
 
+function getTodayValue() {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60_000;
+  return new Date(now.getTime() - offset).toISOString().slice(0, 10);
+}
+
 function buildEmptyForm() {
   return {
     id: null,
     fach: "",
     typ: "Schulaufgabe",
     bezeichnung: "",
-    datum: "",
+    datum: getTodayValue(),
     note: ""
   };
 }
@@ -51,6 +57,7 @@ function TypeBadge({ type }) {
 export function NotenPage({ role, grades, report, currentUser, trainees, users, onLoadGrades, onSaveGrade, onDeleteGrade }) {
   const canManageGrades = role === "trainee" || role === "admin";
   const isReadOnly = role === "trainer";
+  const editorRef = useRef(null);
   const targetOptions = useMemo(() => {
     if (role === "trainer") {
       return (trainees || []).map((trainee) => ({
@@ -89,6 +96,13 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
   const [form, setForm] = useState(buildEmptyForm());
   const [loadingGrades, setLoadingGrades] = useState(false);
   const [loadError, setLoadError] = useState("");
+  const [actionError, setActionError] = useState("");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
 
   useEffect(() => {
     if (role === "trainee") {
@@ -108,6 +122,10 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
 
   useEffect(() => {
     setForm(buildEmptyForm());
+    setEditorOpen(false);
+    setSubmitAttempted(false);
+    setDeleteTarget(null);
+    setActionError("");
   }, [selectedTraineeId]);
 
   useEffect(() => {
@@ -202,24 +220,52 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
   }, [groupedGrades, query, subjectFilter, typeFilter]);
 
   const statistics = useMemo(() => getGradeStatistics(normalizedGrades), [normalizedGrades]);
+  const latestGrade = useMemo(
+    () =>
+      [...normalizedGrades].sort(
+        (left, right) =>
+          String(right.datum).localeCompare(String(left.datum)) ||
+          Number(right.id || 0) - Number(left.id || 0)
+      )[0] || null,
+    [normalizedGrades]
+  );
+  const filteredEntryCount = useMemo(
+    () => filteredGroups.reduce((sum, group) => sum + group.entries.length, 0),
+    [filteredGroups]
+  );
+  const filtersActive = Boolean(query.trim() || subjectFilter !== "all" || typeFilter !== "all");
   const errors = validateForm(form);
 
   async function handleSubmit() {
-    if (!canManageGrades || Object.keys(errors).length) {
+    setSubmitAttempted(true);
+    setActionError("");
+
+    if (!canManageGrades || Object.keys(errors).length || saveBusy) {
       return;
     }
 
-    await onSaveGrade({
-      ...form,
-      traineeId: selectedTraineeId,
-      note: Number(form.note),
-      gewicht: getWeight(form.typ)
-    });
-
-    setForm(buildEmptyForm());
+    setSaveBusy(true);
+    try {
+      await onSaveGrade({
+        ...form,
+        traineeId: selectedTraineeId,
+        note: Number(form.note),
+        gewicht: getWeight(form.typ)
+      });
+      setForm(buildEmptyForm());
+      setSubmitAttempted(false);
+      setEditorOpen(false);
+    } catch (error) {
+      setActionError(error.message || "Die Note konnte nicht gespeichert werden.");
+    } finally {
+      setSaveBusy(false);
+    }
   }
 
   function handleEdit(grade) {
+    setActionError("");
+    setSubmitAttempted(false);
+    setDeleteTarget(null);
     setForm({
       id: grade.id,
       fach: grade.fach,
@@ -228,18 +274,70 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
       datum: grade.datum,
       note: String(grade.note)
     });
+    setEditorOpen(true);
+    requestAnimationFrame(() => editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
-  function handleExportPdf() {
-    generateGradesPdf({
-      entries: normalizedGrades,
-      traineeName: selectedProfile?.name || "",
-      trainingTitle: selectedProfile?.ausbildung || "",
-      currentDate: new Date()
-    });
+  function openNewGradeForm() {
+    setForm(buildEmptyForm());
+    setActionError("");
+    setSubmitAttempted(false);
+    setDeleteTarget(null);
+    setEditorOpen(true);
+    requestAnimationFrame(() => editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   }
 
-  const pageTitle = role === "trainer" ? "Notenansicht" : "Notenverwaltung";
+  function closeEditor() {
+    setForm(buildEmptyForm());
+    setSubmitAttempted(false);
+    setActionError("");
+    setEditorOpen(false);
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget || deleteBusy) {
+      return;
+    }
+
+    setDeleteBusy(true);
+    setActionError("");
+    try {
+      await onDeleteGrade(deleteTarget.id);
+      setDeleteTarget(null);
+      if (form.id === deleteTarget.id) {
+        closeEditor();
+      }
+    } catch (error) {
+      setActionError(error.message || "Die Note konnte nicht gelöscht werden.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  async function handleExportPdf() {
+    setPdfBusy(true);
+    setActionError("");
+    try {
+      await generateGradesPdf({
+        entries: normalizedGrades,
+        traineeName: selectedProfile?.name || "",
+        trainingTitle: selectedProfile?.ausbildung || "",
+        currentDate: new Date()
+      });
+    } catch (error) {
+      setActionError(error.message || "Die Notenübersicht konnte nicht erstellt werden.");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
+  function resetFilters() {
+    setQuery("");
+    setSubjectFilter("all");
+    setTypeFilter("all");
+  }
+
+  const pageTitle = role === "trainee" ? "Meine Noten" : role === "trainer" ? "Notenansicht" : "Notenverwaltung";
   const noTargetsMessage = role === "trainer"
     ? "Dir sind aktuell keine Azubis zugeordnet. Deshalb werden keine Noten angezeigt."
     : "Es sind noch keine Azubis vorhanden.";
@@ -252,10 +350,27 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
       <PageHeader
         kicker="Noten"
         title={pageTitle}
-        actions={selectedProfile ? <PrimaryButton variant="secondary" onClick={handleExportPdf}>Notenübersicht als PDF</PrimaryButton> : null}
+        subtitle={role === "trainee" ? "Leistungsnachweise eintragen und deine Entwicklung nach Fach verfolgen." : undefined}
+        actions={selectedProfile ? (
+          <>
+            {canManageGrades ? (
+              <PrimaryButton onClick={openNewGradeForm} disabled={saveBusy || deleteBusy}>
+                Note eintragen
+              </PrimaryButton>
+            ) : null}
+            <PrimaryButton
+              variant="secondary"
+              onClick={handleExportPdf}
+              disabled={pdfBusy || !normalizedGrades.length}
+            >
+              {pdfBusy ? "PDF wird erstellt..." : "Als PDF exportieren"}
+            </PrimaryButton>
+          </>
+        ) : null}
       />
 
       {loadError ? <div className="field-message error report-error-banner">{loadError}</div> : null}
+      {actionError ? <div className="field-message error report-error-banner" role="alert">{actionError}</div> : null}
 
       {role !== "trainee" ? (
         <section className="panel-card">
@@ -298,121 +413,207 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
       ) : (
         <>
           <section className="stats-grid">
-            <StatCard label="Gesamtdurchschnitt" value={statistics.overallAverage ? formatGrade(statistics.overallAverage) : "-"} note="Gewichtet über alle Fächer" />
-            <StatCard label="Beste Note" value={statistics.bestGrade ? formatGrade(statistics.bestGrade) : "-"} note="Niedrigster Notenwert" />
-            <StatCard label="Schlechteste Note" value={statistics.worstGrade ? formatGrade(statistics.worstGrade) : "-"} note="Höchster Notenwert" />
-            <StatCard label="Fächer" value={statistics.subjectCount} note={`${statistics.totalEntries} Leistungsnachweise gesamt`} />
+            <StatCard label="Notenschnitt" value={statistics.overallAverage ? formatGrade(statistics.overallAverage) : "-"} note="Nach Prüfungsart gewichtet" />
+            <StatCard
+              label="Letzte Note"
+              value={latestGrade ? formatGrade(latestGrade.note) : "-"}
+              note={latestGrade ? `${latestGrade.fach} · ${formatGradeDate(latestGrade.datum)}` : "Noch keine Note eingetragen"}
+            />
+            <StatCard label="Fächer" value={statistics.subjectCount} note="Mit mindestens einem Eintrag" />
+            <StatCard label="Leistungsnachweise" value={statistics.totalEntries} note="Insgesamt erfasst" />
           </section>
 
-          <section className="reports-layout">
-            <article className="panel-card">
+          {editorOpen && canManageGrades ? (
+            <article ref={editorRef} className="panel-card grade-entry-panel">
               <PageHeader
-                kicker={isReadOnly ? "Hinweis" : form.id ? "Bearbeiten" : "Neue Note"}
-                title={isReadOnly ? `Noten für ${selectedProfile.name}` : form.id ? "Leistungsnachweis bearbeiten" : "Leistungsnachweis anlegen"}
+                kicker={form.id ? "Bearbeiten" : "Neue Note"}
+                title={form.id ? "Leistungsnachweis bearbeiten" : "Leistungsnachweis eintragen"}
+                subtitle="Schulaufgaben werden doppelt, Stegreifaufgaben einfach gewichtet."
               />
-              {canManageGrades ? (
-                <>
-                  <div className="form-grid">
-                    <label>
-                      Fach
-                      <input value={form.fach} onChange={(event) => setForm({ ...form, fach: event.target.value })} />
-                      {errors.fach ? <span className="field-message error">{errors.fach}</span> : null}
-                    </label>
-                    <label>
-                      Art
-                      <select value={form.typ} onChange={(event) => setForm({ ...form, typ: event.target.value })}>
-                        {GRADE_TYPES.map((type) => (
-                          <option key={type.value} value={type.value}>
-                            {type.value}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Bezeichnung
-                      <input value={form.bezeichnung} onChange={(event) => setForm({ ...form, bezeichnung: event.target.value })} />
-                      {errors.bezeichnung ? <span className="field-message error">{errors.bezeichnung}</span> : null}
-                    </label>
-                    <label>
-                      Datum
-                      <input type="date" value={form.datum} onChange={(event) => setForm({ ...form, datum: event.target.value })} />
-                      {errors.datum ? <span className="field-message error">{errors.datum}</span> : null}
-                    </label>
-                    <label>
-                      Note
-                      <input type="number" min="1" max="6" step="0.1" value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} />
-                      {errors.note ? <span className="field-message error">{errors.note}</span> : null}
-                    </label>
-                    <div className="read-only-card grade-weight-hint">
-                      <span>Automatisches Gewicht</span>
-                      <strong>{getWeight(form.typ)}</strong>
-                      <small>{form.typ === "Schulaufgabe" ? "Schulaufgabe = 2" : "Stegreifaufgabe = 1"}</small>
-                    </div>
+              <form onSubmit={(event) => {
+                event.preventDefault();
+                handleSubmit();
+              }}>
+                <div className="form-grid grade-entry-grid">
+                  <label htmlFor="grade-subject">
+                    Fach
+                    <input
+                      id="grade-subject"
+                      list="grade-subject-options"
+                      value={form.fach}
+                      onChange={(event) => setForm({ ...form, fach: event.target.value })}
+                      placeholder="z. B. Netzwerktechnik"
+                      autoComplete="off"
+                      aria-invalid={submitAttempted && Boolean(errors.fach)}
+                      aria-describedby={submitAttempted && errors.fach ? "grade-subject-error" : undefined}
+                    />
+                    <datalist id="grade-subject-options">
+                      {subjects.map((subject) => <option key={subject} value={subject} />)}
+                    </datalist>
+                    {submitAttempted && errors.fach ? <span id="grade-subject-error" className="field-message error">{errors.fach}</span> : null}
+                  </label>
+                  <label htmlFor="grade-type">
+                    Prüfungsart
+                    <select id="grade-type" value={form.typ} onChange={(event) => setForm({ ...form, typ: event.target.value })}>
+                      {GRADE_TYPES.map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.value}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label htmlFor="grade-description">
+                    Bezeichnung
+                    <input
+                      id="grade-description"
+                      value={form.bezeichnung}
+                      onChange={(event) => setForm({ ...form, bezeichnung: event.target.value })}
+                      placeholder="z. B. Subnetting und VLAN"
+                      autoComplete="off"
+                      aria-invalid={submitAttempted && Boolean(errors.bezeichnung)}
+                      aria-describedby={submitAttempted && errors.bezeichnung ? "grade-description-error" : undefined}
+                    />
+                    {submitAttempted && errors.bezeichnung ? <span id="grade-description-error" className="field-message error">{errors.bezeichnung}</span> : null}
+                  </label>
+                  <label htmlFor="grade-date">
+                    Datum
+                    <input
+                      id="grade-date"
+                      type="date"
+                      value={form.datum}
+                      onChange={(event) => setForm({ ...form, datum: event.target.value })}
+                      aria-invalid={submitAttempted && Boolean(errors.datum)}
+                      aria-describedby={submitAttempted && errors.datum ? "grade-date-error" : undefined}
+                    />
+                    {submitAttempted && errors.datum ? <span id="grade-date-error" className="field-message error">{errors.datum}</span> : null}
+                  </label>
+                  <label htmlFor="grade-value">
+                    Note
+                    <input
+                      id="grade-value"
+                      type="number"
+                      min="1"
+                      max="6"
+                      step="0.1"
+                      inputMode="decimal"
+                      value={form.note}
+                      onChange={(event) => setForm({ ...form, note: event.target.value })}
+                      placeholder="1,0 bis 6,0"
+                      aria-invalid={submitAttempted && Boolean(errors.note)}
+                      aria-describedby={submitAttempted && errors.note ? "grade-value-error" : "grade-weight-help"}
+                    />
+                    {submitAttempted && errors.note ? <span id="grade-value-error" className="field-message error">{errors.note}</span> : null}
+                  </label>
+                  <div className="read-only-card grade-weight-hint" id="grade-weight-help">
+                    <span>Gewichtung</span>
+                    <strong>{getWeight(form.typ)}×</strong>
+                    <small>{form.typ === "Schulaufgabe" ? "Zählt doppelt im Durchschnitt" : "Zählt einfach im Durchschnitt"}</small>
                   </div>
-                  <div className="editor-footer">
-                    <PrimaryButton onClick={handleSubmit}>{form.id ? "Note aktualisieren" : "Note speichern"}</PrimaryButton>
-                    {form.id ? (
-                      <PrimaryButton variant="ghost" onClick={() => setForm(buildEmptyForm())}>
-                        Bearbeitung abbrechen
-                      </PrimaryButton>
-                    ) : null}
-                  </div>
-                </>
-              ) : (
-                <EmptyState title="Read-only Ansicht" />
-              )}
-            </article>
-
-            <article className="panel-card">
-              <PageHeader kicker="Fächer" title="Fachschnitte" />
-              {loadingGrades ? (
-                <div className="empty-table">Noten werden geladen.</div>
-              ) : groupedGrades.length ? (
-                <div className="subject-summary-grid grade-summary-grid">
-                  {groupedGrades.map((group) => (
-                    <div key={group.fach} className="subject-summary-card grade-summary-card">
-                      <div className="subject-summary-head">
-                        <div>
-                          <strong>{group.fach}</strong>
-                          <p>{group.count} Leistungsnachweise</p>
-                        </div>
-                        {group.average ? <GradePill note={group.average} /> : null}
-                      </div>
-                      <div className="subject-summary-meta">
-                        <span>Schulaufgaben: {group.schulaufgaben}</span>
-                        <span>Stegreifaufgaben: {group.stegreifaufgaben}</span>
-                        <span>Gewichtung: {group.totalWeight}</span>
-                      </div>
-                    </div>
-                  ))}
                 </div>
-              ) : (
-                <EmptyState title="Noch keine Noten" description={noGradesMessage} />
-              )}
+                <div className="editor-footer">
+                  <PrimaryButton type="submit" disabled={saveBusy}>
+                    {saveBusy ? "Wird gespeichert..." : form.id ? "Änderungen speichern" : "Note speichern"}
+                  </PrimaryButton>
+                  <PrimaryButton type="button" variant="ghost" onClick={closeEditor} disabled={saveBusy}>
+                    Abbrechen
+                  </PrimaryButton>
+                </div>
+              </form>
             </article>
+          ) : null}
+
+          <section className="panel-card">
+            <PageHeader
+              kicker="Fächer"
+              title="Deine Fachschnitte"
+              subtitle="Wähle ein Fach aus, um die Liste darunter zu filtern."
+            />
+            {loadingGrades ? (
+              <div className="empty-table">Noten werden geladen.</div>
+            ) : groupedGrades.length ? (
+              <div className="subject-summary-grid grade-summary-grid">
+                {groupedGrades.map((group) => (
+                  <button
+                    type="button"
+                    key={group.fach}
+                    className={`subject-summary-card grade-summary-card grade-summary-card-button${subjectFilter === group.fach ? " active" : ""}`}
+                    onClick={() => setSubjectFilter((current) => current === group.fach ? "all" : group.fach)}
+                    aria-pressed={subjectFilter === group.fach}
+                  >
+                    <div className="subject-summary-head">
+                      <div>
+                        <strong>{group.fach}</strong>
+                        <p>{group.count} Leistungsnachweise</p>
+                      </div>
+                      {group.average ? <GradePill note={group.average} /> : null}
+                    </div>
+                    <div className="subject-summary-meta">
+                      <span>{group.schulaufgaben} Schulaufgaben</span>
+                      <span>{group.stegreifaufgaben} Stegreifaufgaben</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <EmptyState title="Noch keine Noten" description={noGradesMessage} />
+            )}
           </section>
 
           <section className="panel-card">
-            <PageHeader kicker="Übersicht" title="Leistungsnachweise nach Fach" />
-            <FilterBar>
-              <input placeholder="Suche nach Fach, Art, Bezeichnung oder Datum" value={query} onChange={(event) => setQuery(event.target.value)} />
-              <select value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)}>
-                <option value="all">Alle Fächer</option>
-                {subjects.map((subject) => (
-                  <option key={subject} value={subject}>
-                    {subject}
-                  </option>
-                ))}
-              </select>
-              <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-                <option value="all">Alle Arten</option>
-                {GRADE_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.value}
-                  </option>
-                ))}
-              </select>
-            </FilterBar>
+            <PageHeader
+              kicker="Übersicht"
+              title="Alle Leistungsnachweise"
+              subtitle={filtersActive ? `${filteredEntryCount} von ${statistics.totalEntries} Einträgen werden angezeigt.` : "Nach Fach gruppiert, neueste Einträge zuerst."}
+              actions={filtersActive ? (
+                <PrimaryButton variant="ghost" onClick={resetFilters}>Filter zurücksetzen</PrimaryButton>
+              ) : null}
+            />
+            <div className="grade-filter-wrap">
+              <FilterBar>
+                <input
+                  type="search"
+                  aria-label="Leistungsnachweise durchsuchen"
+                  placeholder="Fach oder Bezeichnung suchen"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+                <select aria-label="Nach Fach filtern" value={subjectFilter} onChange={(event) => setSubjectFilter(event.target.value)}>
+                  <option value="all">Alle Fächer</option>
+                  {subjects.map((subject) => (
+                    <option key={subject} value={subject}>
+                      {subject}
+                    </option>
+                  ))}
+                </select>
+                <select aria-label="Nach Prüfungsart filtern" value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                  <option value="all">Alle Arten</option>
+                  {GRADE_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.value}
+                    </option>
+                  ))}
+                </select>
+              </FilterBar>
+            </div>
+
+            {deleteTarget ? (
+              <div className="grade-delete-confirmation" role="alertdialog" aria-labelledby="grade-delete-title">
+                <div>
+                  <strong id="grade-delete-title">Leistungsnachweis wirklich löschen?</strong>
+                  <p>
+                    {deleteTarget.fach} · {deleteTarget.bezeichnung} · Note {formatGrade(deleteTarget.note)}
+                  </p>
+                </div>
+                <div className="grade-delete-actions">
+                  <PrimaryButton variant="ghost" onClick={() => setDeleteTarget(null)} disabled={deleteBusy}>
+                    Abbrechen
+                  </PrimaryButton>
+                  <PrimaryButton variant="danger" onClick={handleDelete} disabled={deleteBusy}>
+                    {deleteBusy ? "Wird gelöscht..." : "Endgültig löschen"}
+                  </PrimaryButton>
+                </div>
+              </div>
+            ) : null}
 
             {loadingGrades ? (
               <div className="empty-table">Noten werden geladen.</div>
@@ -437,38 +638,43 @@ export function NotenPage({ role, grades, report, currentUser, trainees, users, 
                       </div>
                     </div>
 
-                    <DataTable
-                      rowKey="id"
-                      rows={group.entries}
-                      columns={[
-                        { key: "typ", label: "Art", render: (row) => <TypeBadge type={row.typ} /> },
-                        { key: "bezeichnung", label: "Bezeichnung" },
-                        { key: "datum", label: "Datum", render: (row) => formatGradeDate(row.datum) },
-                        { key: "note", label: "Note", render: (row) => <GradePill note={row.note} /> },
-                        { key: "gewicht", label: "Gewicht", render: (row) => <span className="grade-weight-badge">{row.gewicht}</span> },
-                        ...(canManageGrades
-                          ? [{
-                              key: "actions",
-                              label: "Aktionen",
-                              render: (row) => (
-                                <div className="table-actions">
-                                  <PrimaryButton variant="secondary" onClick={() => handleEdit(row)}>
-                                    Bearbeiten
-                                  </PrimaryButton>
-                                  <PrimaryButton variant="ghost" onClick={() => onDeleteGrade(row.id)}>
-                                    Löschen
-                                  </PrimaryButton>
-                                </div>
-                              )
-                            }]
-                          : [])
-                      ]}
-                    />
+                    <div className="grade-desktop-table">
+                      <DataTable
+                        rowKey="id"
+                        rows={group.entries}
+                        columns={[
+                          { key: "typ", label: "Art", render: (row) => <TypeBadge type={row.typ} /> },
+                          { key: "bezeichnung", label: "Bezeichnung" },
+                          { key: "datum", label: "Datum", render: (row) => formatGradeDate(row.datum) },
+                          { key: "note", label: "Note", render: (row) => <GradePill note={row.note} /> },
+                          { key: "gewicht", label: "Gewicht", render: (row) => <span className="grade-weight-badge">{row.gewicht}×</span> },
+                          ...(canManageGrades
+                            ? [{
+                                key: "actions",
+                                label: "Aktionen",
+                                render: (row) => (
+                                  <div className="table-actions">
+                                    <PrimaryButton variant="secondary" onClick={() => handleEdit(row)} disabled={saveBusy || deleteBusy}>
+                                      Bearbeiten
+                                    </PrimaryButton>
+                                    <PrimaryButton variant="ghost" onClick={() => setDeleteTarget(row)} disabled={saveBusy || deleteBusy}>
+                                      Löschen
+                                    </PrimaryButton>
+                                  </div>
+                                )
+                              }]
+                            : [])
+                        ]}
+                      />
+                    </div>
                   </article>
                 ))}
               </div>
             ) : (
-              <EmptyState title="Keine Noten gefunden" description={selectedProfile ? "" : noTargetsMessage} />
+              <EmptyState
+                title={statistics.totalEntries ? "Keine passenden Noten gefunden" : "Noch keine Noten"}
+                description={statistics.totalEntries ? "Passe die Suche oder die Filter an." : noGradesMessage}
+              />
             )}
           </section>
         </>

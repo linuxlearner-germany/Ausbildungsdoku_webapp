@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { applyThemeAttribute, getSystemPrefersDark, isThemePreference, readStoredThemePreference, resolveTheme, THEME_STORAGE_KEY } from "../lib/theme.mjs";
+import { readStoredBackgroundPreference } from "../lib/background.mjs";
 
 const AppStateContext = createContext(null);
 
@@ -11,6 +12,7 @@ export function AppStateProvider({ children }) {
   const [grades, setGrades] = useState([]);
   const [themePreference, setThemePreference] = useState(initialThemePreference);
   const [theme, setTheme] = useState(initialResolvedTheme);
+  const [backgroundPreference, setBackgroundPreference] = useState(() => readStoredBackgroundPreference(typeof window !== "undefined" ? window.localStorage : null));
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(null);
 
@@ -71,6 +73,8 @@ export function AppStateProvider({ children }) {
         setTheme,
         themePreference,
         setThemePreference,
+        backgroundPreference,
+        setBackgroundPreference,
         busy,
         setBusy,
         flash,

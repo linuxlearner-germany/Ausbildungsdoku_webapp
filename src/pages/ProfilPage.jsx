@@ -1,9 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { PageHeader } from "../components/PageHeader";
 import { PrimaryButton } from "../components/PrimaryButton";
+import { ThemeSwitch } from "../components/ThemeSwitch";
 import { EmptyState } from "../components/EmptyState";
 import { downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
 import { apiUrl, isStaticDemo } from "../lib/runtime";
+import { BACKGROUND_REGISTRY, getBackgroundUrl } from "../lib/background.mjs";
 
 function buildProfileForm(profile) {
   return {
@@ -34,9 +37,9 @@ function ProfileDetailGrid({ profile }) {
   );
 }
 
-function ThemeSettingsPanel({ theme, themePreference, onToggleTheme, onSaveThemePreference }) {
+function ThemeSettingsPanel({ theme, themePreference, backgroundPreference, onToggleTheme, onSaveThemePreference, onSaveBackgroundPreference }) {
   return (
-    <section className="panel-card">
+    <section id="darstellung" className="panel-card display-settings-panel" tabIndex="-1">
       <PageHeader
         kicker="Persönliche Einstellungen"
         title="Anzeige und Theme"
@@ -55,9 +58,33 @@ function ThemeSettingsPanel({ theme, themePreference, onToggleTheme, onSaveTheme
             <option value="dark">Dark</option>
           </select>
         </label>
-        <PrimaryButton variant="secondary" onClick={onToggleTheme}>
-          Schnell umschalten
-        </PrimaryButton>
+        <ThemeSwitch theme={theme} onToggle={onToggleTheme} />
+      </div>
+      <div className="background-settings">
+        <div>
+          <strong>Hintergrundbild</strong>
+          <p className="field-message">Die Auswahl gilt unabhängig vom gewählten Theme auf diesem Gerät.</p>
+        </div>
+        <div className="background-grid" role="group" aria-label="Hintergrundbild auswählen">
+          {BACKGROUND_REGISTRY.map((background) => {
+            const selected = backgroundPreference === background.key;
+            return (
+              <button
+                key={background.key}
+                type="button"
+                className={`background-option${selected ? " is-selected" : ""}`}
+                aria-pressed={selected}
+                onClick={() => onSaveBackgroundPreference(background.key)}
+              >
+                <span className="background-thumbnail">
+                  {background.path ? <img src={getBackgroundUrl(background.key, 1920)} alt="" loading="lazy" /> : <span className="background-none-preview">Ohne Bild</span>}
+                  {selected ? <span className="background-check" aria-hidden="true">✓</span> : null}
+                </span>
+                <span>{background.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </section>
   );
@@ -164,7 +191,6 @@ function PasswordChangePanel({ onChangeOwnPassword, forced = false }) {
         <strong>Passwortregeln:</strong>
         <ul className="inline-notice-list">
           <li>Das neue Passwort muss mindestens 10 Zeichen lang sein.</li>
-          <li>Es muss mindestens einen Großbuchstaben, einen Kleinbuchstaben, eine Zahl und ein Sonderzeichen enthalten.</li>
           <li>Das neue Passwort muss sich vom aktuellen Passwort unterscheiden.</li>
           <li>Neues Passwort und Wiederholung müssen exakt übereinstimmen.</li>
         </ul>
@@ -180,7 +206,8 @@ function PasswordChangePanel({ onChangeOwnPassword, forced = false }) {
   );
 }
 
-export function ProfilPage({ role, report, trainees, users, theme, themePreference, onToggleTheme, onSaveThemePreference, onSaveManagedProfile, onChangeOwnPassword, forcePasswordChange = false }) {
+export function ProfilPage({ role, report, trainees, users, theme, themePreference, backgroundPreference, onToggleTheme, onSaveThemePreference, onSaveBackgroundPreference, onSaveManagedProfile, onChangeOwnPassword, forcePasswordChange = false }) {
+  const location = useLocation();
   const targets = useMemo(() => {
     if (role === "trainer") {
       return trainees || [];
@@ -195,6 +222,16 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
   const selectedProfile = targets.find((target) => target.id === selectedId) || null;
   const [form, setForm] = useState(buildProfileForm(selectedProfile));
   const [pdfError, setPdfError] = useState("");
+
+  useEffect(() => {
+    if (location.hash !== "#darstellung") return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      const target = document.getElementById("darstellung");
+      target?.scrollIntoView({ block: "start" });
+      target?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [location.hash]);
 
   useEffect(() => {
     if (!targets.length) {
@@ -214,7 +251,7 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
   async function handlePdfExport(profile, entries) {
     if (isStaticDemo()) {
       setPdfError("");
-      downloadReportPdf({
+      await downloadReportPdf({
         entries,
         traineeName: profile?.name || "",
         trainingTitle: profile?.ausbildung || ""
@@ -245,9 +282,9 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
           kicker="Profil"
           title="Persönliche und betriebliche Daten"
           actions={
-            <button type="button" className="button button-secondary" onClick={() => handlePdfExport(report?.trainee, report?.entries || [])}>
+            <PrimaryButton type="button" variant="secondary" onClick={() => handlePdfExport(report?.trainee, report?.entries || [])}>
               PDF exportieren
-            </button>
+            </PrimaryButton>
           }
         />
         {pdfError ? <div className="field-message error report-error-banner">{pdfError}</div> : null}
@@ -257,8 +294,10 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
         <ThemeSettingsPanel
           theme={theme}
           themePreference={themePreference}
+          backgroundPreference={backgroundPreference}
           onToggleTheme={onToggleTheme}
           onSaveThemePreference={onSaveThemePreference}
+          onSaveBackgroundPreference={onSaveBackgroundPreference}
         />
         <PasswordChangePanel onChangeOwnPassword={onChangeOwnPassword} />
       </div>
@@ -272,9 +311,9 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
         title={role === "trainer" ? "Azubi-Stammdaten pflegen" : "Stammdaten verwalten"}
         actions={
           selectedProfile ? (
-            <button type="button" className="button button-secondary" onClick={() => handlePdfExport(selectedProfile, trainees.find((target) => target.id === selectedProfile.id)?.entries || [])}>
+            <PrimaryButton type="button" variant="secondary" onClick={() => handlePdfExport(selectedProfile, trainees.find((target) => target.id === selectedProfile.id)?.entries || [])}>
               PDF für Auswahl
-            </button>
+            </PrimaryButton>
           ) : null
         }
       />
@@ -346,8 +385,10 @@ export function ProfilPage({ role, report, trainees, users, theme, themePreferen
       <ThemeSettingsPanel
         theme={theme}
         themePreference={themePreference}
+        backgroundPreference={backgroundPreference}
         onToggleTheme={onToggleTheme}
         onSaveThemePreference={onSaveThemePreference}
+        onSaveBackgroundPreference={onSaveBackgroundPreference}
       />
       <PasswordChangePanel onChangeOwnPassword={onChangeOwnPassword} />
     </div>

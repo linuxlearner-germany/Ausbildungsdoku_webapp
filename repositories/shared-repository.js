@@ -63,6 +63,7 @@ function createSharedRepository({ db, writeAuditLog }) {
         "ausbildung",
         "betrieb",
         "berufsschule",
+        "relay_email as relayEmail",
         "ausbildungs_start as ausbildungsStart",
         "ausbildungs_ende as ausbildungsEnde",
         "created_at as createdAt",
@@ -108,7 +109,7 @@ function createSharedRepository({ db, writeAuditLog }) {
 
   async function findUserForAdmin(userId) {
     return db("users")
-      .select("id", "name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule", "ausbildungs_start as ausbildungsStart", "ausbildungs_ende as ausbildungsEnde", "created_at as createdAt")
+      .select("id", "name", "username", "email", "role", "ausbildung", "betrieb", "berufsschule", "relay_email as relayEmail", "ausbildungs_start as ausbildungsStart", "ausbildungs_ende as ausbildungsEnde", "created_at as createdAt")
       .where({ id: userId })
       .first();
   }
@@ -136,6 +137,8 @@ function createSharedRepository({ db, writeAuditLog }) {
     await db.transaction(async (trx) => {
       await trx("audit_logs").where({ actor_user_id: userId }).update({ actor_user_id: null });
       await trx("audit_logs").where({ target_user_id: userId }).update({ target_user_id: null });
+      await trx("mail_deliveries").where({ user_id: userId }).del();
+      await trx("password_reset_tokens").where({ user_id: userId }).del();
       await trx("trainee_trainers").where({ trainee_id: userId }).del();
       await trx("trainee_trainers").where({ trainer_id: userId }).del();
       await trx("grades").where({ trainee_id: userId }).del();
@@ -211,6 +214,7 @@ function createSharedRepository({ db, writeAuditLog }) {
         "ausbildung",
         "betrieb",
         "berufsschule",
+        "relay_email as relayEmail",
         "ausbildungs_start as ausbildungsStart",
         "ausbildungs_ende as ausbildungsEnde",
         "theme_preference as themePreference"

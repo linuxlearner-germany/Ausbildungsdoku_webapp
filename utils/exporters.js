@@ -2,6 +2,12 @@ const fs = require("fs");
 const path = require("path");
 const PDFDocument = require("pdfkit");
 
+const REPORT_SIGNATURE_LABELS = Object.freeze([
+  "Unterschrift Azubi",
+  "Unterschrift Ausbilder",
+  "Unterschrift Erziehungsberechtigte/r"
+]);
+
 function escapeCsvCell(value) {
   const normalized = String(value ?? "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   const sanitized = /^[=+\-@]/.test(normalized) ? `'${normalized}` : normalized;
@@ -192,7 +198,6 @@ function registerPdfFonts(doc) {
 
 function renderPdf(res, trainee, entries, picturesDir) {
   const logoPath = safePdfAssetPath(picturesDir, "logo-mark.png", "WIWEB-waage-vektor_ohne_schrift.png");
-  const fonts = registerPdfFonts(new PDFDocument({ autoFirstPage: false }));
   const sortedEntries = [...entries]
     .filter((entry) => entry.status === "signed")
     .sort((a, b) => String(a.dateFrom).localeCompare(String(b.dateFrom)));
@@ -210,11 +215,7 @@ function renderPdf(res, trainee, entries, picturesDir) {
   }
 
   const doc = new PDFDocument({ size: "A4", margin: 50, autoFirstPage: true });
-  if (fonts.regular === "ReportSans") {
-    doc.registerFont("ReportSans", resolvePdfFontPaths().regular);
-    doc.registerFont("ReportSans-Bold", resolvePdfFontPaths().bold);
-  }
-
+  const fonts = registerPdfFonts(doc);
   const regularFont = fonts.regular;
   const boldFont = fonts.bold;
   const pageBottomY = doc.page.height - doc.page.margins.bottom;
@@ -252,6 +253,26 @@ function renderPdf(res, trainee, entries, picturesDir) {
       doc.fillColor("#4B5F5B").text(weekLabel, 50, 202);
     }
     doc.moveTo(50, 225).lineTo(545, 225).strokeColor("#B7C7C1").lineWidth(1).stroke();
+  }
+
+  function renderSignaturePage() {
+    renderHeader("Unterschriften");
+    setFont("bold", 12);
+    doc.fillColor("#11211F").text("Bestätigung", 50, 285);
+    setFont("regular", 11);
+    doc.text("Hiermit wird bestätigt, dass die Berichtsheftführung geprüft wurde.", 50, 307, { width: 495 });
+
+    const signatureRows = REPORT_SIGNATURE_LABELS.map((label, index) => ({
+      lineY: 400 + (index * 90),
+      label
+    }));
+
+    signatureRows.forEach(({ lineY, label }) => {
+      doc.moveTo(50, lineY).lineTo(260, lineY).strokeColor("#526763").lineWidth(1).stroke();
+      doc.moveTo(320, lineY).lineTo(545, lineY).strokeColor("#526763").lineWidth(1).stroke();
+      doc.fillColor("#5D6F6A").text("Ort, Datum", 50, lineY + 8);
+      doc.text(label, 320, lineY + 8, { width: 225 });
+    });
   }
 
   function buildEntryBody(entry) {
@@ -369,19 +390,7 @@ function renderPdf(res, trainee, entries, picturesDir) {
     setFont("regular", 12);
     doc.fillColor("#11211F").text("Aktuell sind keine signierten Einträge für den PDF-Export vorhanden.", 50, 250);
     doc.addPage();
-    renderHeader("Unterschriften");
-    setFont("bold", 12);
-    doc.fillColor("#11211F").text("Bestätigung", 50, 310);
-    setFont("regular", 11);
-    doc.text("Hiermit wird bestätigt, dass die Berichtsheftführung geprüft wurde.", 50, 332, { width: 495 });
-    doc.moveTo(50, 430).lineTo(260, 430).strokeColor("#526763").lineWidth(1).stroke();
-    doc.moveTo(320, 430).lineTo(545, 430).strokeColor("#526763").lineWidth(1).stroke();
-    doc.fillColor("#5D6F6A").text("Ort, Datum", 50, 438);
-    doc.text("Unterschrift Azubi", 320, 438);
-    doc.moveTo(50, 520).lineTo(260, 520).strokeColor("#526763").lineWidth(1).stroke();
-    doc.moveTo(320, 520).lineTo(545, 520).strokeColor("#526763").lineWidth(1).stroke();
-    doc.text("Ort, Datum", 50, 528);
-    doc.text("Unterschrift Ausbilder", 320, 528);
+    renderSignaturePage();
     doc.end();
     return;
   }
@@ -400,19 +409,7 @@ function renderPdf(res, trainee, entries, picturesDir) {
   });
 
   doc.addPage();
-  renderHeader("Unterschriften");
-  setFont("bold", 12);
-  doc.fillColor("#11211F").text("Bestätigung", 50, 310);
-  setFont("regular", 11);
-  doc.text("Hiermit wird bestätigt, dass die Berichtsheftführung geprüft wurde.", 50, 332, { width: 495 });
-  doc.moveTo(50, 430).lineTo(260, 430).strokeColor("#526763").lineWidth(1).stroke();
-  doc.moveTo(320, 430).lineTo(545, 430).strokeColor("#526763").lineWidth(1).stroke();
-  doc.fillColor("#5D6F6A").text("Ort, Datum", 50, 438);
-  doc.text("Unterschrift Azubi", 320, 438);
-  doc.moveTo(50, 520).lineTo(260, 520).strokeColor("#526763").lineWidth(1).stroke();
-  doc.moveTo(320, 520).lineTo(545, 520).strokeColor("#526763").lineWidth(1).stroke();
-  doc.text("Ort, Datum", 50, 528);
-  doc.text("Unterschrift Ausbilder", 320, 528);
+  renderSignaturePage();
   doc.end();
 }
 
@@ -480,6 +477,7 @@ function renderGradesPdf(res, trainee, grades, picturesDir) {
 }
 
 module.exports = {
+  REPORT_SIGNATURE_LABELS,
   buildAdminUsersCsv,
   buildEntriesCsv,
   renderPdf,

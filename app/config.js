@@ -153,6 +153,23 @@ const envSchema = z.object({
   REDIS_COMMAND_TIMEOUT_MS: z.coerce.number().int().min(500).max(120_000).default(5_000),
   REDIS_MAX_RETRIES: z.coerce.number().int().min(0).max(20).default(4),
   REDIS_PING_INTERVAL_MS: z.coerce.number().int().min(1_000).max(120_000).default(30_000),
+  SMTP_ENABLED: z.union([z.string(), z.boolean()]).optional(),
+  SMTP_HOST: z.string().trim().optional().default(""),
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(587),
+  SMTP_SECURE: z.union([z.string(), z.boolean()]).optional(),
+  SMTP_REQUIRE_TLS: z.union([z.string(), z.boolean()]).optional(),
+  SMTP_USER: z.string().trim().optional().default(""),
+  SMTP_PASSWORD: z.string().optional().default(""),
+  SMTP_FROM: z.string().trim().optional().default(""),
+  SMTP_REPLY_TO: z.string().trim().optional().default(""),
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().min(10).max(1440).default(60),
+  PASSWORD_RESET_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(900_000),
+  PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(100).default(5),
+  REMINDERS_ENABLED: z.union([z.string(), z.boolean()]).optional(),
+  REMINDER_CHECK_INTERVAL_MS: z.coerce.number().int().min(60_000).max(86_400_000).default(900_000),
+  REMINDER_SEND_HOUR: z.coerce.number().int().min(0).max(23).default(17),
+  REMINDER_WEEKDAYS_ONLY: z.union([z.string(), z.boolean()]).optional(),
+  TRAINER_BACKLOG_THRESHOLD: z.coerce.number().int().min(1).max(10000).default(50),
   DB_USER: z.string().trim().optional().default(""),
   DB_PASSWORD: z.string().optional().default(""),
   MSSQL_HOST: z.string().trim().min(1),
@@ -214,6 +231,23 @@ function createConfig({ env = process.env } = {}) {
     REDIS_COMMAND_TIMEOUT_MS: readNumberEnv(env.REDIS_COMMAND_TIMEOUT_MS, 5_000),
     REDIS_MAX_RETRIES: readNumberEnv(env.REDIS_MAX_RETRIES, 4),
     REDIS_PING_INTERVAL_MS: readNumberEnv(env.REDIS_PING_INTERVAL_MS, 30_000),
+    SMTP_ENABLED: env.SMTP_ENABLED,
+    SMTP_HOST: readStringEnv(env.SMTP_HOST, ""),
+    SMTP_PORT: readNumberEnv(env.SMTP_PORT, 587),
+    SMTP_SECURE: env.SMTP_SECURE,
+    SMTP_REQUIRE_TLS: env.SMTP_REQUIRE_TLS,
+    SMTP_USER: readStringEnv(env.SMTP_USER, ""),
+    SMTP_PASSWORD: env.SMTP_PASSWORD || "",
+    SMTP_FROM: readStringEnv(env.SMTP_FROM, ""),
+    SMTP_REPLY_TO: readStringEnv(env.SMTP_REPLY_TO, ""),
+    PASSWORD_RESET_TTL_MINUTES: readNumberEnv(env.PASSWORD_RESET_TTL_MINUTES, 60),
+    PASSWORD_RESET_RATE_LIMIT_WINDOW_MS: readNumberEnv(env.PASSWORD_RESET_RATE_LIMIT_WINDOW_MS, 900_000),
+    PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS: readNumberEnv(env.PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS, 5),
+    REMINDERS_ENABLED: env.REMINDERS_ENABLED,
+    REMINDER_CHECK_INTERVAL_MS: readNumberEnv(env.REMINDER_CHECK_INTERVAL_MS, 900_000),
+    REMINDER_SEND_HOUR: readNumberEnv(env.REMINDER_SEND_HOUR, 17),
+    REMINDER_WEEKDAYS_ONLY: env.REMINDER_WEEKDAYS_ONLY,
+    TRAINER_BACKLOG_THRESHOLD: readNumberEnv(env.TRAINER_BACKLOG_THRESHOLD, 50),
     DB_USER: readStringEnv(env.DB_USER, ""),
     DB_PASSWORD: env.DB_PASSWORD || "",
     MSSQL_HOST: requireEnv("MSSQL_HOST", readStringEnv(env.MSSQL_HOST, "")),
@@ -263,6 +297,8 @@ function createConfig({ env = process.env } = {}) {
   const sessionCookieDomain = readStringEnv(values.SESSION_COOKIE_DOMAIN, "");
   const loginRateLimitWindowMs = values.LOGIN_RATE_LIMIT_WINDOW_MS || 60 * 1000;
   const loginRateLimitMaxAttempts = values.LOGIN_RATE_LIMIT_MAX_ATTEMPTS || (isProduction ? 5 : 50);
+  const smtpEnabled = readBooleanEnv(values.SMTP_ENABLED, false);
+  const remindersEnabled = readBooleanEnv(values.REMINDERS_ENABLED, false);
   const dbUser = values.DB_USER;
   const dbPassword = values.DB_PASSWORD;
   const reportingProgressToday = values.REPORTING_PROGRESS_TODAY
@@ -336,6 +372,27 @@ function createConfig({ env = process.env } = {}) {
       maxRetries: values.REDIS_MAX_RETRIES,
       pingIntervalMs: values.REDIS_PING_INTERVAL_MS
     },
+    mail: {
+      enabled: smtpEnabled,
+      host: values.SMTP_HOST,
+      port: values.SMTP_PORT,
+      secure: readBooleanEnv(values.SMTP_SECURE, values.SMTP_PORT === 465),
+      requireTls: readBooleanEnv(values.SMTP_REQUIRE_TLS, values.SMTP_PORT !== 465),
+      user: values.SMTP_USER,
+      password: values.SMTP_PASSWORD,
+      from: values.SMTP_FROM,
+      replyTo: values.SMTP_REPLY_TO,
+      passwordResetTtlMinutes: values.PASSWORD_RESET_TTL_MINUTES,
+      passwordResetRateLimitWindowMs: values.PASSWORD_RESET_RATE_LIMIT_WINDOW_MS,
+      passwordResetRateLimitMaxAttempts: values.PASSWORD_RESET_RATE_LIMIT_MAX_ATTEMPTS
+    },
+    reminders: {
+      enabled: remindersEnabled,
+      checkIntervalMs: values.REMINDER_CHECK_INTERVAL_MS,
+      sendHour: values.REMINDER_SEND_HOUR,
+      weekdaysOnly: readBooleanEnv(values.REMINDER_WEEKDAYS_ONLY, true),
+      trainerBacklogThreshold: values.TRAINER_BACKLOG_THRESHOLD
+    },
     mssql: {
       host: values.MSSQL_HOST,
       port: values.MSSQL_PORT,
@@ -371,6 +428,22 @@ function createConfig({ env = process.env } = {}) {
     throw new Error("REDIS_KEY_PREFIX muss mit ':' enden.");
   }
 
+  if (config.mail.enabled && (!config.mail.host || !config.mail.from)) {
+    throw new Error("SMTP_HOST und SMTP_FROM muessen bei SMTP_ENABLED=true gesetzt sein.");
+  }
+
+  if (config.mail.enabled && Boolean(config.mail.user) !== Boolean(config.mail.password)) {
+    throw new Error("SMTP_USER und SMTP_PASSWORD muessen gemeinsam gesetzt oder beide leer sein.");
+  }
+
+  if (config.mail.enabled && !config.app.publicBaseUrl) {
+    throw new Error("APP_BASE_URL muss bei SMTP_ENABLED=true gesetzt sein.");
+  }
+
+  if (config.reminders.enabled && !config.mail.enabled) {
+    throw new Error("REMINDERS_ENABLED=true erfordert SMTP_ENABLED=true.");
+  }
+
   if (!config.isTest && !config.redis.password) {
     throw new Error("REDIS_PASSWORD muss gesetzt sein.");
   }
@@ -393,6 +466,10 @@ function createConfig({ env = process.env } = {}) {
 
   if (config.isProduction && config.bootstrap.resetDatabaseOnStart) {
     throw new Error("RESET_DATABASE_ON_START darf in Produktion nicht aktiviert sein.");
+  }
+
+  if (config.isProduction && !config.bootstrap.applyMigrationsOnStart) {
+    throw new Error("APPLY_MIGRATIONS_ON_START darf in Produktion nicht deaktiviert sein.");
   }
 
   if (config.session.cookieDomain && ["localhost", "127.0.0.1"].includes(config.session.cookieDomain)) {

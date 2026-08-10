@@ -11,7 +11,6 @@
 .grade-summary-card,
 .grade-section-card,
 .grade-stat-detail,
-.mobile-record-card,
 .approval-list-row,
 .approval-content-card,
 .import-row-card,
@@ -36,7 +35,7 @@
   background-color: #0f1724;
   background-image:
     linear-gradient(rgba(10, 20, 30, 0.75), rgba(10, 20, 30, 0.75)),
-    url("/Pictures/login-bg.png");
+    var(--login-background-image);
   background-position: center;
   background-repeat: no-repeat;
   background-size: cover;
@@ -58,8 +57,9 @@
 
 .login-brand {
   display: flex;
-  gap: 0.9rem;
-  align-items: center;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: flex-start;
 }
 
 .login-brand h1 {
@@ -115,6 +115,30 @@
   color: #fecaca;
 }
 
+.login-secondary-link {
+  color: #bfdbfe;
+  text-align: center;
+  text-underline-offset: 0.2em;
+}
+
+.login-secondary-link:hover {
+  color: #ffffff;
+}
+
+.password-reset-card {
+  max-width: 460px;
+}
+
+.password-reset-result {
+  display: grid;
+  gap: 1rem;
+}
+
+.password-reset-result p {
+  margin: 0;
+  color: #e2e8f0;
+}
+
 .list-stack,
 .quick-actions,
 .trainer-overview-grid,
@@ -162,8 +186,6 @@
 .approval-row-meta,
 .approval-action-bar,
 .approval-bulk-bar,
-.mobile-record-head,
-.mobile-record-body,
 .admin-user-card-head,
 .admin-user-facts,
 .admin-assignment-row,
@@ -182,7 +204,6 @@
 .approval-row-copy span,
 .approval-row-meta,
 .approval-detail-head p,
-.mobile-record-body small,
 .admin-user-card-head p,
 .admin-user-relations p,
 .admin-assignment-copy p,
@@ -229,10 +250,6 @@
 .admin-section-label strong,
 .approval-section-head strong {
   color: var(--app-text);
-}
-
-.mobile-records {
-  display: none;
 }
 
 .grade-pill,
@@ -282,6 +299,66 @@
   transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
+.grade-entry-panel {
+  scroll-margin-top: 1rem;
+}
+
+.grade-entry-panel form {
+  display: grid;
+  gap: 1rem;
+}
+
+.grade-summary-card-button {
+  width: 100%;
+  color: var(--app-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.grade-summary-card-button:hover,
+.grade-summary-card-button.active {
+  background: var(--app-surface-muted);
+  border-color: var(--app-border-strong);
+}
+
+.grade-summary-card-button.active {
+  box-shadow: 0 0 0 2px var(--app-primary-soft);
+}
+
+.grade-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.grade-filter-wrap .filter-bar {
+  grid-template-columns: minmax(260px, 2fr) repeat(2, minmax(170px, 1fr));
+}
+
+.grade-delete-confirmation,
+.grade-delete-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.grade-delete-confirmation {
+  justify-content: space-between;
+}
+.grade-delete-confirmation p {
+  color: var(--app-muted);
+}
+
+.grade-delete-confirmation {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--app-danger) 35%, var(--app-border) 65%);
+  border-radius: var(--app-radius-sm);
+  background: var(--app-danger-soft);
+}
+
+.grade-delete-confirmation p {
+  margin: 0.25rem 0 0;
+}
+
 .approval-summary {
   display: grid;
   gap: 1rem;
@@ -315,6 +392,125 @@
 .report-meta-card strong,
 .grade-stat-detail strong {
   font-size: 1.15rem;
+}
+
+.archive-page {
+  gap: 1.15rem;
+  align-self: start;
+  align-content: start;
+}
+
+.archive-table-panel {
+  padding: 0;
+  overflow: hidden;
+  border-color: var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  backdrop-filter: blur(6px);
+}
+
+.archive-table-panel:hover {
+  border-color: var(--border);
+  box-shadow: var(--app-shadow-sm);
+}
+
+.archive-table-panel .table-shell {
+  border: 0;
+  border-radius: inherit;
+  background: var(--surface);
+  backdrop-filter: none;
+}
+
+.archive-data-table {
+  width: 100%;
+  table-layout: fixed;
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--text-primary);
+  --bs-table-hover-bg: color-mix(in srgb, var(--primary) 6%, transparent);
+  --bs-table-hover-color: var(--text-primary);
+  --bs-table-border-color: color-mix(in srgb, var(--border) 73%, transparent);
+}
+
+.archive-data-table thead th {
+  height: 3rem;
+  padding-block: 0.75rem;
+  border-bottom-color: var(--border);
+  background: color-mix(in srgb, var(--surface-elevated) 55%, transparent);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+table.archive-data-table > tbody > tr > td {
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 73%, transparent);
+  background: transparent;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+table.archive-data-table > tbody > tr:last-child > td {
+  border-bottom: 0;
+}
+
+.archive-data-table tbody tr:hover > * {
+  --bs-table-bg-state: color-mix(in srgb, var(--primary) 6%, transparent);
+}
+
+.archive-data-table .archive-column-date,
+.archive-data-table .archive-column-signer {
+  color: var(--text-secondary);
+}
+
+.archive-data-table .archive-column-title,
+.archive-data-table .archive-column-trainee {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.archive-data-table .archive-column-status {
+  white-space: nowrap;
+}
+
+.archive-table-panel .empty-table {
+  min-height: 9rem;
+  display: grid;
+  place-content: center;
+  gap: 0.4rem;
+  padding: 1.5rem;
+  border: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--surface-elevated) 78%, transparent);
+  color: var(--text-muted);
+  text-align: center;
+  box-shadow: none;
+}
+
+.archive-table-panel .empty-table strong {
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.archive-table-panel .empty-table span {
+  font-size: 0.875rem;
+}
+
+.archive-pdf-action:hover,
+.archive-pdf-action:active {
+  box-shadow: none;
+  transform: none;
+}
+
+.button-icon {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .approval-list-row,
@@ -506,267 +702,39 @@
   align-self: start;
 }
 
-@media (max-width: 991px) {
-  .two-column-grid,
-  .admin-users-layout,
-  .approval-layout {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 767px) {
-  .login-card {
-    padding: 1.25rem;
-  }
-
-  .mobile-records {
-    display: grid;
-    gap: 0.75rem;
-    margin-bottom: 1rem;
-  }
-
-  .table-shell {
-    overflow-x: auto;
-  }
-}
-
-@media (max-width: 575px) {
-  .login-page,
-  .page-content {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-  }
-
-  .login-brand {
-    align-items: flex-start;
-  }
-
-  .approval-list-head,
-  .approval-detail-head,
-  .approval-detail-actions,
-  .approval-row-main,
-  .approval-row-meta,
-  .approval-action-bar,
-  .approval-bulk-bar,
-  .trainer-card-head,
-  .trainer-card-stats,
-  .trainer-card-latest,
-  .subject-summary-head,
-  .grade-section-head,
-  .mobile-record-head,
-  .mobile-record-body,
-  .admin-user-card-head,
-  .admin-user-facts,
-  .admin-assignment-row,
-  .audit-log-row-head,
-  .audit-log-grid,
-  .import-row-head {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .approval-row-meta {
-    gap: 0.25rem;
-  }
-}
-
-@media (max-width: 991px) {
-  .report-module-calendar,
-  .report-writing-view,
-  .report-editor-summary {
-    grid-template-columns: 1fr;
-  }
-
-  .calendar-panel-large,
-  .week-strip-card,
-  .day-inspector-card,
-  .writing-toolbar,
-  .editor-card-inline {
-    min-width: 0;
-  }
-
-  .week-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .view-switch,
-  .report-type-pills,
-  .day-inspector-button-row,
-  .report-bulk-actions,
-  .writing-toolbar-controls,
-  .assignment-actions,
-  .admin-section-tabs {
-    width: 100%;
-  }
-
-  .view-switch {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .view-switch-button,
-  .report-bulk-actions > *,
-  .day-inspector-button-row > *,
-  .assignment-actions > * {
-    min-width: 0;
-  }
-
-  .report-type-pills,
-  .report-bulk-actions,
-  .day-inspector-button-row,
-  .assignment-actions,
-  .admin-section-tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-  }
-
-  .report-type-pills > *,
-  .report-bulk-actions > *,
-  .day-inspector-button-row > *,
-  .assignment-actions > *,
-  .admin-section-tabs > * {
-    flex: 1 1 220px;
-  }
-
-  .admin-user-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-subnav {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  }
-}
-
-@media (max-width: 767px) {
-  .login-page {
-    padding: 1rem;
-    background-position: center top;
-  }
-
-  .login-card {
-    max-width: 100%;
-    padding: 20px;
-  }
-
-  .login-brand {
-    align-items: flex-start;
-  }
-
-  .stats-grid,
-  .quick-actions,
-  .trainer-overview-grid,
-  .admin-chip-grid,
-  .admin-chip-grid.compact,
-  .subject-summary-grid,
-  .grade-group-list {
-    grid-template-columns: 1fr;
-  }
-
-  .report-editor-drawer {
-    grid-template-columns: 1fr;
-  }
-
-  .report-editor-backdrop {
-    display: none;
-  }
-
-  .report-editor-panel {
-    width: 100%;
-    padding: 1rem 0.75rem;
-  }
-
-  .report-list-row,
-  .list-row,
-  .quick-action-card,
-  .trainer-card,
-  .admin-user-card,
-  .admin-assignment-row,
-  .audit-log-row {
-    min-width: 0;
-  }
-}
-
-@media (max-width: 575px) {
-  .login-page {
-    padding-top: 1rem;
-    padding-bottom: 1rem;
-  }
-
-  .login-card {
-    padding: 18px;
-  }
-
-  .login-brand {
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .login-brand h1 {
-    font-size: 1.45rem;
-  }
-
-  .page-header {
-    gap: 0.75rem;
-  }
-
-  .view-switch {
-    grid-template-columns: 1fr;
-  }
-
-  .week-strip,
-  .editor-writing-grid,
-  .report-editor-summary,
-  .report-module-calendar,
-  .report-writing-view {
-    grid-template-columns: 1fr;
-  }
-
-  .week-strip-day {
-    padding: 0.9rem 0.85rem;
-  }
-
-  .report-type-pills > *,
-  .report-bulk-actions > *,
-  .day-inspector-button-row > *,
-  .assignment-actions > *,
-  .admin-section-tabs > * {
-    flex-basis: 100%;
-  }
-
-  .filter-bar,
-  .writing-toolbar-controls,
-  .calendar-month-switcher {
-    display: grid;
-    grid-template-columns: 1fr;
-  }
-
-  .calendar-panel-large {
-    padding: 1rem;
-  }
-
-  .calendar-grid-enterprise {
-    gap: 0.45rem;
-  }
-
-  .calendar-tile {
-    min-height: 72px;
-    padding: 0.55rem;
-  }
-
-  .calendar-weekday {
-    padding: 0.35rem 0;
-    font-size: 0.68rem;
-  }
-}
-
-@media (max-width: 600px) {
-  .login-page {
-    padding: 0.85rem;
-  }
-
-  .login-card {
-    max-width: none;
-    padding: 18px 16px;
-  }
-}
+/* Compact trainee dashboard: optimized for a complete Full-HD overview. */
+.trainee-dashboard { align-self:start; align-content:start; gap:1rem; }
+.dashboard-kpi-grid { grid-template-columns:repeat(4,minmax(0,1fr)); gap:1rem; }
+.dashboard-kpi-grid .stat-card { min-height:7rem; justify-content:center; padding:1rem 1.15rem; }
+.dashboard-kpi-grid .stat-card-value { font-size:2rem; }
+.trainee-dashboard .dashboard-period-panel,
+.trainee-dashboard .dashboard-latest-panel,
+.trainee-dashboard .dashboard-actions-panel { padding:1.1rem 1.25rem; }
+.dashboard-section-head { min-height:2.65rem; display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding-bottom:.75rem; border-bottom:1px solid var(--border); }
+.dashboard-section-head h3 { margin:.2rem 0 0; color:var(--text-primary); font-size:1.05rem; font-weight:700; }
+.dashboard-section-head > strong { align-self:center; color:var(--primary); font-size:.85rem; font-variant-numeric:tabular-nums; }
+.dashboard-period-content { display:grid; gap:.85rem; padding-top:.85rem; }
+.dashboard-period-meta { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:.65rem; }
+.dashboard-period-meta > div { min-width:0; display:grid; gap:.25rem; padding:.6rem .7rem; border:1px solid var(--border); border-radius:var(--radius-md); background:var(--surface-elevated); }
+.dashboard-period-meta span,
+.dashboard-progress-block span { color:var(--text-muted); font-size:.7rem; font-weight:650; }
+.dashboard-period-meta strong,
+.dashboard-progress-block strong { color:var(--text-primary); font-size:.86rem; font-variant-numeric:tabular-nums; }
+.dashboard-progress-block { display:grid; gap:.45rem; }
+.dashboard-progress-block > div:first-child { display:flex; justify-content:space-between; gap:1rem; }
+.dashboard-progress { height:.55rem; overflow:hidden; border-radius:999px; background:var(--surface-elevated); }
+.dashboard-progress > span { height:100%; display:block; border-radius:inherit; background:var(--primary); }
+.dashboard-lower-grid { grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr); align-items:stretch; }
+.dashboard-latest-list { display:grid; padding-top:.45rem; }
+.dashboard-latest-row { min-height:3rem; display:grid; grid-template-columns:minmax(0,1fr) 7rem 7rem; gap:.75rem; align-items:center; padding:.55rem .15rem; border-bottom:1px solid color-mix(in srgb,var(--border) 72%,transparent); }
+.dashboard-latest-row:last-child { border-bottom:0; }
+.dashboard-latest-row > strong { min-width:0; overflow:hidden; color:var(--text-primary); font-size:.86rem; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.dashboard-latest-row time { color:var(--text-secondary); font-size:.8rem; font-variant-numeric:tabular-nums; }
+.dashboard-latest-row .status-badge { justify-self:start; }
+.dashboard-quick-actions { grid-template-columns:repeat(2,minmax(0,1fr)); gap:.65rem; padding-top:.75rem; }
+.dashboard-quick-action { min-height:3.6rem; display:grid; grid-template-columns:2rem minmax(0,1fr); gap:.65rem; align-items:center; padding:.55rem .65rem; border-radius:var(--radius-md); background:var(--surface-elevated); }
+.dashboard-quick-action:hover { border-color:var(--border-strong); background:var(--surface-hover); transform:none; }
+.dashboard-quick-action > svg { width:1.9rem; height:1.9rem; padding:.4rem; border-radius:var(--radius-md); background:var(--primary-soft); fill:none; stroke:var(--primary); stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+.dashboard-quick-action > span { min-width:0; display:grid; gap:.1rem; }
+.dashboard-quick-action strong { color:var(--text-primary); font-size:.82rem; font-weight:650; }
+.dashboard-quick-action small { overflow:hidden; color:var(--text-muted); font-size:.7rem; font-weight:400; text-overflow:ellipsis; white-space:nowrap; }

@@ -161,7 +161,7 @@ function ReportEditor({
   if (!draft) {
     return (
       <article className={`panel-card editor-card${inline ? " editor-card-inline" : ""}`}>
-        <EmptyState title="Kein Bericht ausgewählt" />
+        <EmptyState title="Kein Bericht ausgewählt" description="Wähle einen Bericht aus, um Details anzuzeigen." />
       </article>
     );
   }
@@ -687,13 +687,15 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
         title="Berichte"
         actions={
           <div className="page-actions">
-            <div className="view-switch">
+            <div className="view-switch" role="tablist" aria-label="Ansicht auswählen">
               {VIEW_OPTIONS.map((view) => (
                 <button
                   key={view.id}
                   type="button"
                   className={`view-switch-button${activeView === view.id ? " active" : ""}`}
                   onClick={() => switchView(view.id)}
+                  role="tab"
+                  aria-selected={activeView === view.id}
                 >
                   {view.label}
                 </button>
@@ -821,7 +823,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
           {drawerOpen ? (
             <div className="report-editor-drawer">
               <div className="report-editor-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
-              <div className="report-editor-panel">
+              <div className="report-editor-panel" role="dialog" aria-modal="true" aria-label="Tagesbericht bearbeiten">
                 <ReportEditor
                   key={editorKey}
                   entry={selectedEntry}
@@ -847,22 +849,22 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
             kicker="Listenansicht"
             title="Berichte"
           />
-          <FilterBar>
-            <input placeholder="Nach Titel, Datum oder Inhalt suchen" value={query} onChange={(event) => setQuery(event.target.value)} />
-            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+          <FilterBar label="Berichte filtern">
+            <input aria-label="Berichte durchsuchen" placeholder="Nach Titel, Datum oder Inhalt suchen" value={query} onChange={(event) => setQuery(event.target.value)} />
+            <select aria-label="Nach Status filtern" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="all">Alle Status</option>
               <option value="draft">Entwurf</option>
               <option value="submitted">Eingereicht</option>
               <option value="signed">Signiert</option>
               <option value="rejected">Nachbearbeitung</option>
             </select>
-            <select value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)}>
+            <select aria-label="Nach Zeitraum filtern" value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)}>
               <option value="all">Gesamter Zeitraum</option>
               <option value="today">Heute</option>
               <option value="week">Diese Woche</option>
               <option value="month">Dieser Monat</option>
             </select>
-            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+            <select aria-label="Sortierung auswählen" value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
               <option value="date-desc">Neueste zuerst</option>
               <option value="date-asc">Aelteste zuerst</option>
               <option value="status">Nach Status</option>
@@ -878,7 +880,7 @@ export function TagesberichtePage({ report, initialView = "calendar", onCreate, 
                     <StatusBadge status={entry.status} />
                   </div>
                   <div className="report-list-meta">
-                    <span>{entry.dateFrom || "-"}</span>
+                    <span>{formatLocalDate(entry.dateFrom, { day: "2-digit", month: "2-digit", year: "numeric" }) || "-"}</span>
                     <span>{entry.betrieb && entry.schule ? "Betrieb + Schule" : entry.betrieb ? "Betrieb" : entry.schule ? "Berufsschule" : "Noch ohne Inhalt"}</span>
                   </div>
                   {entry.trainerComment ? <p>{entry.trainerComment}</p> : null}

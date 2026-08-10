@@ -9,6 +9,7 @@ import { FreigabenPage } from "./pages/FreigabenPage";
 import { ProfilPage } from "./pages/ProfilPage";
 import { ArchivPage } from "./pages/ArchivPage";
 import { AdminUsersPage } from "./pages/AdminUsersPage";
+import { EmailRelaySettingsPage } from "./pages/EmailRelaySettingsPage";
 import { NotenPage } from "./pages/NotenPage";
 import { ExportPage } from "./pages/ExportPage";
 import { canAccessMenuItem, getDefaultRouteForRole } from "./navigation/menuConfig.mjs";
@@ -21,7 +22,10 @@ function ProtectedApp() {
     grades,
     theme,
     themePreference,
+    backgroundPreference,
     flash,
+    busy,
+    login,
     setFlash,
     logout,
     getTraineeReport,
@@ -46,6 +50,7 @@ function ProtectedApp() {
     updateManagedProfile,
     changeOwnPassword,
     saveThemePreference,
+    saveBackgroundPreference,
     refreshGrades,
     saveGrade,
     deleteGrade,
@@ -53,7 +58,7 @@ function ProtectedApp() {
   } = useStaticAppContext();
 
   if (!session.user) {
-    return <LoginPage />;
+    return <LoginPage login={login} busy={busy} />;
   }
 
   const role = dashboard?.role || session.user.role;
@@ -72,6 +77,7 @@ function ProtectedApp() {
       user={session.user}
       theme={theme}
       themePreference={themePreference}
+      backgroundPreference={backgroundPreference}
       flash={flash}
       onLogout={logout}
       onToggleTheme={async () => {
@@ -190,6 +196,7 @@ function ProtectedApp() {
                 users={users}
                 theme={theme}
                 themePreference={themePreference}
+                backgroundPreference={backgroundPreference}
                 onToggleTheme={async () => {
                   await toggleTheme();
                   setFlash({ type: "success", message: `Darstellung auf ${theme === "dark" ? "hell" : "dunkel"} umgestellt.` });
@@ -198,6 +205,7 @@ function ProtectedApp() {
                   await saveThemePreference(nextPreference);
                   setFlash({ type: "success", message: `Darstellung auf ${nextPreference === "system" ? "Systemstandard" : nextPreference} gesetzt.` });
                 }}
+                onSaveBackgroundPreference={saveBackgroundPreference}
                 onSaveManagedProfile={async (userId, profile) => {
                   await updateManagedProfile(userId, profile);
                   setFlash({ type: "success", message: "Profil gespeichert." });
@@ -325,6 +333,10 @@ function ProtectedApp() {
               }}
             />
           )}
+        />
+        <Route
+          path="/admin/email-relay"
+          element={guardRoute("admin-email-relay", <EmailRelaySettingsPage />)}
         />
         <Route
           path="/admin/audit-log"

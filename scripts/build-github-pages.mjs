@@ -1,5 +1,5 @@
 import { build } from "esbuild";
-import { cp, mkdir, writeFile } from "node:fs/promises";
+import { cp, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,14 +8,22 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const outputDir = path.join(projectRoot, "github-pages");
 
+await rm(outputDir, { recursive: true, force: true });
 await mkdir(outputDir, { recursive: true });
 
 await build({
   entryPoints: [path.join(projectRoot, "src", "main.github-pages.jsx")],
   bundle: true,
   format: "esm",
-  sourcemap: true,
-  outfile: path.join(outputDir, "app.js"),
+  splitting: true,
+  target: "es2022",
+  minify: true,
+  sourcemap: false,
+  legalComments: "none",
+  outdir: outputDir,
+  entryNames: "app",
+  chunkNames: "chunks/[name]-[hash]",
+  assetNames: "assets/[name]-[hash]",
   external: ["/Pictures/*"],
   loader: {
     ".png": "file",

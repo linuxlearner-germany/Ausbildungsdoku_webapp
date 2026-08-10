@@ -1,5 +1,7 @@
 # Ausbildungsdoku Webapp
 
+Aktuelle Version: `1.2.0`
+
 ## Überblick
 
 Die Ausbildungsdoku Webapp ist ein digitales Berichtsheft mit getrennten Rollen für Azubis, Ausbilder und Admins. Die Anwendung deckt Berichte, Freigaben, Noten, Exporte, Benutzerverwaltung und Audit-Logs ab.
@@ -150,17 +152,18 @@ Backups landen lokal in `./backups` und sind per `.gitignore` vom Repository aus
 
 ## Updates ohne Datenverlust
 
-Manuell:
+Für einen versionierten Container-Release:
 
 ```bash
-git pull
-docker compose -f docker-compose.local.yml down
-docker compose -f docker-compose.local.yml up -d --build
+docker compose pull
+docker compose up -d --remove-orphans
 ```
 
 Wichtig:
 
-- `down` ohne `-v` behält Daten.
+- Die vorhandene `.env` wird von Compose nur gelesen und durch diesen Ablauf nicht verändert.
+- Vor dem App-Start führt der Service `migrate` automatisch alle noch offenen Knex-Migrationen aus.
+- `APP_IMAGE_TAG` in `.env` bestimmt die installierte Release-Version.
 - Volume-Loeschungen loeschen Daten und sind kein Login-Recovery-Schritt.
 - Vor Updates ist ein Backup empfohlen.
 
@@ -178,9 +181,17 @@ Wichtige Variablen:
 - MSSQL: `MSSQL_HOST`, `MSSQL_PORT`, `MSSQL_DATABASE`, `MSSQL_USER`, `MSSQL_PASSWORD`, `MSSQL_ENCRYPT`, `MSSQL_TRUST_SERVER_CERTIFICATE`
 - Redis: `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`
 - Sessions: `SESSION_SECRET`, `SESSION_SECURE`, `SESSION_SAME_SITE`, `SESSION_MAX_AGE_MS`
+- SMTP: `SMTP_ENABLED`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_REQUIRE_TLS`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`
+- E-Mail-Funktionen: `PASSWORD_RESET_TTL_MINUTES`, `REMINDERS_ENABLED`, `REMINDER_SEND_HOUR`, `REMINDER_WEEKDAYS_ONLY`, `TRAINER_BACKLOG_THRESHOLD`
 - Bootstrap: `APPLY_MIGRATIONS_ON_START`, `BOOTSTRAP_DATABASE_ON_START`, `ENABLE_DEMO_DATA`, `RESET_DATABASE_ON_START`
 
-Mehr Details stehen in [docs/LOCAL_DOCKER.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/LOCAL_DOCKER.md).
+SMTP und Erinnerungen sind standardmaessig deaktiviert. Fuer Passwort-Reset und
+Erinnerungs-E-Mails muss `APP_BASE_URL` auf die von den Empfaengern erreichbare
+HTTPS-Adresse zeigen. Reset-Links werden nur als SHA-256-Hash gespeichert, sind
+standardmaessig 60 Minuten gueltig und nach der ersten Verwendung unbrauchbar.
+Azubis erhalten hoechstens eine Berichts-Erinnerung pro Tag. Ausbilder erhalten
+hoechstens eine taegliche Erinnerung, sobald ihnen mindestens
+`TRAINER_BACKLOG_THRESHOLD` offene Einreichungen zugeordnet sind.
 
 ## DB-Verwaltung
 
@@ -204,32 +215,34 @@ Redis speichert ausschließlich Login-Sessions. Berichte, Benutzer, Noten, Freig
 
 Im lokalen Compose läuft Redis bewusst ohne Dateipersistenzmodus, weil der Fachdatenbestand ohnehin in MSSQL liegt und der stabile Session-Betrieb wichtiger ist als Redis-Disk-Backups.
 
+Der lokale Komplett-Stack verwendet `NODE_ENV=development`, weil er standardmäßig
+über HTTP auf `localhost` läuft. Der produktionsnahe Stack verwendet weiterhin
+`NODE_ENV=production` und sichere HTTPS-Cookies.
+
 ## MSSQL einfach erklärt
 
 MSSQL ist die Hauptdatenbank für Benutzer, Berichte, Noten, Freigaben, Zuordnungen und Audit-Logs. SQLite wird nicht verwendet.
 
 ## Rollenmodell
 
-- `admin`: Dashboard, Benutzerverwaltung, Benutzer anlegen, Zuordnungen, Audit-Log, Profil
+- `admin`: Dashboard, Noten, Benutzerverwaltung, Benutzer anlegen, Zuordnungen, Audit-Log, Profil
 - `trainee`: Dashboard, Berichte, Noten, Freigaben, Export, Archiv, Profil
-- `trainer`: Dashboard, Freigaben, Archiv, Profil
+- `trainer`: Dashboard, Notenansicht, Freigaben, Archiv, Profil
 
 ## Exportregeln
 
 - PDF enthält ausschließlich signierte Berichte.
+- Die PDF-Unterschriftsseite enthält Felder für Azubi, Ausbilder und Erziehungsberechtigte.
 - CSV bleibt für eigene Berichte verfügbar.
 - CSV wird als UTF-8 mit BOM exportiert.
 - PDF nutzt DejaVu-Fonts im Container, damit Umlaute korrekt bleiben.
 
 ## Deployment
 
-Der produktionsnahe Containerbetrieb ist in [docs/DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/DEPLOYMENT.md) beschrieben.
-
-Eine konkrete Anleitung fuer **Debian mit Docker sowie externer oder separater MSSQL-Instanz** steht in [docs/DEBIAN_DOCKER_MSSQL_DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/DEBIAN_DOCKER_MSSQL_DEPLOYMENT.md).
-
-Ein Serverbetrieb **nur fuer das lokale Netz mit externer MSSQL-Datenbank** ist in [docs/SERVER_LAN_DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/SERVER_LAN_DEPLOYMENT.md) beschrieben.
-
-Wenn Redis auf dem Debian-Server selbst als Compose-Service mitlaufen soll, steht dafuer [docker-compose.server-redis.yml](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docker-compose.server-redis.yml) bereit.
+Der produktionsnahe Betrieb mit externer MSSQL- und Redis-Instanz verwendet
+[`docker-compose.yml`](docker-compose.yml). Wenn Redis auf dem Server als
+Compose-Service mitlaufen soll, steht [`docker-compose.server-redis.yml`](docker-compose.server-redis.yml)
+bereit.
 
 ## Raspberry Pi
 
@@ -253,10 +266,7 @@ Der komplette Stack ist für Raspberry Pi nicht empfohlen:
 
 Weiterführende Doku:
 
-- [docs/LOCAL_DOCKER.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/LOCAL_DOCKER.md)
-- [docs/BACKUP_RESTORE.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/BACKUP_RESTORE.md)
-- [docs/DEPLOYMENT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/DEPLOYMENT.md)
-- [docs/ARCHITECTURE.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/ARCHITECTURE.md)
-- [docs/SECURITY.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/SECURITY.md)
-- [docs/TROUBLESHOOTING.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/TROUBLESHOOTING.md)
-- [docs/FINAL_LOCAL_DOCKER_REPORT.md](/home/paul/Dokumente/GitHub/Ausbildungsdoku_webapp/docs/FINAL_LOCAL_DOCKER_REPORT.md)
+- [Finale Docker-Deployment-Dokumentation](docs/Berichtsheftwebapp_Finale_Docker_Deployment_Dokumentation_bereinigt.md)
+- [Docker-Dokumentation](docs/Berichtsheftwebapp%20Docker%20Dokumentation.md)
+- [Ausgearbeitete Docker-Dokumentation](docs/Berichtsheftwebapp_Docker_Dokumentation_ausgearbeitet.md)
+- [Änderungsprotokoll](CHANGELOG.md)
