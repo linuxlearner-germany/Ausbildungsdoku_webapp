@@ -23,6 +23,7 @@ function ProtectedApp() {
     theme,
     themePreference,
     backgroundPreference,
+    loginBackground,
     flash,
     busy,
     login,
@@ -47,6 +48,8 @@ function ProtectedApp() {
     previewUserImport,
     importUsers,
     loadAuditLogs,
+    loadLoginBackgroundSettings,
+    saveLoginBackgroundSettings,
     updateManagedProfile,
     changeOwnPassword,
     saveThemePreference,
@@ -58,7 +61,7 @@ function ProtectedApp() {
   } = useStaticAppContext();
 
   if (!session.user) {
-    return <LoginPage login={login} busy={busy} />;
+    return <LoginPage login={login} busy={busy} background={loginBackground} />;
   }
 
   const role = dashboard?.role || session.user.role;
@@ -87,7 +90,7 @@ function ProtectedApp() {
     >
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<DashboardPage role={role} report={report} trainees={trainees} users={users} onLoadAuditLogs={loadAuditLogs} />} />
+        <Route path="/dashboard" element={<DashboardPage role={role} report={report} trainees={trainees} users={users} onLoadAuditLogs={loadAuditLogs} loginBackground={loginBackground} onLoadLoginBackground={loadLoginBackgroundSettings} onSaveLoginBackground={saveLoginBackgroundSettings} />} />
         <Route
           path="/berichte"
           element={guardRoute("reports",

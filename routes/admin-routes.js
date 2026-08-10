@@ -4,6 +4,7 @@ const { asyncHandler } = require("../middleware/async-handler");
 function createAdminRoutes({ adminController, requireRole }) {
   const router = express.Router();
 
+  router.get("/ui-settings/login-background", asyncHandler(adminController.getLoginBackgroundSettings));
   router.post("/profile/:userId", requireRole("trainer", "admin"), asyncHandler(adminController.updateProfile));
   router.post("/admin/users", requireRole("admin"), asyncHandler(adminController.createUser));
   router.post("/admin/assign-trainer", requireRole("admin"), asyncHandler(adminController.assignTrainer));
@@ -16,6 +17,7 @@ function createAdminRoutes({ adminController, requireRole }) {
   router.get("/admin/email-relay", requireRole("admin"), asyncHandler(adminController.getEmailRelaySettings));
   router.put("/admin/email-relay", requireRole("admin"), asyncHandler(adminController.saveEmailRelaySettings));
   router.post("/admin/email-relay/test", requireRole("admin"), asyncHandler(adminController.testEmailRelaySettings));
+  router.put("/admin/ui-settings/login-background", requireRole("admin"), asyncHandler(adminController.saveLoginBackgroundSettings));
 
   return router;
 }

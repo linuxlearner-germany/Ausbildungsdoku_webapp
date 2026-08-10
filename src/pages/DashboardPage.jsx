@@ -8,6 +8,7 @@ import { calculateWeightedAverage, formatGrade } from "../lib/grades";
 import { downloadPdfFromApi, downloadReportPdf } from "../lib/reportExport";
 import { apiUrl, isStaticDemo } from "../lib/runtime";
 import { formatLocalDate } from "../lib/date.mjs";
+import { LOGIN_BACKGROUND_REGISTRY, getLoginBackgroundUrl, normalizeLoginBackground } from "../lib/login-background.mjs";
 
 function formatDisplayDate(value, fallback = "-") {
   return formatLocalDate(value, { day: "2-digit", month: "2-digit", year: "numeric" }) || fallback;
@@ -73,7 +74,72 @@ function DashboardQuickAction({ action }) {
   );
 }
 
-export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }) {
+function LoginBackgroundSettings({ activeBackground, onLoad, onSave }) {
+  const [selected, setSelected] = useState(() => normalizeLoginBackground(activeBackground));
+  const [state, setState] = useState({ busy: false, error: "", success: "" });
+
+  useEffect(() => {
+    let active = true;
+    if (typeof onLoad !== "function") return undefined;
+    onLoad()
+      .then((data) => {
+        if (active) setSelected(normalizeLoginBackground(data.background));
+      })
+      .catch((error) => {
+        if (active) setState({ busy: false, error: error.message || "Login-Hintergrund konnte nicht geladen werden.", success: "" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [onLoad]);
+
+  async function selectBackground(background) {
+    if (state.busy || background === selected) return;
+    setState({ busy: true, error: "", success: "" });
+    try {
+      const data = await onSave(background);
+      setSelected(normalizeLoginBackground(data.background));
+      setState({ busy: false, error: "", success: "Login-Hintergrund gespeichert." });
+    } catch (error) {
+      setState({ busy: false, error: error.message || "Login-Hintergrund konnte nicht gespeichert werden.", success: "" });
+    }
+  }
+
+  return (
+    <section className="panel-card admin-login-background-panel">
+      <PageHeader
+        kicker="Globale Darstellung"
+        title="Login-Hintergrund"
+        subtitle="Diese Auswahl gilt vor der Anmeldung für alle Benutzer und Geräte."
+      />
+      <div className="login-background-grid" role="group" aria-label="Globalen Login-Hintergrund auswählen">
+        {LOGIN_BACKGROUND_REGISTRY.map((background) => {
+          const isSelected = selected === background.key;
+          return (
+            <button
+              key={background.key}
+              type="button"
+              className={`login-background-option${isSelected ? " is-selected" : ""}`}
+              aria-pressed={isSelected}
+              disabled={state.busy}
+              onClick={() => selectBackground(background.key)}
+            >
+              <span className="login-background-thumbnail">
+                <img src={getLoginBackgroundUrl(background.key, 1920)} alt="" loading="lazy" />
+                {isSelected ? <span className="background-check" aria-hidden="true">✓</span> : null}
+              </span>
+              <span>{background.label}</span>
+            </button>
+          );
+        })}
+      </div>
+      {state.error ? <div className="field-message error" role="alert">{state.error}</div> : null}
+      {state.success ? <div className="field-message success" role="status">{state.success}</div> : null}
+    </section>
+  );
+}
+
+export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs, loginBackground, onLoadLoginBackground, onSaveLoginBackground }) {
   const [pdfError, setPdfError] = useState("");
   const [auditState, setAuditState] = useState({ busy: false, error: "", items: [] });
   const allEntries = useMemo(() => trainees.flatMap((trainee) => trainee.entries || []), [trainees]);
@@ -342,6 +408,11 @@ export function DashboardPage({ role, report, trainees, users, onLoadAuditLogs }
         <StatCard label="Signiert" value={allEntries.filter((entry) => entry.status === "signed").length} note="Abgeschlossene Berichte" />
         <StatCard label="Nachbearbeitung" value={allEntries.filter((entry) => entry.status === "rejected").length} note="Zurückgegebene Berichte" />
       </section>
+      <LoginBackgroundSettings
+        activeBackground={loginBackground}
+        onLoad={onLoadLoginBackground}
+        onSave={onSaveLoginBackground}
+      />
       <section className="two-column-grid">
         <article className="panel-card">
           <PageHeader kicker="System" title="Admin-Arbeitsbereiche" />

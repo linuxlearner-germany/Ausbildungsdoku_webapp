@@ -14,8 +14,18 @@ export function AuthProvider({ children }) {
     setBusy,
     busy,
     applyThemePreference,
-    setFlash
+    setFlash,
+    setLoginBackground
   } = useAppState();
+
+  async function refreshLoginBackground() {
+    try {
+      const data = await apiClient.get("/api/ui-settings/login-background", { headers: {} });
+      setLoginBackground(data.background);
+    } catch (_error) {
+      // The local default remains usable if public settings are temporarily unavailable.
+    }
+  }
 
   async function restoreSession() {
     try {
@@ -39,6 +49,7 @@ export function AuthProvider({ children }) {
   }
 
   useEffect(() => {
+    refreshLoginBackground();
     restoreSession();
   }, []);
 

@@ -1,4 +1,8 @@
 const { HttpError } = require("../utils/http-error");
+const loginBackgrounds = require("../shared/login-backgrounds.json");
+
+const DEFAULT_LOGIN_BACKGROUND = "standard";
+const LOGIN_BACKGROUND_KEYS = new Set(loginBackgrounds.map((background) => background.key));
 
 function createAdminService({ adminRepository, helpers, mailer, encryptSetting, sessionSecret }) {
   function validateAdminUserPayload(input, { requirePassword = false } = {}) {
@@ -338,6 +342,37 @@ function createAdminService({ adminRepository, helpers, mailer, encryptSetting, 
     return saved;
   }
 
+  async function getLoginBackgroundSettings() {
+    const row = await adminRepository.getGlobalUiSettings();
+    const background = LOGIN_BACKGROUND_KEYS.has(row?.login_background_key)
+      ? row.login_background_key
+      : DEFAULT_LOGIN_BACKGROUND;
+    return { background, updatedAt: row?.updated_at || null };
+  }
+
+  async function saveLoginBackgroundSettings(actor, payload) {
+    const background = String(payload?.background || "").trim();
+    if (!LOGIN_BACKGROUND_KEYS.has(background)) {
+      throw new HttpError(400, "Ungueltiger Login-Hintergrund.");
+    }
+    const previous = await getLoginBackgroundSettings();
+    await adminRepository.saveLoginBackground(background, actor.id);
+    await helpers.writeAuditLog({
+      actor,
+      actionType: "LOGIN_BACKGROUND_UPDATED",
+      entityType: "global_ui_settings",
+      entityId: "1",
+      summary: "Globaler Login-Hintergrund aktualisiert.",
+      changes: {
+        loginBackground: {
+          before: previous.background,
+          after: background
+        }
+      }
+    });
+    return { ok: true, ...(await getLoginBackgroundSettings()) };
+  }
+
   async function updateProfile(actor, userId, payload) {
     const trainee = await adminRepository.findTraineeById(userId);
     if (!trainee || trainee.role !== "trainee") {
@@ -399,6 +434,8 @@ function createAdminService({ adminRepository, helpers, mailer, encryptSetting, 
     getEmailRelaySettings,
     saveEmailRelaySettings,
     testEmailRelaySettings,
+    getLoginBackgroundSettings,
+    saveLoginBackgroundSettings,
     updateProfile,
     getAdminDashboard
   };
