@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { applyThemeAttribute, getSystemPrefersDark, isThemePreference, readStoredThemePreference, resolveTheme, THEME_STORAGE_KEY } from "../lib/theme.mjs";
 import { readStoredBackgroundPreference } from "../lib/background.mjs";
+import { DEFAULT_LOGIN_BACKGROUND, normalizeLoginBackground } from "../lib/login-background.mjs";
 
 const AppStateContext = createContext(null);
 
@@ -13,6 +14,7 @@ export function AppStateProvider({ children }) {
   const [themePreference, setThemePreference] = useState(initialThemePreference);
   const [theme, setTheme] = useState(initialResolvedTheme);
   const [backgroundPreference, setBackgroundPreference] = useState(() => readStoredBackgroundPreference(typeof window !== "undefined" ? window.localStorage : null));
+  const [loginBackground, setLoginBackgroundState] = useState(DEFAULT_LOGIN_BACKGROUND);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState(null);
 
@@ -26,6 +28,10 @@ export function AppStateProvider({ children }) {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(THEME_STORAGE_KEY, nextPreference);
     }
+  }
+
+  function setLoginBackground(value) {
+    setLoginBackgroundState(normalizeLoginBackground(value));
   }
 
   useEffect(() => {
@@ -75,6 +81,8 @@ export function AppStateProvider({ children }) {
         setThemePreference,
         backgroundPreference,
         setBackgroundPreference,
+        loginBackground,
+        setLoginBackground,
         busy,
         setBusy,
         flash,

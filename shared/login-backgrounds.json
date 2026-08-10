@@ -1,0 +1,22 @@
+[
+  { "key": "standard", "label": "Standard", "path": "/Pictures/Backgrounds/standard.png", "position": "center center" },
+  { "key": "modern", "label": "Modern", "path": "/Pictures/Backgrounds/desktop-full-hd-modern.png", "position": "center center" },
+  {
+    "key": "modern-logo",
+    "label": "Modern – Logo rechts",
+    "path": "/Pictures/Backgrounds/desktop-full-hd-modern-logo-rechts.png",
+    "position": "center center",
+    "sources": [
+      { "minWidth": 3200, "path": "/Pictures/Backgrounds/desktop-4k-modern-logo-rechts.png" },
+      { "minWidth": 2200, "path": "/Pictures/Backgrounds/desktop-2560-modern-logo-rechts.png" }
+    ]
+  },
+  { "key": "wiweb", "label": "WIWEB", "path": "/Pictures/Backgrounds/desktop-full-hd-wiweb.png", "position": "center center" },
+  { "key": "wiweb-circle", "label": "WIWEB Kreis", "path": "/Pictures/Backgrounds/desktop-full-hd-wiweb-kreis.png", "position": "center center" },
+  { "key": "alternative-1", "label": "Alternative 1", "path": "/Pictures/Backgrounds/desktop-full-hd-alternative-1-jpeg.jpg", "position": "center center" },
+  { "key": "alternative-2", "label": "Alternative 2", "path": "/Pictures/Backgrounds/desktop-full-hd-alternative-2.png", "position": "center center" },
+  { "key": "windows-1", "label": "Windows 1", "path": "/Pictures/Backgrounds/windows-hintergrund-1.jpg", "position": "center center" },
+  { "key": "windows-2", "label": "Windows 2", "path": "/Pictures/Backgrounds/windows-hintergrund-2.jpg", "position": "center center" },
+  { "key": "windows-3", "label": "Windows 3", "path": "/Pictures/Backgrounds/windows-hintergrund-3.jpg", "position": "center center" },
+  { "key": "windows-4", "label": "Windows 4", "path": "/Pictures/Backgrounds/windows-hintergrund-4.jpg", "position": "center center" }
+]

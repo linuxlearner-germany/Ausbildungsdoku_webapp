@@ -49,10 +49,15 @@ const profilePayloadSchema = z.object({
   berufsschule: z.string().optional().default("")
 });
 
+const loginBackgroundSettingsSchema = z.object({
+  background: z.string().trim().min(1, "Login-Hintergrund fehlt.")
+});
+
 module.exports = {
   adminUserPayloadSchema,
   emailRelaySettingsSchema,
   assignTrainerSchema,
   auditLogQuerySchema,
-  profilePayloadSchema
+  profilePayloadSchema,
+  loginBackgroundSettingsSchema
 };

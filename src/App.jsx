@@ -24,6 +24,7 @@ function ProtectedApp() {
     theme,
     themePreference,
     backgroundPreference,
+    loginBackground,
     flash,
     busy,
     login,
@@ -51,6 +52,8 @@ function ProtectedApp() {
     loadEmailRelaySettings,
     saveEmailRelaySettings,
     testEmailRelaySettings,
+    loadLoginBackgroundSettings,
+    saveLoginBackgroundSettings,
     updateManagedProfile,
     changeOwnPassword,
     saveThemePreference,
@@ -64,9 +67,9 @@ function ProtectedApp() {
   if (!session.user) {
     return (
       <Routes>
-        <Route path="/passwort-vergessen" element={<PasswordResetRequestPage />} />
-        <Route path="/passwort-zuruecksetzen" element={<PasswordResetConfirmPage />} />
-        <Route path="*" element={<LoginPage login={login} busy={busy} />} />
+        <Route path="/passwort-vergessen" element={<PasswordResetRequestPage background={loginBackground} />} />
+        <Route path="/passwort-zuruecksetzen" element={<PasswordResetConfirmPage background={loginBackground} />} />
+        <Route path="*" element={<LoginPage login={login} busy={busy} background={loginBackground} />} />
       </Routes>
     );
   }
@@ -139,7 +142,7 @@ function ProtectedApp() {
     >
       <Routes>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/dashboard" element={<DashboardPage role={role} report={report} trainees={trainees} users={users} onLoadAuditLogs={loadAuditLogs} />} />
+        <Route path="/dashboard" element={<DashboardPage role={role} report={report} trainees={trainees} users={users} onLoadAuditLogs={loadAuditLogs} loginBackground={loginBackground} onLoadLoginBackground={loadLoginBackgroundSettings} onSaveLoginBackground={saveLoginBackgroundSettings} />} />
         <Route
           path="/berichte"
           element={guardRoute("reports",

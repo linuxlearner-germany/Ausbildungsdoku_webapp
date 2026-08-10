@@ -169,6 +169,25 @@ function createAdminRepository({
       } else {
         await db("email_relay_settings").insert(payload);
       }
+    },
+
+    async getGlobalUiSettings() {
+      return db("global_ui_settings").where({ id: 1 }).first();
+    },
+
+    async saveLoginBackground(backgroundKey, actorId) {
+      const payload = {
+        id: 1,
+        login_background_key: backgroundKey,
+        updated_at: db.fn.now(),
+        updated_by_user_id: actorId
+      };
+      const existing = await this.getGlobalUiSettings();
+      if (existing) {
+        await db("global_ui_settings").where({ id: 1 }).update(payload);
+      } else {
+        await db("global_ui_settings").insert(payload);
+      }
     }
   };
 }
