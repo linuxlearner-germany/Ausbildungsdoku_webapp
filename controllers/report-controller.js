@@ -51,7 +51,7 @@ function createReportController({ reportService, schemas, helpers }) {
 
     async signEntry(req, res) {
       const payload = parseSchema(schemas.trainerSignSchema, req.body || {});
-      res.json(await reportService.signEntry(req.user, payload.entryId, String(payload.trainerComment || "").trim()));
+      res.json(await reportService.signEntry(req.user, payload.entryId));
     },
 
     async rejectEntry(req, res) {
@@ -68,7 +68,6 @@ function createReportController({ reportService, schemas, helpers }) {
       const payload = parseSchema(schemas.trainerBatchSchema, {
         action: req.body?.action,
         entryIds: Array.isArray(req.body?.entryIds) ? req.body.entryIds.map((value) => String(value || "").trim()).filter(Boolean) : [],
-        trainerComment: req.body?.trainerComment || "",
         reason: req.body?.reason || ""
       });
       res.json(await reportService.batchTrainerAction(req.user, payload));

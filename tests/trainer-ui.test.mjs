@@ -43,9 +43,14 @@ test("Freigabenfilter ist zweispaltig, zugaenglich und behaelt alle Aktionen", (
   }
   assert.match(css, /\.approval-filter-bar\s*\{[^}]*grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/);
   assert.match(css, /\.approval-filter-bar > input:first-child\s*\{[^}]*grid-column:1 \/ -1/);
-  for (const action of ["Freigeben", "Zurückgeben", "PDF"]) {
+  for (const action of ["Kommentar speichern", "Freigeben", "Zur Nachbearbeitung zurückgeben", "PDF"]) {
     assert.match(source, new RegExp(action));
   }
+  assert.match(source, /onComment\(selectedEntry\.id, comment\)/);
+  assert.match(source, /runDecisionAction\("sign", \(\) => onSign\(selectedEntry\.id\)\)/);
+  assert.match(source, /runDecisionAction\("reject", \(\) => onReject\(selectedEntry\.id, reason\)\)/);
+  assert.match(source, /setSelected\(nextOpenEntry\?\.id \|\| null\)/);
+  assert.doesNotMatch(source, /onSign\(selectedEntry\.id, comment\)/);
 });
 
 test("Gemeinsamer Empty State bietet eine explizite kompakte Variante", () => {

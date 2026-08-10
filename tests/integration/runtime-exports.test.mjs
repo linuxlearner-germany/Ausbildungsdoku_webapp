@@ -344,9 +344,16 @@ await test("PDF-Export liefert fuer Azubi und Ausbilder gueltige Downloads", { c
     );
     assert.equal(submitDraftResponse.status, 200);
 
+    const commentEntryResponse = await postJson(
+      `${baseUrl}/api/trainer/comment`,
+      { entryId: createDraftData.entry.id, comment: "Freigegeben für PDF-Test" },
+      trainerCookie
+    );
+    assert.equal(commentEntryResponse.status, 200);
+
     const signEntryResponse = await postJson(
       `${baseUrl}/api/trainer/sign`,
-      { entryId: createDraftData.entry.id, trainerComment: "Freigegeben für PDF-Test" },
+      { entryId: createDraftData.entry.id },
       trainerCookie
     );
     assert.equal(signEntryResponse.status, 200);

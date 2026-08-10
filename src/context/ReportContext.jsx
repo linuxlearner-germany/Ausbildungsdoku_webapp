@@ -80,8 +80,8 @@ export function ReportProvider({ children }) {
     return data;
   }
 
-  async function signEntry(entryId, trainerComment) {
-    await apiClient.post("/api/trainer/sign", { entryId, trainerComment });
+  async function signEntry(entryId) {
+    await apiClient.post("/api/trainer/sign", { entryId });
     await refreshDashboard();
   }
 
@@ -94,7 +94,6 @@ export function ReportProvider({ children }) {
     const data = await apiClient.post("/api/trainer/batch", {
       action,
       entryIds,
-      trainerComment: payload.trainerComment || "",
       reason: payload.reason || ""
     });
     await refreshDashboard();

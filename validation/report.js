@@ -32,8 +32,7 @@ const batchSubmitSchema = z.object({
 });
 
 const trainerSignSchema = z.object({
-  entryId: z.string().trim().min(1, "Eintrag fehlt."),
-  trainerComment: z.string().optional().default("")
+  entryId: z.string().trim().min(1, "Eintrag fehlt.")
 });
 
 const trainerRejectSchema = z.object({
@@ -43,13 +42,12 @@ const trainerRejectSchema = z.object({
 
 const trainerCommentSchema = z.object({
   entryId: z.string().trim().min(1, "Eintrag fehlt."),
-  comment: z.string().trim().min(1, "Kommentar fehlt.")
+  comment: z.string().trim()
 });
 
 const trainerBatchSchema = z.object({
   action: z.enum(["sign", "reject"]),
   entryIds: z.array(z.string().trim().min(1)).min(1, "Keine Einträge ausgewählt."),
-  trainerComment: z.string().optional().default(""),
   reason: z.string().optional().default("")
 });
 
