@@ -186,13 +186,13 @@ function ProtectedApp() {
               role={role}
               report={report}
               trainees={trainees}
-              onSign={async (entryId, comment) => {
-                await signEntry(entryId, comment);
+              onSign={async (entryId) => {
+                await signEntry(entryId);
                 setFlash({ type: "success", message: "Bericht freigegeben." });
               }}
               onReject={async (entryId, reason) => {
                 await rejectEntry(entryId, reason);
-                setFlash({ type: "success", message: "Bericht abgelehnt." });
+                setFlash({ type: "success", message: "Bericht zur Nachbearbeitung zurückgegeben." });
               }}
               onProcessEntries={async (action, entryIds, payload) => {
                 const data = await processTrainerEntries(action, entryIds, payload);

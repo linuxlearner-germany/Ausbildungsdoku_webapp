@@ -127,3 +127,45 @@ await test("Freigabe schreibt kein Audit-Log, wenn der Bericht parallel verarbei
   assert.match(result.error, /inzwischen bereits verarbeitet/);
   assert.equal(auditLogs.length, 0);
 });
+
+await test("Freigabe und Rueckgabe veraendern den gespeicherten Ausbilderkommentar nicht", async () => {
+  const repositoryCalls = [];
+  const submittedEntry = {
+    id: "entry-separated",
+    weekLabel: "Bericht",
+    dateFrom: "2026-04-05",
+    dateTo: "2026-04-05",
+    betrieb: "Support",
+    schule: "",
+    status: "submitted",
+    trainee_id: 33,
+    trainerComment: "Separat gespeicherter Kommentar"
+  };
+  const service = createService({
+    reportRepository: {
+      async signEntry(...args) {
+        repositoryCalls.push(["sign", ...args]);
+        return 1;
+      },
+      async rejectSubmittedEntry(...args) {
+        repositoryCalls.push(["reject", ...args]);
+        return 1;
+      }
+    },
+    sharedRepository: {
+      async findEntryWithOwnerById() {
+        return submittedEntry;
+      },
+      async isTrainerAssignedToTrainee() {
+        return true;
+      }
+    }
+  });
+
+  await service.signReportEntryForActor({ id: 5, role: "trainer", name: "Trainer" }, submittedEntry.id);
+  await service.rejectReportEntryForActor({ id: 5, role: "trainer", name: "Trainer" }, submittedEntry.id, "Bitte ergänzen");
+
+  assert.equal(repositoryCalls[0][0], "sign");
+  assert.equal(repositoryCalls[0].length, 4);
+  assert.deepEqual(repositoryCalls[1], ["reject", submittedEntry.id, "Bitte ergänzen"]);
+});

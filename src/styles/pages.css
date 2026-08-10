@@ -805,6 +805,15 @@ table.archive-data-table > tbody > tr:last-child > td {
 .trainer-approvals-page .approval-list-row { gap:.45rem; padding:.7rem .8rem; }
 .trainer-approvals-page .approval-row-meta { font-size:.76rem; }
 .trainer-approvals-page .approval-empty { min-height:0; align-items:start; }
+.approval-feedback-separated { align-items:stretch; }
+.approval-feedback-section { display:grid; grid-template-rows:auto auto minmax(7rem,auto) auto; gap:.5rem; padding:.85rem; border:1px solid var(--border); border-radius:var(--radius-lg); background:var(--surface-elevated); }
+.approval-feedback-section > label { color:var(--text-primary); font-size:.82rem; font-weight:700; }
+.approval-feedback-hint { min-height:2.25rem; margin:0; color:var(--text-muted); font-size:.74rem; line-height:1.45; }
+.approval-feedback-section > .app-btn,
+.approval-feedback-section > .button { justify-self:start; }
+.approval-return-section { border-color:color-mix(in srgb,var(--warning) 25%,var(--border)); }
+.approval-action-bar { justify-content:flex-start; padding-top:.85rem; border-top:1px solid var(--border); }
+.approval-decision-label { margin-right:auto; color:var(--text-secondary); font-size:.8rem; font-weight:700; }
 
 .display-settings-panel .theme-settings-layout { grid-template-columns:minmax(180px,1fr) minmax(220px,1.2fr) auto; align-items:end; }
 .theme-quick-toggle { display:grid; gap:.5rem; justify-items:start; color:var(--text-primary); font-size:var(--app-font-size-sm); font-weight:650; }

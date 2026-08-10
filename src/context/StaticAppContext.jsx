@@ -687,12 +687,14 @@ export function StaticAppProvider({ children }) {
     return { entry, trainee };
   }
 
-  async function signEntry(entryId, trainerComment) {
+  async function signEntry(entryId) {
     const { trainee } = getManagedEntry(entryId);
     commit((draft) => {
       const entry = draft.entries.find((candidate) => candidate.id === entryId);
+      if (entry.status !== "submitted") {
+        throw new Error("Nur eingereichte Berichte können freigegeben werden.");
+      }
       entry.status = "signed";
-      entry.trainerComment = String(trainerComment || "").trim();
       entry.rejectionReason = "";
       entry.signerName = currentUser.name;
       entry.signedAt = new Date().toISOString();
@@ -714,9 +716,11 @@ export function StaticAppProvider({ children }) {
     const { trainee } = getManagedEntry(entryId);
     commit((draft) => {
       const entry = draft.entries.find((candidate) => candidate.id === entryId);
+      if (entry.status !== "submitted") {
+        throw new Error("Nur eingereichte Berichte können zurückgegeben werden.");
+      }
       entry.status = "rejected";
       entry.rejectionReason = String(reason || "").trim();
-      entry.trainerComment = "";
       entry.signerName = "";
       entry.signedAt = null;
       addAuditLog(draft, {
@@ -740,7 +744,7 @@ export function StaticAppProvider({ children }) {
     for (const entryId of entryIds || []) {
       try {
         if (action === "sign") {
-          await signEntry(entryId, payload.trainerComment);
+          await signEntry(entryId);
         } else {
           await rejectEntry(entryId, payload.reason);
         }
@@ -757,7 +761,20 @@ export function StaticAppProvider({ children }) {
     getManagedEntry(entryId);
     commit((draft) => {
       const entry = draft.entries.find((candidate) => candidate.id === entryId);
+      if (entry.status !== "submitted") {
+        throw new Error("Nur eingereichte Berichte können kommentiert werden.");
+      }
       entry.trainerComment = String(comment || "").trim();
+      addAuditLog(draft, {
+        actorUserId: currentUser.id,
+        actorName: currentUser.name,
+        actorRole: currentUser.role,
+        actionType: "REPORT_COMMENT_UPDATED",
+        entityType: "entry",
+        entityId: entry.id,
+        targetUserId: entry.traineeId,
+        summary: entry.trainerComment ? "Ausbilderkommentar wurde gespeichert." : "Ausbilderkommentar wurde entfernt."
+      });
     });
   }
 
