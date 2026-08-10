@@ -31,6 +31,10 @@ label:has(input[type="checkbox"]),label:has(input[type="radio"]) { display:flex;
 .empty-state-icon { width:1.6rem; height:1.6rem; margin-bottom:.15rem; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; opacity:.8; }
 .empty-state h3 { margin:0; color:var(--text-secondary); font-size:1rem; font-weight:700; }
 .empty-state p { max-width:52ch; margin:0; color:var(--text-muted); font-size:.875rem; }
+.empty-state--compact { min-height:4.75rem; gap:.3rem; padding:.85rem 1rem; }
+.empty-state--compact .empty-state-icon { width:1.3rem; height:1.3rem; margin-bottom:0; }
+.empty-state--compact h3 { font-size:.9375rem; }
+.empty-state--compact p { font-size:.8125rem; }
 .filter-bar { padding:var(--app-space-3); border:1px solid var(--app-border); border-radius:var(--radius-lg); background:var(--surface-elevated); }
 .filter-bar input,.filter-bar select { border-color:var(--app-input-border); background:var(--app-input-bg); color:var(--text-primary); }
 .filter-bar input:hover,.filter-bar select:hover { border-color:var(--border-strong); }
