@@ -150,14 +150,50 @@ Restore:
 
 Backups landen lokal in `./backups` und sind per `.gitignore` vom Repository ausgeschlossen.
 
-## Updates ohne Datenverlust
+## Deployment mit externer MSSQL-Datenbank
 
-Für einen versionierten Container-Release:
+Auf dem Deployment-Server laufen nur die Webapp und Redis als Container. Die
+MSSQL-Datenbank wird extern angebunden. Dafür werden die produktive
+Compose-Datei und die Redis-Erweiterung gemeinsam verwendet:
 
 ```bash
-docker compose pull
-docker compose up -d --remove-orphans
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.server-redis.yml \
+  pull
+
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.server-redis.yml \
+  up -d --remove-orphans
+
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.server-redis.yml \
+  ps
 ```
+
+Die Services verwenden fertige Container-Images. Deshalb darf der
+Deployment-Befehl weder `docker compose build` noch `--build` enthalten;
+andernfalls meldet Compose `no service to build`.
+
+In `.env` zeigt `MSSQL_HOST` auf den externen MSSQL-Server und
+`REDIS_HOST=redis` auf den Redis-Container. `MSSQL_HOST=localhost` ist im
+Webapp-Container normalerweise falsch, weil `localhost` dort den Container
+selbst bezeichnet.
+
+Nach dem Start laufen `app` und `redis` dauerhaft. `migrate` verbindet sich
+mit der externen Datenbank, führt ausstehende Migrationen aus und endet danach
+erfolgreich. Zur Fehleranalyse:
+
+```bash
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.server-redis.yml \
+  logs --tail=100 migrate app redis
+```
+
+## Updates ohne Datenverlust
 
 Wichtig:
 
