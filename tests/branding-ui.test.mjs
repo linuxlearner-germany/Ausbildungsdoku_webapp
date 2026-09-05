@@ -10,9 +10,9 @@ test("Web-Branding verwendet eine zentrale Logo-Komponente", () => {
   const login = readProjectFile("src", "pages", "LoginPage.jsx");
   const reset = readProjectFile("src", "pages", "PasswordResetPage.jsx");
 
-  assert.match(sidebar, /<BrandLogo size="medium" \/>/);
-  assert.match(login, /<BrandLogo size="large" \/>/);
-  assert.match(reset, /<BrandLogo size="large" \/>/);
+  assert.match(sidebar, /<BrandLogo size="medium" variant="sidebar" \/>/);
+  assert.match(login, /<BrandLogo size="large" variant="auth" \/>/);
+  assert.match(reset, /<BrandLogo size="large" variant="auth" \/>/);
   assert.doesNotMatch(`${sidebar}${login}${reset}`, /className="sidebar-logo"/);
 });
 
@@ -22,7 +22,7 @@ test("Logo-Groessen sind zentral und seitenverhaeltnistreu definiert", () => {
 
   assert.match(theme, /--brand-logo-sm:\s*24px/);
   assert.match(theme, /--brand-logo-md:\s*32px/);
-  assert.match(theme, /--brand-logo-lg:\s*44px/);
+  assert.match(theme, /--brand-logo-lg:\s*52px/);
   assert.match(components, /width:\s*auto/);
   assert.match(components, /object-fit:\s*contain/);
 });
@@ -30,8 +30,9 @@ test("Logo-Groessen sind zentral und seitenverhaeltnistreu definiert", () => {
 test("Sidebar gruppiert den neuen Produktnamen und Untertitel mit dem Logo", () => {
   const sidebar = readProjectFile("src", "components", "SidebarNavigation.jsx");
 
-  assert.match(sidebar, /<strong>WIWEB Berichtsheft<\/strong>/);
+  assert.match(sidebar, /<strong>Berichtsheft<\/strong>/);
   assert.match(sidebar, /<small>Digitaler Ausbildungsnachweis<\/small>/);
+  assert.doesNotMatch(sidebar, /<strong>WIWEB/);
 });
 
 test("Der bisherige Produktname bleibt aus sichtbaren Oberflaechen entfernt", () => {
@@ -44,5 +45,5 @@ test("Der bisherige Produktname bleibt aus sichtbaren Oberflaechen entfernt", ()
   ].join("\n");
 
   assert.doesNotMatch(visibleSources, /Ausbildungsdoku/);
-  assert.match(visibleSources, /WIWEB Berichtsheft/);
+  assert.match(readProjectFile("src", "components", "BrandLogo.jsx"), /alt="WIWEB"/);
 });

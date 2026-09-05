@@ -60,10 +60,10 @@
   --app-radius-sm: var(--radius-md);
   --app-radius-md: var(--radius-lg);
   --app-radius-lg: var(--radius-xl);
-  --app-sidebar-width: 240px;
+  --app-sidebar-width: 280px;
   --brand-logo-sm: 24px;
   --brand-logo-md: 32px;
-  --brand-logo-lg: 44px;
+  --brand-logo-lg: 52px;
   --brand-logo-backdrop: rgba(248, 250, 252, 0.96);
   --bs-body-bg: var(--app-bg);
   --bs-body-color: var(--app-text);
