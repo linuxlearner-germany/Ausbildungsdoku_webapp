@@ -9,7 +9,7 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function createMailer({ config, logger, getEmailRelaySettings = async () => null }) {
+function createMailer({ config, logger, getEmailRelaySettings = async () => null, transportFactory = nodemailer.createTransport }) {
   function getEnvironmentSettings() {
     return {
       enabled: config.mail.enabled,
@@ -17,6 +17,7 @@ function createMailer({ config, logger, getEmailRelaySettings = async () => null
       port: config.mail.port,
       secure: config.mail.secure,
       requireTls: config.mail.requireTls,
+      htmlEnabled: true,
       user: config.mail.user,
       password: config.mail.password,
       from: config.mail.from,
@@ -33,6 +34,7 @@ function createMailer({ config, logger, getEmailRelaySettings = async () => null
       port: Number(saved.port),
       secure: Boolean(saved.secure),
       requireTls: Boolean(saved.require_tls),
+      htmlEnabled: Boolean(saved.html_enabled),
       user: saved.username,
       password: saved.password,
       from: saved.from_address,
@@ -41,7 +43,7 @@ function createMailer({ config, logger, getEmailRelaySettings = async () => null
   }
 
   function createTransport(settings) {
-    return nodemailer.createTransport({
+    return transportFactory({
       host: settings.host,
       port: settings.port,
       secure: settings.secure,
@@ -61,7 +63,14 @@ function createMailer({ config, logger, getEmailRelaySettings = async () => null
     return Boolean(settings.enabled && settings.host && settings.from && (!settings.user || settings.password));
   }
 
-  async function send({ to, subject, text, html }) {
+  async function send({ to, subject, text, html, htmlAttachments = [] }) {
+    const plainText = typeof text === "string" ? text : "";
+    if (!plainText.trim()) {
+      const error = new Error("Klartextinhalt fehlt.");
+      error.code = "MAIL_TEXT_REQUIRED";
+      throw error;
+    }
+
     const settings = await getActiveSettings();
     if (!(settings.enabled && settings.host && settings.from && (!settings.user || settings.password))) {
       const error = new Error("SMTP ist nicht konfiguriert.");
@@ -69,14 +78,21 @@ function createMailer({ config, logger, getEmailRelaySettings = async () => null
       throw error;
     }
 
-    const result = await createTransport(settings).sendMail({
+    const message = {
       from: settings.from,
       replyTo: settings.replyTo || undefined,
       to,
       subject,
-      text,
-      html
-    });
+      text: plainText
+    };
+    if (settings.htmlEnabled && typeof html === "string" && html.trim()) {
+      message.html = html;
+      if (Array.isArray(htmlAttachments) && htmlAttachments.length) {
+        message.attachments = htmlAttachments;
+      }
+    }
+
+    const result = await createTransport(settings).sendMail(message);
     logger.info("E-Mail versendet", {
       messageId: result.messageId,
       recipientDomain: String(to).split("@").at(-1) || ""

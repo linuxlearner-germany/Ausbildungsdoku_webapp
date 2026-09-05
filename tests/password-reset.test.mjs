@@ -5,13 +5,14 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { createAuthService } = require("../services/auth-service");
+const { escapeHtml } = require("../utils/mailer");
 
 function buildService() {
   let stored = null;
   const sent = [];
   const user = {
     id: 7,
-    name: "Test Azubi",
+    name: "Test <Azubi> & Co",
     username: "test-azubi",
     email: "azubi@example.test"
   };
@@ -49,7 +50,7 @@ function buildService() {
   };
   const mailer = {
     isConfigured: true,
-    escapeHtml: (value) => String(value),
+    escapeHtml,
     async send(message) {
       sent.push(message);
     }
@@ -75,6 +76,10 @@ test("Passwort-Reset speichert nur einen Hash und versendet einen Einmal-Link", 
   assert.equal(sent.length, 1);
   const resetUrl = sent[0].text.match(/https:\/\/\S+/)?.[0];
   assert.ok(resetUrl);
+  const htmlResetUrl = sent[0].html.match(/href="([^"]+)"/)?.[1];
+  assert.equal(htmlResetUrl, resetUrl);
+  assert.match(sent[0].html, /Test &lt;Azubi&gt; &amp; Co/);
+  assert.doesNotMatch(sent[0].html, /Test <Azubi>/);
   const token = new URL(resetUrl).searchParams.get("token");
   assert.ok(token);
   assert.notEqual(getStored().tokenHash, token);

@@ -156,6 +156,7 @@ function createAdminRepository({
         port: settings.port,
         secure: settings.secure,
         require_tls: settings.requireTls,
+        html_enabled: settings.htmlEnabled,
         username: settings.username,
         password_encrypted: settings.passwordEncrypted,
         from_address: settings.from,

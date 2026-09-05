@@ -287,9 +287,10 @@ function createBootstrap({
 
   async function resetDatabase() {
     await db.transaction(async (trx) => {
+      await trx("global_ui_settings").del();
+      await trx("email_relay_settings").del();
       await trx("mail_deliveries").del();
       await trx("password_reset_tokens").del();
-      await trx("global_ui_settings").del();
       await trx("audit_logs").del();
       await trx("grades").del();
       await trx("entries").del();

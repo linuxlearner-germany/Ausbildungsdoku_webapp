@@ -20,6 +20,7 @@ const emailRelaySettingsSchema = z.object({
   port: z.coerce.number().int().min(1).max(65535).optional().default(587),
   secure: z.boolean().optional().default(false),
   requireTls: z.boolean().optional().default(true),
+  htmlEnabled: z.boolean().optional().default(true),
   username: z.string().trim().optional().default(""),
   password: z.string().optional().default(""),
   clearPassword: z.boolean().optional().default(false),
