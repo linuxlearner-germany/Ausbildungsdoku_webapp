@@ -1,8 +1,16 @@
 services:
   app:
     # Produktionsnaher Modus: nur die App laeuft im Container, MSSQL und Redis werden extern angebunden.
-    image: ${APP_IMAGE:-ghcr.io/linuxlearner-germany/ausbildungsdoku-webapp}:${APP_IMAGE_TAG:-1.2.0}
-    pull_policy: always
+    image: ${APP_IMAGE:-ausbildungsdoku-webapp:server}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        HTTP_PROXY: ${HTTP_PROXY:-}
+        HTTPS_PROXY: ${HTTPS_PROXY:-}
+        NO_PROXY: ${NO_PROXY:-localhost,127.0.0.1}
+    pull_policy: never
     container_name: ausbildungsdoku-app
     restart: unless-stopped
     init: true
@@ -90,8 +98,8 @@ services:
   migrate:
     # Knex-Migrationen laufen vor jedem App-Start. `latest` ist idempotent,
     # daher ist ein erneuter Start oder `docker compose up` sicher.
-    image: ${APP_IMAGE:-ghcr.io/linuxlearner-germany/ausbildungsdoku-webapp}:${APP_IMAGE_TAG:-1.2.0}
-    pull_policy: always
+    image: ${APP_IMAGE:-ausbildungsdoku-webapp:server}
+    pull_policy: never
     restart: "no"
     init: true
     env_file:
