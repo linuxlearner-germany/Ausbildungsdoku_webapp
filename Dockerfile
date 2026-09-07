@@ -55,6 +55,7 @@ COPY --from=build --chown=appuser:appuser /app/routes ./routes
 COPY --from=build --chown=appuser:appuser /app/scripts ./scripts
 COPY --from=build --chown=appuser:appuser /app/services ./services
 COPY --from=build --chown=appuser:appuser /app/sessions ./sessions
+COPY --from=build --chown=appuser:appuser /app/shared ./shared
 COPY --from=build --chown=appuser:appuser /app/utils ./utils
 COPY --from=build --chown=appuser:appuser /app/validation ./validation
 COPY --from=build --chown=appuser:appuser /app/index.js ./index.js

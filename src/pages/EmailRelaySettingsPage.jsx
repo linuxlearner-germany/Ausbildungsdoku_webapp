@@ -10,7 +10,7 @@ function AdminSectionNav() {
 }
 
 function toForm(settings = {}) {
-  return { enabled: Boolean(settings.enabled), host: settings.host || "", port: String(settings.port || 587), secure: Boolean(settings.secure), requireTls: settings.requireTls !== false, username: settings.username || "", password: "", clearPassword: false, from: settings.from || "", replyTo: settings.replyTo || "", passwordConfigured: Boolean(settings.passwordConfigured), source: settings.source || "environment" };
+  return { enabled: Boolean(settings.enabled), host: settings.host || "", port: String(settings.port || 587), secure: Boolean(settings.secure), requireTls: settings.requireTls !== false, htmlEnabled: settings.htmlEnabled !== false, username: settings.username || "", password: "", clearPassword: false, from: settings.from || "", replyTo: settings.replyTo || "", passwordConfigured: Boolean(settings.passwordConfigured), source: settings.source || "environment" };
 }
 
 export function EmailRelaySettingsPage({ onLoadSettings, onSaveSettings, onTestSettings, onSuccess }) {
@@ -60,6 +60,26 @@ export function EmailRelaySettingsPage({ onLoadSettings, onSaveSettings, onTestS
           <label>Absenderadresse<input value={form.from} onChange={(event) => update({ from: event.target.value })} placeholder="WIWEB Berichtsheft <noreply@example.com>" /></label>
           <label>Reply-To-Adresse (optional)<input type="email" value={form.replyTo} onChange={(event) => update({ replyTo: event.target.value })} placeholder="support@example.com" /></label>
         </div>
+        <section className="relay-format-setting" aria-labelledby="relay-html-label">
+          <div>
+            <strong id="relay-html-label">HTML-E-Mails aktivieren</strong>
+            <span>{form.htmlEnabled ? "HTML mit Klartext-Fallback" : "Nur Klartext"}</span>
+          </div>
+          <label className="relay-format-switch" htmlFor="relay-html-enabled">
+            <input
+              id="relay-html-enabled"
+              type="checkbox"
+              role="switch"
+              aria-checked={form.htmlEnabled}
+              aria-describedby="relay-html-help"
+              checked={form.htmlEnabled}
+              onChange={(event) => update({ htmlEnabled: event.target.checked })}
+            />
+            <span aria-hidden="true" className="relay-format-switch-track"><span /></span>
+            <span>{form.htmlEnabled ? "Ein" : "Aus"}</span>
+          </label>
+          <p id="relay-html-help">Klartext wird immer mitgesendet. HTML-fähige Mailprogramme zeigen bei aktivierter Option die formatierte Version an.</p>
+        </section>
         <p className="field-message">Das Passwort wird verschlüsselt gespeichert und nie wieder angezeigt. Ein Wechsel des SESSION_SECRET erfordert eine erneute Eingabe.</p>
         <div className="page-actions"><PrimaryButton onClick={() => save(false)} disabled={saving}>{saving ? "Wird gespeichert..." : "Speichern"}</PrimaryButton><PrimaryButton variant="secondary" onClick={() => save(true)} disabled={saving}>{saving ? "Bitte warten..." : "Speichern und Test-E-Mail senden"}</PrimaryButton></div>
       </> : null}
