@@ -197,7 +197,7 @@ function registerPdfFonts(doc) {
 }
 
 function renderPdf(res, trainee, entries, picturesDir) {
-  const logoPath = safePdfAssetPath(picturesDir, "logo-mark.png", "WIWEB-waage-vektor_ohne_schrift.png");
+  const logoPath = safePdfAssetPath(picturesDir, "logo-short.png", "WIWEB-logo.png");
   const sortedEntries = [...entries]
     .filter((entry) => entry.status === "signed")
     .sort((a, b) => String(a.dateFrom).localeCompare(String(b.dateFrom)));
@@ -214,7 +214,7 @@ function renderPdf(res, trainee, entries, picturesDir) {
     currentGroup.entries.push(entry);
   }
 
-  const doc = new PDFDocument({ size: "A4", margin: 50, autoFirstPage: true });
+  const doc = new PDFDocument({ size: "A4", margin: 50, autoFirstPage: true, bufferPages: true });
   const fonts = registerPdfFonts(doc);
   const regularFont = fonts.regular;
   const boldFont = fonts.bold;
@@ -236,23 +236,40 @@ function renderPdf(res, trainee, entries, picturesDir) {
   }
 
   function renderHeader(pageTitle, weekLabel = "") {
-    if (fs.existsSync(logoPath)) doc.image(logoPath, 50, 42, { fit: [64, 64] });
-    setFont("bold", 22);
-    doc.fillColor("#11211F").text("WIWEB Berichtsheft", 130, 50);
+    if (fs.existsSync(logoPath)) doc.image(logoPath, 50, 42, { fit: [145, 36], align: "left", valign: "center" });
+    setFont("bold", 20);
+    doc.fillColor("#0065A8").text("WIWEB Berichtsheft", 215, 45);
+    setFont("regular", 9);
+    doc.fillColor("#526B7A").text("Digitaler Ausbildungsnachweis", 215, 72);
     setFont("regular", 11);
     doc.fillColor("#334155");
-    doc.text(`Name: ${trainee.name}`, 130, 80);
-    doc.text(`Ausbildung: ${trainee.ausbildung || "-"}`, 130, 96);
-    doc.text(`Betrieb: ${trainee.betrieb || "-"}`, 130, 112);
-    doc.text(`Berufsschule: ${trainee.berufsschule || "-"}`, 130, 128);
-    doc.text(`Stand: ${formatPdfDate(new Date())}`, 130, 144);
+    doc.text(`Name: ${trainee.name}`, 50, 100);
+    doc.text(`Ausbildung: ${trainee.ausbildung || "-"}`, 50, 116);
+    doc.text(`Betrieb: ${trainee.betrieb || "-"}`, 300, 100);
+    doc.text(`Berufsschule: ${trainee.berufsschule || "-"}`, 300, 116);
+    doc.text(`Stand: ${formatPdfDate(new Date())}`, 50, 132);
     setFont("bold", 15);
     doc.fillColor("#11211F").text(pageTitle, 50, 182);
     if (weekLabel) {
       setFont("regular", 11);
       doc.fillColor("#4B5F5B").text(weekLabel, 50, 202);
     }
-    doc.moveTo(50, 225).lineTo(545, 225).strokeColor("#B7C7C1").lineWidth(1).stroke();
+    doc.moveTo(50, 225).lineTo(545, 225).strokeColor("#0065A8").lineWidth(1).stroke();
+  }
+
+  function finishDocument() {
+    const range = doc.bufferedPageRange();
+    for (let index = range.start; index < range.start + range.count; index += 1) {
+      doc.switchToPage(index);
+      setFont("regular", 8);
+      doc.fillColor("#5D6F78").text(
+        `WIWEB Berichtsheft · Seite ${index + 1} von ${range.count}`,
+        50,
+        doc.page.height - 34,
+        { width: 495, align: "center", lineBreak: false }
+      );
+    }
+    doc.end();
   }
 
   function renderSignaturePage() {
@@ -391,7 +408,7 @@ function renderPdf(res, trainee, entries, picturesDir) {
     doc.fillColor("#11211F").text("Aktuell sind keine signierten Einträge für den PDF-Export vorhanden.", 50, 250);
     doc.addPage();
     renderSignaturePage();
-    doc.end();
+    finishDocument();
     return;
   }
 
@@ -410,7 +427,7 @@ function renderPdf(res, trainee, entries, picturesDir) {
 
   doc.addPage();
   renderSignaturePage();
-  doc.end();
+  finishDocument();
 }
 
 function renderGradesPdf(res, trainee, grades, picturesDir) {
