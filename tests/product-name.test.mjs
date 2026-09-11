@@ -43,3 +43,14 @@ test("Sidebar und Login verwenden den neuen Untertitel", () => {
 
   assert.equal((source.match(/Digitaler Ausbildungsnachweis/g) || []).length, 2);
 });
+
+test("Wortlogo und Begleittext verdoppeln WIWEB nicht", () => {
+  const source = [
+    readProjectFile("src", "components", "SidebarNavigation.jsx"),
+    readProjectFile("src", "pages", "LoginPage.jsx"),
+    readProjectFile("src", "pages", "PasswordResetPage.jsx")
+  ].join("\n");
+
+  assert.doesNotMatch(source, /<h1>WIWEB Berichtsheft|<strong>WIWEB Berichtsheft/);
+  assert.match(source, /<h1>Berichtsheft<\/h1>/);
+});

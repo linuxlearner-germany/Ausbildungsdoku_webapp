@@ -2,10 +2,12 @@ import React from "react";
 import { assetUrl } from "../lib/runtime";
 
 const SUPPORTED_SIZES = new Set(["small", "medium", "large"]);
+const SUPPORTED_VARIANTS = new Set(["default", "sidebar", "auth"]);
 
-export function BrandLogo({ size = "medium", className = "" }) {
+export function BrandLogo({ size = "medium", variant = "default", className = "" }) {
   const resolvedSize = SUPPORTED_SIZES.has(size) ? size : "medium";
-  const classes = ["brand-logo", `brand-logo--${resolvedSize}`, className].filter(Boolean).join(" ");
+  const resolvedVariant = SUPPORTED_VARIANTS.has(variant) ? variant : "default";
+  const classes = ["brand-logo", `brand-logo--${resolvedSize}`, `brand-logo--${resolvedVariant}`, className].filter(Boolean).join(" ");
 
   return (
     <span className={classes}>

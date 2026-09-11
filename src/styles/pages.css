@@ -43,7 +43,7 @@
 
 .login-card {
   width: 100%;
-  max-width: 400px;
+  max-width: 440px;
   display: grid;
   gap: 1.25rem;
   padding: 24px;
@@ -57,9 +57,9 @@
 
 .login-brand {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 0.75rem;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .login-brand h1 {
@@ -72,6 +72,17 @@
   margin: 0.2rem 0 0;
   color: #94a3b8;
   font-size: 0.82rem;
+}
+
+.password-reset-heading h2 {
+  margin: 0 0 0.35rem;
+  color: #f8fafc;
+  font-size: 1.25rem;
+}
+
+.password-reset-heading .field-message {
+  margin: 0;
+  color: #cbd5e1;
 }
 
 .login-form {
