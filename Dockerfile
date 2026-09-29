@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-FROM node:24.18.0-bookworm-slim AS base
+FROM node:26.10.0-bookworm-slim AS base
 
 WORKDIR /app
 
@@ -13,7 +13,7 @@ FROM deps AS build
 COPY . .
 RUN npm run build
 
-FROM node:24.18.0-bookworm-slim AS runtime-base
+FROM node:26.10.0-bookworm-slim AS runtime-base
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates fonts-dejavu-core \
