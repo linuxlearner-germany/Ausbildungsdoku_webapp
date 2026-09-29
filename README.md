@@ -209,6 +209,33 @@ Optionales Hilfsskript:
 ./scripts/update-local-docker.sh
 ```
 
+## GitHub Releases und Packages
+
+Releases werden über einen semantischen Git-Tag ausgelöst. Die Tag-Version muss
+mit der Version in `package.json` übereinstimmen:
+
+```bash
+git tag -a v1.2.0 -m "WIWEB Berichtsheft 1.2.0"
+git push origin v1.2.0
+```
+
+Der GitHub-Workflow führt Unit-Tests und den Produktions-Build aus, veröffentlicht
+das Container-Image unter `ghcr.io/linuxlearner-germany/ausbildungsdoku-webapp`
+und erstellt danach ein GitHub Release mit automatisch generierten Release Notes.
+Für `v1.2.0` entstehen die Image-Tags `1.2.0`, `1.2`, `1` und `latest`.
+
+Ein bestimmtes Release kann direkt über seinen unveränderlichen Digest oder über
+den vollständigen Versions-Tag bezogen werden:
+
+```bash
+docker pull ghcr.io/linuxlearner-germany/ausbildungsdoku-webapp:1.2.0
+```
+
+Der Workflow lässt sich in GitHub Actions auch manuell für einen bereits
+vorhandenen `vX.Y.Z`-Tag erneut starten. GitHub Releases und Container Packages
+benötigen keine zusätzlichen Repository-Secrets; der Workflow verwendet das
+automatisch bereitgestellte `GITHUB_TOKEN`.
+
 ## ENV-Konfiguration
 
 Wichtige Variablen:
