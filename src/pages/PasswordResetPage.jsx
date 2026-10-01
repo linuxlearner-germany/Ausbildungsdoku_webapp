@@ -17,11 +17,15 @@ function PublicAuthCard({ title, subtitle, background, children }) {
     >
       <div className="login-card password-reset-card">
         <div className="login-brand">
-          <BrandLogo size="large" />
+          <BrandLogo size="large" variant="auth" />
           <div>
-            <h1>{title}</h1>
-            <small className="field-message">{subtitle}</small>
+            <h1>Berichtsheft</h1>
+            <p className="login-product-subtitle">Digitaler Ausbildungsnachweis</p>
           </div>
+        </div>
+        <div className="password-reset-heading">
+          <h2>{title}</h2>
+          <p className="field-message">{subtitle}</p>
         </div>
         {children}
       </div>

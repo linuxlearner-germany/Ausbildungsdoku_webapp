@@ -27,9 +27,9 @@
 .sidebar-brand {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  align-items: flex-start;
+  flex-direction: row;
+  gap: 0.65rem;
+  align-items: center;
   min-height: 6.75rem;
   padding: 1rem 0.9rem;
   border-bottom: 1px solid var(--app-border);
@@ -43,7 +43,7 @@
 
 .sidebar-brand-copy strong {
   color: var(--app-text);
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   line-height: 1.2;
 }

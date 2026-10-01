@@ -19,6 +19,8 @@
 .brand-logo--small { --brand-logo-height: var(--brand-logo-sm); }
 .brand-logo--medium { --brand-logo-height: var(--brand-logo-md); }
 .brand-logo--large { --brand-logo-height: var(--brand-logo-lg); }
+.brand-logo--sidebar { flex: 0 0 auto; }
+.brand-logo--auth { border-color: rgba(255, 255, 255, 0.32); }
 
 .brand-logo img {
   display: block;

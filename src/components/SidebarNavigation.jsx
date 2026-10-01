@@ -74,9 +74,9 @@ export function SidebarNavigation({ user, theme, onLogout, onToggleTheme }) {
   return (
     <aside id="primary-sidebar" className="sidebar" aria-label="Seitenmenü">
       <div className="sidebar-brand">
-        <BrandLogo size="medium" />
+        <BrandLogo size="medium" variant="sidebar" />
         <div className="sidebar-brand-copy">
-          <strong>WIWEB Berichtsheft</strong>
+          <strong>Berichtsheft</strong>
           <small>Digitaler Ausbildungsnachweis</small>
         </div>
       </div>
